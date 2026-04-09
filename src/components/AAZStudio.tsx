@@ -35,7 +35,7 @@ const MODES = [
 
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const DURATIONS = [4, 5, 8, 10, 12, 15]
-const COST_PER_SEC = parseFloat(process.env.NEXT_PUBLIC_COST_PER_SEC || '0.08')
+const COST_PER_SEC = parseFloat(process.env.NEXT_PUBLIC_COST_PER_SEC || '0.19')
 
 /* ── Storage — biblioteca de sheets compartilhada via Vercel KV ── */
 
@@ -519,7 +519,7 @@ export function AAZStudio() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: `${C.green}10`, border: `1px solid ${C.green}30`, borderRadius: 9, padding: '11px 14px' }}>
               <div>
                 <div style={{ fontSize: 10, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Custo estimado</div>
-                <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>{duration}s · Segmind Fast · $0.08/s</div>
+                <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>{duration}s · Segmind · ${COST_PER_SEC}/s</div>
               </div>
               <div style={{ fontSize: 22, fontWeight: 800, color: C.green, fontFamily: 'monospace' }}>${cost}</div>
             </div>
