@@ -4,22 +4,49 @@ import { NextRequest, NextResponse } from 'next/server'
  * POST /api/generate-sheet
  * Proxy server-side para Segmind Seedance 2.0 Character Sheet
  * Resolve CORS — a SEGMIND_API_KEY nunca chega ao browser
- *
- * Body esperado:
- * {
- *   reference_images: string[]   // base64 data URLs (1–3 fotos)
- *   character_name: string       // ex: "Abigail"
- *   character_id: string         // ex: "abigail" (para salvar no KV na Fase 3)
- * }
- *
- * Resposta: image/png blob (pass-through do Segmind)
- *
- * TODO Fase 2 (Alexandre):
- *  - Confirmar schema exato do endpoint seedance-2.0-character
- *  - Adicionar retry automático (o endpoint pode demorar até 60s)
- *  - TODO Fase 3 (Alexandre): após gerar, salvar no Vercel KV
- *    kv.set(`aaz:char:${character_id}`, { sheetUrl, name, emoji, ... })
  */
+
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 2000
+const FETCH_TIMEOUT_MS = 110_000 // 110s (Vercel limit = 120s)
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  retries = MAX_RETRIES,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal })
+
+      if (res.status === 429 && attempt < retries) {
+        const retryAfter = res.headers.get('retry-after')
+        const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : RETRY_DELAY_MS * (attempt + 1)
+        console.warn(`[/api/generate-sheet] 429 rate-limited, retry ${attempt + 1}/${retries} in ${delay}ms`)
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+
+      return res
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (attempt < retries) {
+          console.warn(`[/api/generate-sheet] timeout, retry ${attempt + 1}/${retries}`)
+          continue
+        }
+        throw new Error('Segmind não respondeu no tempo limite (110s).')
+      }
+      throw err
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  throw new Error('Máximo de tentativas excedido.')
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -40,10 +67,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'character_name é obrigatório.' }, { status: 400 })
     }
 
+    // ── Chamada ao Segmind com retry ────────────────────────────
     const endpoint = process.env.SEGMIND_SHEET_ENDPOINT
       ?? 'https://api.segmind.com/v1/seedance-2.0-character'
 
-    const segmindRes = await fetch(endpoint, {
+    const segmindRes = await fetchWithRetry(endpoint, {
       method:  'POST',
       headers: {
         'x-api-key':    apiKey,
@@ -76,9 +104,7 @@ export async function POST(request: NextRequest) {
 
   } catch (err) {
     console.error('[/api/generate-sheet]', err)
-    return NextResponse.json(
-      { error: 'Erro interno ao processar a requisição.' },
-      { status: 500 }
-    )
+    const message = err instanceof Error ? err.message : 'Erro interno ao processar a requisição.'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

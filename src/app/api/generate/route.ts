@@ -4,31 +4,49 @@ import { NextRequest, NextResponse } from 'next/server'
  * POST /api/generate
  * Proxy server-side para Segmind Seedance 2.0
  * Resolve CORS — a SEGMIND_API_KEY nunca chega ao browser
- *
- * Body esperado (mesmo schema do frontend):
- * {
- *   prompt: string
- *   duration: number
- *   aspect_ratio: string
- *   resolution: string
- *   generate_audio: boolean
- *   mode: 'text_to_video' | 'first_last_frames' | 'omni_reference'
- *   // omni_reference:
- *   reference_images?: string[]   // base64 data URLs
- *   reference_videos?: string[]
- *   reference_audios?: string[]
- *   // first_last_frames:
- *   first_frame_url?: string
- *   last_frame_url?: string
- * }
- *
- * Resposta: video/mp4 blob (pass-through do Segmind)
- *
- * TODO Fase 2 (Alexandre):
- *  - Implementar o fetch para SEGMIND_VIDEO_ENDPOINT
- *  - Fazer streaming do blob de volta para o cliente
- *  - Tratar erros Segmind (rate limit, content filter, timeout)
  */
+
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = 2000
+const FETCH_TIMEOUT_MS = 110_000 // 110s (Vercel limit = 120s)
+
+async function fetchWithRetry(
+  url: string,
+  init: RequestInit,
+  retries = MAX_RETRIES,
+): Promise<Response> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+    try {
+      const res = await fetch(url, { ...init, signal: controller.signal })
+
+      if (res.status === 429 && attempt < retries) {
+        const retryAfter = res.headers.get('retry-after')
+        const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : RETRY_DELAY_MS * (attempt + 1)
+        console.warn(`[/api/generate] 429 rate-limited, retry ${attempt + 1}/${retries} in ${delay}ms`)
+        await new Promise(r => setTimeout(r, delay))
+        continue
+      }
+
+      return res
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (attempt < retries) {
+          console.warn(`[/api/generate] timeout, retry ${attempt + 1}/${retries}`)
+          continue
+        }
+        throw new Error('Segmind não respondeu no tempo limite (110s).')
+      }
+      throw err
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  throw new Error('Máximo de tentativas excedido.')
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,10 +88,10 @@ export async function POST(request: NextRequest) {
     if (body.first_frame_url) segmindPayload.first_frame_url = body.first_frame_url
     if (body.last_frame_url)  segmindPayload.last_frame_url  = body.last_frame_url
 
-    // ── Chamada ao Segmind ──────────────────────────────────────
+    // ── Chamada ao Segmind com retry ────────────────────────────
     const endpoint = process.env.SEGMIND_VIDEO_ENDPOINT ?? 'https://api.segmind.com/v1/seedance-2.0'
 
-    const segmindRes = await fetch(endpoint, {
+    const segmindRes = await fetchWithRetry(endpoint, {
       method:  'POST',
       headers: {
         'x-api-key':     apiKey,
@@ -104,9 +122,7 @@ export async function POST(request: NextRequest) {
 
   } catch (err) {
     console.error('[/api/generate]', err)
-    return NextResponse.json(
-      { error: 'Erro interno ao processar a requisição.' },
-      { status: 500 }
-    )
+    const message = err instanceof Error ? err.message : 'Erro interno ao processar a requisição.'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
