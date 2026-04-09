@@ -1,11 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Permite body size maior para upload de imagens base64 nas rotas de API
-  api: {
-    bodyParser: {
-      sizeLimit: '50mb',
-    },
-  },
   // Headers de segurança
   async headers() {
     return [
