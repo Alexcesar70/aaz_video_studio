@@ -6,6 +6,8 @@ import { NextRequest, NextResponse } from 'next/server'
  * Resolve CORS — a SEGMIND_API_KEY nunca chega ao browser
  */
 
+export const maxDuration = 120
+
 const MAX_RETRIES = 3
 const RETRY_DELAY_MS = 2000
 const FETCH_TIMEOUT_MS = 110_000 // 110s (Vercel limit = 120s)
