@@ -13,18 +13,5 @@
     "src/app/api/scene-director/route.ts": {
       "maxDuration": 30
     }
-  },
-  "env": {
-    "SITE_PASSWORD":                  "@aaz-site-password",
-    "SESSION_SECRET":                 "@aaz-session-secret",
-    "SEGMIND_API_KEY":                "@aaz-segmind-api-key",
-    "SEGMIND_VIDEO_ENDPOINT":         "@aaz-segmind-video-endpoint",
-    "SEGMIND_SHEET_ENDPOINT":         "@aaz-segmind-sheet-endpoint",
-    "ANTHROPIC_API_KEY":              "@aaz-anthropic-api-key",
-    "ANTHROPIC_MODEL":                "@aaz-anthropic-model",
-    "KV_URL":                         "@aaz-kv-url",
-    "KV_REST_API_URL":                "@aaz-kv-rest-api-url",
-    "KV_REST_API_TOKEN":              "@aaz-kv-rest-api-token",
-    "KV_REST_API_READ_ONLY_TOKEN":    "@aaz-kv-rest-api-read-only-token"
   }
 }
