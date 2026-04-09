@@ -91,6 +91,46 @@ export function AAZStudio() {
   const [sheetStatus, setSheetStatus] = useState('idle')
   const [sheetMsg, setSheetMsg] = useState('')
 
+  /* scene director */
+  const [sdDesc, setSdDesc] = useState('')
+  const [sdChars, setSdChars] = useState<string[]>([])
+  const [sdSetting, setSdSetting] = useState('')
+  const [sdEmotion, setSdEmotion] = useState('')
+  const [sdStatus, setSdStatus] = useState('idle')
+  const [sdMsg, setSdMsg] = useState('')
+
+  const toggleSdChar = (id: string) => setSdChars(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
+
+  const runSceneDirector = async () => {
+    if (!sdDesc.trim()) { setSdStatus('error'); setSdMsg('Descreva a cena.'); return }
+    setSdStatus('generating'); setSdMsg('Claude está escrevendo os prompts...')
+    try {
+      const res = await fetch('/api/scene-director', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scene_description: sdDesc,
+          characters: sdChars.length ? sdChars : undefined,
+          setting: sdSetting || undefined,
+          duration,
+          emotion: sdEmotion || undefined,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const data = await res.json()
+      const p = data.prompts as { lang: string; prompt: string }[]
+      setPrompts({
+        pt: p.find(x => x.lang === 'pt-br')?.prompt ?? '',
+        es: p.find(x => x.lang === 'es')?.prompt ?? '',
+        en: p.find(x => x.lang === 'en')?.prompt ?? '',
+      })
+      setSdStatus('success'); setSdMsg('Prompts gerados e injetados nas 3 abas!')
+      setTab('studio')
+    } catch (err: unknown) {
+      setSdStatus('error'); setSdMsg(err instanceof Error ? err.message : 'Erro desconhecido')
+    }
+  }
+
   /* studio */
   const [selChars, setSelChars] = useState<Character[]>([])
   const [mode, setMode] = useState('text_to_video')
@@ -284,7 +324,7 @@ export function AAZStudio() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
-        {[['studio', '🎬 Estúdio'], ['library', '📚 Biblioteca'], ['history', '📋 Histórico']].map(([id, lbl]) => (
+        {[['studio', '🎬 Estúdio'], ['director', '🎭 Scene Director'], ['library', '📚 Biblioteca'], ['history', '📋 Histórico']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.gold}` : '2px solid transparent', color: tab === id ? C.gold : C.textDim, padding: '11px 18px', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
@@ -503,6 +543,67 @@ export function AAZStudio() {
 
             {resultUrl && (
               <a href={resultUrl} download={`aaz-${Date.now()}.mp4`} style={{ display: 'block', textAlign: 'center', padding: '9px', background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 7, color: C.blue, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>↓ Baixar MP4</a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════════ SCENE DIRECTOR ══════════ */}
+      {tab === 'director' && (
+        <div style={{ padding: '26px', maxWidth: 700 }}>
+          <Label>🎭 Scene Director — Claude AI</Label>
+          <div style={{ background: `${C.purple}10`, border: `1px solid ${C.purple}30`, borderRadius: 9, padding: '10px 14px', fontSize: 11, color: C.purple, marginBottom: 18 }}>
+            Descreva a cena em texto livre. O Claude gera prompts otimizados para Seedance 2.0 em PT-BR, ES e EN e injeta automaticamente nas 3 abas do Estúdio.
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>DESCRIÇÃO DA CENA</div>
+              <textarea
+                placeholder="Ex: Abraão e Abigail estão no Clube da Aliança. Abraão pega o brinquedo da Abigail sem pedir. Ela fica com o maxilar apertado, olhos marejados. Tuba late baixo, as sobrancelhas caem. Até que Abraão percebe e devolve..."
+                value={sdDesc}
+                onChange={e => setSdDesc(e.target.value)}
+                style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: '11px 12px', color: C.text, fontSize: 12, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 120 }}
+                rows={5}
+              />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>PERSONAGENS NA CENA</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+                {CHARACTERS.map(char => {
+                  const sel = sdChars.includes(char.id)
+                  return (
+                    <button key={char.id} onClick={() => toggleSdChar(char.id)} style={{ background: sel ? `${char.color}18` : C.card, border: `1px solid ${sel ? char.color : C.border}`, borderRadius: 9, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, transition: 'all 0.15s' }}>
+                      <span style={{ fontSize: 18 }}>{char.emoji}</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: sel ? char.color : C.textDim }}>{char.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>CENÁRIO (opcional)</div>
+                <Input placeholder="Ex: Clube da Aliança, cozinha..." value={sdSetting} onChange={e => setSdSetting(e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>CONFLITO EMOCIONAL (opcional)</div>
+                <Input placeholder="Ex: egoísmo vs. compartilhar" value={sdEmotion} onChange={e => setSdEmotion(e.target.value)} />
+              </div>
+            </div>
+
+            <button onClick={runSceneDirector} disabled={sdStatus === 'generating'} style={{ background: sdStatus === 'generating' ? C.card : `linear-gradient(135deg,${C.purple},#6B3FA0)`, border: `1px solid ${sdStatus === 'generating' ? C.border : C.purple}`, borderRadius: 11, padding: '14px', cursor: sdStatus === 'generating' ? 'not-allowed' : 'pointer', color: sdStatus === 'generating' ? C.textDim : '#fff', fontSize: 13, fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase', width: '100%', fontFamily: "'Georgia',serif", boxShadow: sdStatus === 'generating' ? 'none' : `0 0 22px ${C.purpleGlow}`, transition: 'all 0.2s' }}>
+              {sdStatus === 'generating' ? '⟳ Claude escrevendo...' : '🎭 Gerar Prompts Trilíngues'}
+            </button>
+
+            {sdStatus !== 'idle' && (
+              <div style={{ textAlign: 'center' }}>
+                <Pill color={sdStatus === 'success' ? C.green : sdStatus === 'error' ? C.red : C.purple}>
+                  {sdStatus === 'generating' && '⟳ '}{sdStatus === 'success' && '✓ '}{sdStatus === 'error' && '✕ '}{sdMsg}
+                </Pill>
+              </div>
             )}
           </div>
         </div>

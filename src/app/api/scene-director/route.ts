@@ -1,38 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { SCENE_DIRECTOR_SYSTEM } from '@/lib/sceneDirectorSystem'
 
 /**
  * POST /api/scene-director
  * Gera prompts trilíngues (PT-BR + ES + EN) via Claude API
- * usando o skill AAZ com Jesus — Scene Director for Seedance 2.0
- *
- * Body esperado:
- * {
- *   scene_description: string   // texto livre descrevendo a cena
- *   characters?: string[]       // ex: ["abraao", "abigail", "tuba"]
- *   setting?: string            // ex: "clube_da_aliança" | "casa_miriam_elias" | texto livre
- *   duration?: number           // 10 | 12 | 15 (default: 10)
- *   emotion?: string            // conflito emocional em jogo (opcional)
- * }
- *
- * Resposta:
- * {
- *   prompts: [
- *     { lang: "pt-br", prompt: string },
- *     { lang: "es",    prompt: string },
- *     { lang: "en",    prompt: string },
- *   ]
- * }
- *
- * TODO Fase 4 (Alexandre):
- *  - Carregar o SKILL.md completo como system prompt
- *  - Montar o user message com scene_description + characters + setting
- *  - Chamar claude-sonnet-4-20250514 com max_tokens: 4096
- *  - Fazer parse do JSON retornado [{lang, prompt}, ...]
- *  - Retornar { prompts } para o frontend injetar nas 3 abas
  */
 
-// O system prompt completo está em src/lib/sceneDirectorSystem.ts
-// (gerado na Fase 4 a partir do SKILL.md)
+interface ScenePrompt {
+  lang: string
+  prompt: string
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,21 +30,93 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Placeholder — Fase 4 implementa a chamada real
-    // Retorna estrutura correta para o frontend já poder consumir
-    return NextResponse.json({
-      prompts: [
-        { lang: 'pt-br', prompt: `[Scene Director: Fase 4 pendente] ${body.scene_description}` },
-        { lang: 'es',    prompt: `[Scene Director: Fase 4 pendiente] ${body.scene_description}` },
-        { lang: 'en',    prompt: `[Scene Director: Phase 4 pending] ${body.scene_description}` },
-      ],
+    // ── Monta o user message ────────────────────────────────────
+    const parts: string[] = []
+    parts.push(`Scene description: ${body.scene_description}`)
+
+    if (body.characters?.length) {
+      parts.push(`Characters in this scene: ${body.characters.join(', ')}`)
+    }
+    if (body.setting) {
+      parts.push(`Setting: ${body.setting}`)
+    }
+    if (body.duration) {
+      parts.push(`Video duration: ${body.duration} seconds`)
+    }
+    if (body.emotion) {
+      parts.push(`Emotional conflict: ${body.emotion}`)
+    }
+
+    const userMessage = parts.join('\n')
+
+    // ── Chamada à Claude API ────────────────────────────────────
+    const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'
+
+    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': anthropicKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4096,
+        system: SCENE_DIRECTOR_SYSTEM,
+        messages: [{ role: 'user', content: userMessage }],
+      }),
     })
+
+    if (!claudeRes.ok) {
+      const err = await claudeRes.json().catch(() => ({}))
+      const message = (err as { error?: { message?: string } })?.error?.message
+        ?? `Claude API retornou ${claudeRes.status}`
+      return NextResponse.json({ error: message }, { status: claudeRes.status })
+    }
+
+    const claudeData = await claudeRes.json() as {
+      content: { type: string; text: string }[]
+    }
+
+    const text = claudeData.content
+      ?.find(c => c.type === 'text')
+      ?.text?.trim()
+
+    if (!text) {
+      return NextResponse.json(
+        { error: 'Claude não retornou texto.' },
+        { status: 502 }
+      )
+    }
+
+    // ── Parse do JSON ───────────────────────────────────────────
+    let prompts: ScenePrompt[]
+    try {
+      prompts = JSON.parse(text)
+    } catch {
+      // Tenta extrair JSON de dentro de code fences
+      const match = text.match(/\[[\s\S]*\]/)
+      if (!match) {
+        return NextResponse.json(
+          { error: 'Claude retornou formato inválido.', raw: text },
+          { status: 502 }
+        )
+      }
+      prompts = JSON.parse(match[0])
+    }
+
+    if (!Array.isArray(prompts) || prompts.length !== 3) {
+      return NextResponse.json(
+        { error: 'Claude retornou array com tamanho incorreto.', raw: text },
+        { status: 502 }
+      )
+    }
+
+    return NextResponse.json({ prompts })
 
   } catch (err) {
     console.error('[/api/scene-director]', err)
-    return NextResponse.json(
-      { error: 'Erro interno ao processar a requisição.' },
-      { status: 500 }
-    )
+    const message = err instanceof Error ? err.message : 'Erro interno ao processar a requisição.'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
