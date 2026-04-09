@@ -8,47 +8,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const maxDuration = 120
 
-const MAX_RETRIES = 3
-const RETRY_DELAY_MS = 2000
 const FETCH_TIMEOUT_MS = 110_000 // 110s (Vercel limit = 120s)
-
-async function fetchWithRetry(
-  url: string,
-  init: RequestInit,
-  retries = MAX_RETRIES,
-): Promise<Response> {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
-
-    try {
-      const res = await fetch(url, { ...init, signal: controller.signal })
-
-      if (res.status === 429 && attempt < retries) {
-        const retryAfter = res.headers.get('retry-after')
-        const delay = retryAfter ? parseInt(retryAfter, 10) * 1000 : RETRY_DELAY_MS * (attempt + 1)
-        console.warn(`[/api/generate-sheet] 429 rate-limited, retry ${attempt + 1}/${retries} in ${delay}ms`)
-        await new Promise(r => setTimeout(r, delay))
-        continue
-      }
-
-      return res
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        if (attempt < retries) {
-          console.warn(`[/api/generate-sheet] timeout, retry ${attempt + 1}/${retries}`)
-          continue
-        }
-        throw new Error('Segmind não respondeu no tempo limite (110s).')
-      }
-      throw err
-    } finally {
-      clearTimeout(timeout)
-    }
-  }
-
-  throw new Error('Máximo de tentativas excedido.')
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -69,21 +29,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'character_name é obrigatório.' }, { status: 400 })
     }
 
-    // ── Chamada ao Segmind com retry ────────────────────────────
+    // ── Chamada ao Segmind (sem retry para evitar cobrança dupla) ──
     const endpoint = process.env.SEGMIND_SHEET_ENDPOINT
       ?? 'https://api.segmind.com/v1/seedance-2.0-character'
 
-    const segmindRes = await fetchWithRetry(endpoint, {
-      method:  'POST',
-      headers: {
-        'x-api-key':    apiKey,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        reference_images: body.reference_images,
-        character_name:   body.character_name,
-      }),
-    })
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+    let segmindRes: Response
+    try {
+      segmindRes = await fetch(endpoint, {
+        method:  'POST',
+        headers: {
+          'x-api-key':    apiKey,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reference_images: body.reference_images,
+          character_name:   body.character_name,
+        }),
+        signal: controller.signal,
+      })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return NextResponse.json({ error: 'Segmind não respondeu no tempo limite (110s).' }, { status: 504 })
+      }
+      throw err
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (!segmindRes.ok) {
       const errorData = await segmindRes.json().catch(() => ({}))
