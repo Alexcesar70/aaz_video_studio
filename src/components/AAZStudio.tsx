@@ -43,6 +43,7 @@ const COST_PER_SEC = parseFloat(process.env.NEXT_PUBLIC_COST_PER_SEC || '0.19')
 interface Character { id: string; name: string; emoji: string; color: string }
 interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
 interface LibraryEntry { charId: string; name: string; emoji: string; sheetUrl: string; photos: number; createdAt: string }
+interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
 /* ── Atoms ── */
@@ -90,6 +91,23 @@ export function AAZStudio() {
   const [sheetPhotos, setSheetPhotos] = useState<{ url: string; name: string }[]>([])
   const [sheetStatus, setSheetStatus] = useState('idle')
   const [sheetMsg, setSheetMsg] = useState('')
+
+  /* scenarios */
+  const [scenarios, setScenarios] = useState<ScenarioEntry[]>([])
+  const [scenarioName, setScenarioName] = useState('')
+  const [scenarioPhoto, setScenarioPhoto] = useState<{ url: string; name: string } | null>(null)
+
+  const addScenarioPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]
+    if (f) { const url = await toDataUrl(f); setScenarioPhoto({ url, name: f.name }) }
+  }
+
+  const saveScenario = () => {
+    if (!scenarioName.trim() || !scenarioPhoto) return
+    const entry: ScenarioEntry = { id: `scene_${Date.now()}`, name: scenarioName, imageUrl: scenarioPhoto.url, createdAt: new Date().toLocaleDateString('pt-BR') }
+    setScenarios(p => [...p, entry])
+    setScenarioName(''); setScenarioPhoto(null)
+  }
 
   /* scene director */
   const [sdDesc, setSdDesc] = useState('')
@@ -144,9 +162,19 @@ export function AAZStudio() {
   const [refVids, setRefVids] = useState<RefItem[]>([])
   const [refAuds, setRefAuds] = useState<RefItem[]>([])
 
-  /* first/last */
+  /* first/last — agora com upload de imagem */
   const [firstUrl, setFirstUrl] = useState('')
   const [lastUrl, setLastUrl] = useState('')
+  const [firstPreview, setFirstPreview] = useState('')
+  const [lastPreview, setLastPreview] = useState('')
+  const firstFrameRef = useRef<HTMLInputElement>(null)
+  const lastFrameRef = useRef<HTMLInputElement>(null)
+
+  const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
+    const url = await toDataUrl(file)
+    setter(url)
+    previewSetter(url)
+  }
 
   /* chain */
   const [chain, setChain] = useState(false)
@@ -324,7 +352,7 @@ export function AAZStudio() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
-        {[['studio', '🎬 Estúdio'], ['director', '🎭 Scene Director'], ['library', '📚 Biblioteca'], ['history', '📋 Histórico']].map(([id, lbl]) => (
+        {[['studio', '🎬 Estúdio'], ['director', '✨ Assistente de Prompt'], ['library', '📚 Biblioteca'], ['history', '📋 Histórico']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.gold}` : '2px solid transparent', color: tab === id ? C.gold : C.textDim, padding: '11px 18px', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
@@ -456,10 +484,38 @@ export function AAZStudio() {
 
             {/* First/Last */}
             {mode === 'first_last_frames' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <Label>URLs de Frame</Label>
-                <Input placeholder="URL do primeiro frame..." value={firstUrl} onChange={e => setFirstUrl(e.target.value)} style={{ fontFamily: 'monospace' }} />
-                <Input placeholder="URL do último frame..." value={lastUrl} onChange={e => setLastUrl(e.target.value)} style={{ fontFamily: 'monospace' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Label>Frames de Início e Fim</Label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: C.textDim, marginBottom: 6, letterSpacing: '1px' }}>PRIMEIRO FRAME</div>
+                    {firstPreview ? (
+                      <div style={{ position: 'relative' }}>
+                        <img src={firstPreview} alt="First frame" style={{ width: '100%', borderRadius: 8, border: `1px solid ${C.border}`, aspectRatio: '16/9', objectFit: 'cover' }} />
+                        <button onClick={() => { setFirstUrl(''); setFirstPreview('') }} style={{ position: 'absolute', top: -6, right: -6, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                      </div>
+                    ) : (
+                      <div onClick={() => firstFrameRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '24px 12px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer', aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        📷 Upload imagem
+                      </div>
+                    )}
+                    <input ref={firstFrameRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadFrame(f, setFirstUrl, setFirstPreview) }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: C.textDim, marginBottom: 6, letterSpacing: '1px' }}>ÚLTIMO FRAME</div>
+                    {lastPreview ? (
+                      <div style={{ position: 'relative' }}>
+                        <img src={lastPreview} alt="Last frame" style={{ width: '100%', borderRadius: 8, border: `1px solid ${C.border}`, aspectRatio: '16/9', objectFit: 'cover' }} />
+                        <button onClick={() => { setLastUrl(''); setLastPreview('') }} style={{ position: 'absolute', top: -6, right: -6, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                      </div>
+                    ) : (
+                      <div onClick={() => lastFrameRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '24px 12px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer', aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        📷 Upload imagem
+                      </div>
+                    )}
+                    <input ref={lastFrameRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadFrame(f, setLastUrl, setLastPreview) }} />
+                  </div>
+                </div>
               </div>
             )}
 
@@ -548,10 +604,10 @@ export function AAZStudio() {
         </div>
       )}
 
-      {/* ══════════ SCENE DIRECTOR ══════════ */}
+      {/* ══════════ ASSISTENTE DE PROMPT ══════════ */}
       {tab === 'director' && (
         <div style={{ padding: '26px', maxWidth: 700 }}>
-          <Label>🎭 Scene Director — Claude AI</Label>
+          <Label>✨ Assistente de Prompt — Claude AI</Label>
           <div style={{ background: `${C.purple}10`, border: `1px solid ${C.purple}30`, borderRadius: 9, padding: '10px 14px', fontSize: 11, color: C.purple, marginBottom: 18 }}>
             Descreva a cena em texto livre. O Claude gera prompts otimizados para Seedance 2.0 em PT-BR, ES e EN e injeta automaticamente nas 3 abas do Estúdio.
           </div>
@@ -595,7 +651,7 @@ export function AAZStudio() {
             </div>
 
             <button onClick={runSceneDirector} disabled={sdStatus === 'generating'} style={{ background: sdStatus === 'generating' ? C.card : `linear-gradient(135deg,${C.purple},#6B3FA0)`, border: `1px solid ${sdStatus === 'generating' ? C.border : C.purple}`, borderRadius: 11, padding: '14px', cursor: sdStatus === 'generating' ? 'not-allowed' : 'pointer', color: sdStatus === 'generating' ? C.textDim : '#fff', fontSize: 13, fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase', width: '100%', fontFamily: "'Georgia',serif", boxShadow: sdStatus === 'generating' ? 'none' : `0 0 22px ${C.purpleGlow}`, transition: 'all 0.2s' }}>
-              {sdStatus === 'generating' ? '⟳ Claude escrevendo...' : '🎭 Gerar Prompts Trilíngues'}
+              {sdStatus === 'generating' ? '⟳ Claude escrevendo...' : '✨ Gerar Prompts Trilíngues'}
             </button>
 
             {sdStatus !== 'idle' && (
@@ -619,7 +675,7 @@ export function AAZStudio() {
                 <div style={{ fontSize: 10, color: C.textDim, marginBottom: 10, letterSpacing: '1px' }}>SELECIONAR PERSONAGEM</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
                   {CHARACTERS.map(char => (
-                    <button key={char.id} onClick={() => setSheetChar(char)} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <button key={char.id} onClick={() => { setSheetChar(char); setSheetPhotos([]); setSheetStatus('idle'); setSheetMsg('') }} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                       <span style={{ fontSize: 18 }}>{char.emoji}</span>
                       <span style={{ fontSize: 9, fontWeight: 700, color: sheetChar?.id === char.id ? char.color : C.textDim }}>{char.name}</span>
                     </button>
@@ -651,8 +707,9 @@ export function AAZStudio() {
             </div>
           </div>
 
+          {/* ── Personagens salvos ── */}
           <div>
-            <Label>Biblioteca de Personagens ({Object.keys(library).length})</Label>
+            <Label>Personagens Salvos ({Object.keys(library).length})</Label>
             {Object.keys(library).length === 0
               ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: '40px', textAlign: 'center', color: C.textDim }}><div style={{ fontSize: 30, marginBottom: 8 }}>📚</div><div>Nenhum sheet ainda. Gere o primeiro acima.</div></div>
               : (
@@ -678,6 +735,55 @@ export function AAZStudio() {
                       </div>
                     )
                   })}
+                </div>
+              )
+            }
+          </div>
+
+          {/* ── Cenários ── */}
+          <div>
+            <Label>Cenários</Label>
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>NOME DO CENÁRIO</div>
+                <Input placeholder="Ex: Clube da Aliança, Cozinha..." value={scenarioName} onChange={e => setScenarioName(e.target.value)} />
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>IMAGEM DE REFERÊNCIA</div>
+                {scenarioPhoto ? (
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <img src={scenarioPhoto.url} alt={scenarioPhoto.name} style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                    <button onClick={() => setScenarioPhoto(null)} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 14, height: 14, cursor: 'pointer', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                  </div>
+                ) : (
+                  <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = (e) => addScenarioPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '13px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer' }}>
+                    📷 Upload imagem
+                  </div>
+                )}
+              </div>
+              <div style={{ gridColumn: '1/-1' }}>
+                <button onClick={saveScenario} disabled={!scenarioName.trim() || !scenarioPhoto} style={{ background: scenarioName.trim() && scenarioPhoto ? `linear-gradient(135deg,${C.blue},#2558A8)` : C.card, border: `1px solid ${scenarioName.trim() && scenarioPhoto ? C.blue : C.border}`, borderRadius: 9, padding: '10px 22px', cursor: scenarioName.trim() && scenarioPhoto ? 'pointer' : 'not-allowed', color: scenarioName.trim() && scenarioPhoto ? '#fff' : C.textDim, fontSize: 12, fontWeight: 800, letterSpacing: '1px', fontFamily: "'Georgia',serif" }}>
+                  + Salvar Cenário
+                </button>
+              </div>
+            </div>
+            {scenarios.length === 0
+              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: '30px', textAlign: 'center', color: C.textDim }}><div style={{ fontSize: 24, marginBottom: 6 }}>🏠</div><div style={{ fontSize: 11 }}>Nenhum cenário salvo ainda.</div></div>
+              : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 14 }}>
+                  {scenarios.map(s => (
+                    <div key={s.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, overflow: 'hidden' }}>
+                      <img src={s.imageUrl} alt={s.name} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }} />
+                      <div style={{ padding: '12px' }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{s.name}</div>
+                        <div style={{ fontSize: 9, color: C.textDim, marginBottom: 8 }}>{s.createdAt}</div>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => { setTab('studio'); setMode('omni_reference'); const idx = refImgs.length + 1; setRefImgs(p => [...p, { url: s.imageUrl, label: `@image${idx}`, name: `Cenário · ${s.name}` }]) }} style={{ flex: 1, background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 7, padding: '5px', cursor: 'pointer', color: C.blue, fontSize: 10, fontWeight: 700, fontFamily: 'inherit' }}>Usar</button>
+                          <button onClick={() => setScenarios(p => p.filter(x => x.id !== s.id))} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 7, padding: '5px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>×</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )
             }
