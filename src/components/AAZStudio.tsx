@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 
 /* ═══════════════════════════════════════════════════════════════
@@ -37,17 +37,7 @@ const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const DURATIONS = [4, 5, 8, 10, 12, 15]
 const COST_PER_SEC = parseFloat(process.env.NEXT_PUBLIC_COST_PER_SEC || '0.08')
 
-/* ── Storage — biblioteca de sheets compartilhada via KV ── */
-// No cliente, o estado vem da API /api/library (Fase 3)
-// Por ora mantemos localStorage como fallback para Fase 1
-const STORAGE_KEY = 'aaz-char-library-v2'
-const loadLib = () => {
-  if (typeof window === 'undefined') return {}
-  try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : {} } catch { return {} }
-}
-const saveLib = (l: Record<string, LibraryEntry>) => {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(l)) } catch {}
-}
+/* ── Storage — biblioteca de sheets compartilhada via Vercel KV ── */
 
 /* ── Types ── */
 interface Character { id: string; name: string; emoji: string; color: string }
@@ -76,9 +66,24 @@ export function AAZStudio() {
   /* tabs */
   const [tab, setTab] = useState('studio')
 
-  /* biblioteca */
-  const [library, setLibrary] = useState<Record<string, LibraryEntry>>(loadLib)
-  const updLib = (next: Record<string, LibraryEntry>) => { setLibrary(next); saveLib(next) }
+  /* biblioteca — Vercel KV */
+  const [library, setLibrary] = useState<Record<string, LibraryEntry>>({})
+
+  const loadLibrary = useCallback(async () => {
+    try {
+      const res = await fetch('/api/library')
+      if (res.ok) setLibrary(await res.json())
+    } catch { /* silently fallback to empty */ }
+  }, [])
+
+  useEffect(() => { loadLibrary() }, [loadLibrary])
+
+  const saveToKV = async (entry: LibraryEntry) => {
+    try { await fetch('/api/library', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }) } catch {}
+  }
+  const deleteFromKV = async (charId: string) => {
+    try { await fetch(`/api/library/${encodeURIComponent(charId)}`, { method: 'DELETE' }) } catch {}
+  }
 
   /* sheet builder */
   const [sheetChar, setSheetChar] = useState<Character | null>(null)
@@ -181,12 +186,17 @@ export function AAZStudio() {
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
       const blob = await res.blob()
-      const sheetUrl = URL.createObjectURL(blob)
+      const sheetUrl = await new Promise<string>(resolve => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      })
       const entry: LibraryEntry = {
         charId: sheetChar.id, name: sheetChar.name, emoji: sheetChar.emoji,
         sheetUrl, photos: sheetPhotos.length, createdAt: new Date().toLocaleDateString('pt-BR'),
       }
-      updLib({ ...library, [sheetChar.id]: entry })
+      setLibrary(prev => ({ ...prev, [sheetChar.id]: entry }))
+      await saveToKV(entry)
       setSheetStatus('success'); setSheetMsg(`Sheet de ${sheetChar.name} salvo!`)
       setSheetPhotos([]); setSheetChar(null)
     } catch (err: unknown) {
@@ -561,7 +571,7 @@ export function AAZStudio() {
                           </div>
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => { setTab('studio'); setMode('omni_reference'); setTimeout(() => addFromLibrary(entry.charId), 150) }} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 7, padding: '5px', cursor: 'pointer', color: C.purple, fontSize: 10, fontWeight: 700, fontFamily: 'inherit' }}>Usar</button>
-                            <button onClick={() => { const next = { ...library }; delete next[entry.charId]; updLib(next) }} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 7, padding: '5px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>×</button>
+                            <button onClick={() => { const next = { ...library }; delete next[entry.charId]; setLibrary(next); deleteFromKV(entry.charId) }} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 7, padding: '5px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>×</button>
                           </div>
                         </div>
                       </div>
