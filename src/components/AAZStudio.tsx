@@ -44,6 +44,8 @@ interface Character { id: string; name: string; emoji: string; color: string; de
 interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
 interface LibraryEntry { charId: string; name: string; emoji: string; sheetUrl: string; photos: number; createdAt: string }
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
+interface Episode { id: string; name: string; createdAt: string }
+interface SceneAsset { id: string; episodeId: string; sceneNumber: number; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
 /* ── Atoms ── */
@@ -92,22 +94,69 @@ export function AAZStudio() {
   const [sheetStatus, setSheetStatus] = useState('idle')
   const [sheetMsg, setSheetMsg] = useState('')
 
-  /* scenarios */
+  /* scenarios — persisted to KV */
   const [scenarios, setScenarios] = useState<ScenarioEntry[]>([])
   const [scenarioName, setScenarioName] = useState('')
   const [scenarioPhoto, setScenarioPhoto] = useState<{ url: string; name: string } | null>(null)
+
+  const loadScenarios = useCallback(async () => {
+    try { const r = await fetch('/api/scenarios'); if (r.ok) setScenarios(await r.json()) } catch {}
+  }, [])
 
   const addScenarioPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]
     if (f) { const url = await toDataUrl(f); setScenarioPhoto({ url, name: f.name }) }
   }
 
-  const saveScenario = () => {
+  const saveScenario = async () => {
     if (!scenarioName.trim() || !scenarioPhoto) return
-    const entry: ScenarioEntry = { id: `scene_${Date.now()}`, name: scenarioName, imageUrl: scenarioPhoto.url, createdAt: new Date().toLocaleDateString('pt-BR') }
+    const entry: ScenarioEntry = { id: `scenario_${Date.now()}`, name: scenarioName, imageUrl: scenarioPhoto.url, createdAt: new Date().toLocaleDateString('pt-BR') }
     setScenarios(p => [...p, entry])
     setScenarioName(''); setScenarioPhoto(null)
+    try { await fetch('/api/scenarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }) } catch {}
   }
+
+  const deleteScenario = async (id: string) => {
+    setScenarios(p => p.filter(s => s.id !== id))
+    try { await fetch(`/api/scenarios/${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch {}
+  }
+
+  /* episodes */
+  const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null)
+  const [newEpName, setNewEpName] = useState('')
+
+  const loadEpisodes = useCallback(async () => {
+    try { const r = await fetch('/api/episodes'); if (r.ok) { const eps = await r.json(); setEpisodes(eps); if (eps.length && !currentEpisode) setCurrentEpisode(eps[0]) } } catch {}
+  }, [currentEpisode])
+
+  const createEpisode = async () => {
+    if (!newEpName.trim()) return
+    const ep: Episode = { id: `ep_${Date.now()}`, name: newEpName, createdAt: new Date().toISOString() }
+    setEpisodes(p => [...p, ep]); setCurrentEpisode(ep); setNewEpName('')
+    try { await fetch('/api/episodes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ep) }) } catch {}
+  }
+
+  const deleteEpisode = async (id: string) => {
+    setEpisodes(p => p.filter(e => e.id !== id))
+    if (currentEpisode?.id === id) setCurrentEpisode(episodes.find(e => e.id !== id) ?? null)
+    setSceneAssets(p => p.filter(s => s.episodeId !== id))
+    try { await fetch(`/api/episodes/${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch {}
+  }
+
+  /* scene assets — persisted to KV */
+  const [sceneAssets, setSceneAssets] = useState<SceneAsset[]>([])
+
+  const loadScenes = useCallback(async () => {
+    try { const r = await fetch('/api/scenes'); if (r.ok) setSceneAssets(await r.json()) } catch {}
+  }, [])
+
+  /* load all data */
+  useEffect(() => { loadScenarios(); loadEpisodes(); loadScenes() }, [loadScenarios, loadEpisodes, loadScenes])
+
+  /* asset panel in studio */
+  const [showAssets, setShowAssets] = useState(false)
+  const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'scenes'>('chars')
 
   /* scene director */
   const [sdDesc, setSdDesc] = useState('')
@@ -225,6 +274,23 @@ export function AAZStudio() {
     setRefImgs(p => [...p, { url: entry.sheetUrl, label: `@image${idx}`, name: `Sheet · ${entry.name}`, fromLib: true, charId }])
   }
 
+  /* Ideia 3: one-click inject any asset */
+  const injectScenario = (s: ScenarioEntry) => {
+    if (refImgs.length >= 9) return
+    setMode('omni_reference')
+    const idx = refImgs.length + 1
+    setRefImgs(p => [...p, { url: s.imageUrl, label: `@image${idx}`, name: `Cenário · ${s.name}` }])
+  }
+
+  const injectSceneAsFirstFrame = (scene: SceneAsset) => {
+    if (scene.lastFrameUrl) {
+      setFirstUrl(scene.lastFrameUrl); setFirstPreview(scene.lastFrameUrl)
+      setMode('first_last_frames')
+    } else if (scene.videoUrl) {
+      setChain(true); setLastResult(scene.videoUrl)
+    }
+  }
+
   const injectTags = () => {
     const tags = selChars.map(c => library[c.id] ? `@image${refImgs.findIndex(r => r.charId === c.id) + 1}` : `@character:${c.id}`).join(' ')
     setPrompts(p => ({ ...p, [lang]: p[lang] ? `${p[lang]} ${tags}` : tags }))
@@ -312,13 +378,28 @@ export function AAZStudio() {
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       setResultUrl(url); setLastResult(url); setStatus('success'); setStatusMsg('Vídeo gerado!')
+      const now = Date.now()
       setHistory(p => [{
-        id: Date.now(),
+        id: now,
         prompt: prompts[lang].slice(0, 90) + (prompts[lang].length > 90 ? '…' : ''),
         chars: selChars.map(c => c.name).join(', '),
         mode, ratio, duration, cost, url,
         timestamp: new Date().toLocaleTimeString('pt-BR'),
       }, ...p.slice(0, 19)])
+
+      // Ideia 2: salvar cena como asset persistente
+      if (currentEpisode) {
+        const epScenes = sceneAssets.filter(s => s.episodeId === currentEpisode.id)
+        const scene: SceneAsset = {
+          id: `scene_${now}`, episodeId: currentEpisode.id,
+          sceneNumber: epScenes.length + 1, prompt: prompts[lang],
+          videoUrl: url, lastFrameUrl: url,
+          characters: selChars.map(c => c.id), duration, cost,
+          createdAt: new Date().toISOString(),
+        }
+        setSceneAssets(p => [...p, scene])
+        fetch('/api/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scene) }).catch(() => {})
+      }
     } catch (err: unknown) {
       setStatus('error'); setStatusMsg(err instanceof Error ? err.message : 'Erro Segmind.')
     } finally {
@@ -362,7 +443,69 @@ export function AAZStudio() {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', minHeight: 'calc(100vh - 100px)' }}>
 
           {/* ── Esquerda: Preview grande + Prompt ── */}
-          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+
+            {/* Ideia 5: Episódio seletor */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <select value={currentEpisode?.id ?? ''} onChange={e => setCurrentEpisode(episodes.find(ep => ep.id === e.target.value) ?? null)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 14, fontFamily: 'inherit', flex: 1, outline: 'none' }}>
+                <option value="">Selecione um episódio</option>
+                {episodes.map(ep => <option key={ep.id} value={ep.id}>{ep.name}</option>)}
+              </select>
+              <Input placeholder="Novo episódio..." value={newEpName} onChange={e => setNewEpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createEpisode()} style={{ width: 200 }} />
+              <button onClick={createEpisode} disabled={!newEpName.trim()} style={{ background: newEpName.trim() ? C.purple : C.card, border: `1px solid ${newEpName.trim() ? C.purple : C.border}`, borderRadius: 8, padding: '8px 16px', cursor: newEpName.trim() ? 'pointer' : 'default', color: newEpName.trim() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar</button>
+              <button onClick={() => setShowAssets(!showAssets)} style={{ background: showAssets ? C.purple : C.card, border: `1px solid ${showAssets ? C.purple : C.border}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: showAssets ? '#fff' : C.textDim, fontSize: 13, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Assets</button>
+            </div>
+
+            {/* Ideia 4: Painel de Assets colapsável */}
+            {showAssets && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px', maxHeight: 280, overflowY: 'auto' }}>
+                <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+                  {[['chars', 'Personagens'], ['scenarios', 'Cenários'], ['scenes', 'Cenas']].map(([id, lbl]) => (
+                    <button key={id} onClick={() => setLibTab(id as 'chars' | 'scenarios' | 'scenes')} style={{ flex: 1, padding: '6px', borderRadius: 8, background: libTab === id ? C.card : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
+                  ))}
+                </div>
+
+                {/* Personagens */}
+                {libTab === 'chars' && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {Object.values(library).length === 0 ? <div style={{ color: C.textDim, fontSize: 13 }}>Nenhum personagem salvo.</div> : Object.values(library).map(entry => (
+                      <button key={entry.charId} onClick={() => { addFromLibrary(entry.charId); setMode('omni_reference') }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 80 }}>
+                        {entry.sheetUrl && <img src={entry.sheetUrl} alt={entry.name} style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} />}
+                        <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{entry.emoji} {entry.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Cenários */}
+                {libTab === 'scenarios' && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {scenarios.length === 0 ? <div style={{ color: C.textDim, fontSize: 13 }}>Nenhum cenário salvo.</div> : scenarios.map(s => (
+                      <button key={s.id} onClick={() => injectScenario(s)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 100 }}>
+                        <img src={s.imageUrl} alt={s.name} style={{ width: 88, height: 50, borderRadius: 8, objectFit: 'cover' }} />
+                        <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{s.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Cenas do episódio */}
+                {libTab === 'scenes' && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {!currentEpisode ? <div style={{ color: C.textDim, fontSize: 13 }}>Selecione um episódio acima.</div> :
+                      sceneAssets.filter(s => s.episodeId === currentEpisode.id).length === 0 ? <div style={{ color: C.textDim, fontSize: 13 }}>Nenhuma cena neste episódio.</div> :
+                      sceneAssets.filter(s => s.episodeId === currentEpisode.id).map(scene => (
+                        <button key={scene.id} onClick={() => injectSceneAsFirstFrame(scene)} title="Usar como frame inicial da próxima cena" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 100 }}>
+                          <div style={{ width: 88, height: 50, borderRadius: 8, background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🎬</div>
+                          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Cena {scene.sceneNumber}</span>
+                          <span style={{ fontSize: 10, color: C.textDim }}>{scene.duration}s</span>
+                        </button>
+                      ))
+                    }
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Video Preview — grande */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
@@ -659,71 +802,78 @@ export function AAZStudio() {
         </div>
       )}
 
-      {/* ══════════ BIBLIOTECA ══════════ */}
+      {/* ══════════ BIBLIOTECA — Ideia 1: categorias separadas ══════════ */}
       {tab === 'library' && (
-        <div style={{ padding: '26px', display: 'flex', flexDirection: 'column', gap: 26 }}>
-          <div>
-            <Label>Gerar Character Sheet · Seedance 2.0</Label>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-              <div>
-                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 10, letterSpacing: '1px' }}>SELECIONAR PERSONAGEM</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
-                  {CHARACTERS.map(char => (
-                    <button key={char.id} onClick={() => { setSheetChar(char); setSheetPhotos([]); setSheetStatus('idle'); setSheetMsg('') }} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                      <span style={{ fontSize: 18 }}>{char.emoji}</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: sheetChar?.id === char.id ? char.color : C.textDim }}>{char.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 10, letterSpacing: '1px' }}>FOTOS DE REFERÊNCIA ({sheetPhotos.length}/3)</div>
-                {sheetPhotos.length > 0 && (
-                  <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
-                    {sheetPhotos.map((p, i) => (
-                      <div key={i} style={{ position: 'relative' }}>
-                        <img src={p.url} alt={p.name} style={{ width: 58, height: 58, borderRadius: 6, objectFit: 'cover', border: `1px solid ${C.border}` }} />
-                        <button onClick={() => setSheetPhotos(p => p.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 14, height: 14, cursor: 'pointer', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = (e) => addSheetPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '13px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer' }}>
-                  📷 Adicionar fotos (1-3)
-                </div>
-              </div>
-              <div style={{ gridColumn: '1/-1', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <button onClick={genSheet} disabled={sheetStatus === 'generating'} style={{ background: `linear-gradient(135deg,${C.gold},${C.goldDim})`, border: `1px solid ${C.gold}`, borderRadius: 9, padding: '11px 22px', cursor: 'pointer', color: '#000', fontSize: 12, fontWeight: 800, letterSpacing: '1px', fontFamily: "'Georgia',serif", boxShadow: `0 0 18px ${C.goldGlow}` }}>
-                  {sheetStatus === 'generating' ? '⟳ Gerando...' : '✦ Gerar Character Sheet 4K'}
-                </button>
-                {sheetStatus !== 'idle' && <Pill color={sheetStatus === 'success' ? C.green : sheetStatus === 'error' ? C.red : C.gold}>{sheetMsg}</Pill>}
-              </div>
-            </div>
+        <div style={{ padding: '26px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}` }}>
+            {[['chars', 'Personagens'], ['scenarios', 'Cenários'], ['scenes', 'Cenas']].map(([id, lbl]) => (
+              <button key={id} onClick={() => setLibTab(id as 'chars' | 'scenarios' | 'scenes')} style={{ flex: 1, padding: '10px', borderRadius: 8, background: libTab === id ? C.surface : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
+            ))}
           </div>
 
-          {/* ── Personagens salvos ── */}
-          <div>
-            <Label>Personagens Salvos ({Object.keys(library).length})</Label>
+          {/* ═══ PERSONAGENS ═══ */}
+          {libTab === 'chars' && (<>
+            {/* Gerador */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px' }}>
+              <Label>Gerar Character Sheet</Label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Personagem</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+                    {CHARACTERS.map(char => (
+                      <button key={char.id} onClick={() => { setSheetChar(char); setSheetPhotos([]); setSheetStatus('idle'); setSheetMsg('') }} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                        <span style={{ fontSize: 20 }}>{char.emoji}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: sheetChar?.id === char.id ? char.color : C.textDim }}>{char.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Referência ({sheetPhotos.length}/3) — opcional</div>
+                  {sheetPhotos.length > 0 && (
+                    <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
+                      {sheetPhotos.map((p, i) => (
+                        <div key={i} style={{ position: 'relative' }}>
+                          <img src={p.url} alt={p.name} style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                          <button onClick={() => setSheetPhotos(prev => prev.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = (e) => addSheetPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Upload fotos</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
+                <button onClick={genSheet} disabled={sheetStatus === 'generating'} style={{ background: sheetStatus === 'generating' ? C.card : C.purple, border: `1px solid ${sheetStatus === 'generating' ? C.border : C.purple}`, borderRadius: 10, padding: '12px 24px', cursor: sheetStatus === 'generating' ? 'not-allowed' : 'pointer', color: sheetStatus === 'generating' ? C.textDim : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit' }}>
+                  {sheetStatus === 'generating' ? '⟳ Gerando...' : 'Gerar Sheet (~$0.58)'}
+                </button>
+                {sheetStatus !== 'idle' && <Pill color={sheetStatus === 'success' ? C.green : sheetStatus === 'error' ? C.red : C.purple}>{sheetMsg}</Pill>}
+              </div>
+            </div>
+
+            {/* Grid de personagens salvos */}
             {Object.keys(library).length === 0
-              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: '40px', textAlign: 'center', color: C.textDim }}><div style={{ fontSize: 30, marginBottom: 8 }}>📚</div><div>Nenhum sheet ainda. Gere o primeiro acima.</div></div>
+              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhum personagem salvo. Gere o primeiro acima.</div>
               : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
                   {Object.values(library).map(entry => {
                     const char = CHARACTERS.find(c => c.id === entry.charId)
                     return (
-                      <div key={entry.charId} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, overflow: 'hidden' }}>
+                      <div key={entry.charId} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
                         {entry.sheetUrl && <img src={entry.sheetUrl} alt={entry.name} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover' }} />}
-                        <div style={{ padding: '12px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 9 }}>
-                            <span style={{ fontSize: 18 }}>{entry.emoji}</span>
+                        <div style={{ padding: '14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                            <span style={{ fontSize: 20 }}>{entry.emoji}</span>
                             <div>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: char?.color || C.gold }}>{entry.name}</div>
-                              <div style={{ fontSize: 9, color: C.textDim }}>{entry.createdAt}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: char?.color || C.text }}>{entry.name}</div>
+                              <div style={{ fontSize: 12, color: C.textDim }}>{entry.createdAt}</div>
                             </div>
                           </div>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => { setTab('studio'); setMode('omni_reference'); setTimeout(() => addFromLibrary(entry.charId), 150) }} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 7, padding: '5px', cursor: 'pointer', color: C.purple, fontSize: 10, fontWeight: 700, fontFamily: 'inherit' }}>Usar</button>
-                            <button onClick={() => { const next = { ...library }; delete next[entry.charId]; setLibrary(next); deleteFromKV(entry.charId) }} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 7, padding: '5px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>×</button>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => { setTab('studio'); setMode('omni_reference'); setTimeout(() => addFromLibrary(entry.charId), 150) }} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Usar no Estúdio</button>
+                            <button onClick={() => { const next = { ...library }; delete next[entry.charId]; setLibrary(next); deleteFromKV(entry.charId) }} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.red, fontSize: 14, fontFamily: 'inherit' }}>×</button>
                           </div>
                         </div>
                       </div>
@@ -732,48 +882,42 @@ export function AAZStudio() {
                 </div>
               )
             }
-          </div>
+          </>)}
 
-          {/* ── Cenários ── */}
-          <div>
-            <Label>Cenários</Label>
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 13, padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+          {/* ═══ CENÁRIOS ═══ */}
+          {libTab === 'scenarios' && (<>
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, alignItems: 'end' }}>
               <div>
-                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>NOME DO CENÁRIO</div>
-                <Input placeholder="Ex: Clube da Aliança, Cozinha..." value={scenarioName} onChange={e => setScenarioName(e.target.value)} />
+                <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Nome do cenário</div>
+                <Input placeholder="Ex: Clube da Aliança..." value={scenarioName} onChange={e => setScenarioName(e.target.value)} />
               </div>
               <div>
-                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>IMAGEM DE REFERÊNCIA</div>
+                <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Imagem</div>
                 {scenarioPhoto ? (
                   <div style={{ position: 'relative', display: 'inline-block' }}>
-                    <img src={scenarioPhoto.url} alt={scenarioPhoto.name} style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
-                    <button onClick={() => setScenarioPhoto(null)} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 14, height: 14, cursor: 'pointer', fontSize: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                    <img src={scenarioPhoto.url} alt={scenarioPhoto.name} style={{ width: 80, height: 50, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                    <button onClick={() => setScenarioPhoto(null)} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                   </div>
                 ) : (
-                  <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = (e) => addScenarioPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '13px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer' }}>
-                    📷 Upload imagem
-                  </div>
+                  <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = (e) => addScenarioPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Upload</div>
                 )}
               </div>
-              <div style={{ gridColumn: '1/-1' }}>
-                <button onClick={saveScenario} disabled={!scenarioName.trim() || !scenarioPhoto} style={{ background: scenarioName.trim() && scenarioPhoto ? `linear-gradient(135deg,${C.blue},#2558A8)` : C.card, border: `1px solid ${scenarioName.trim() && scenarioPhoto ? C.blue : C.border}`, borderRadius: 9, padding: '10px 22px', cursor: scenarioName.trim() && scenarioPhoto ? 'pointer' : 'not-allowed', color: scenarioName.trim() && scenarioPhoto ? '#fff' : C.textDim, fontSize: 12, fontWeight: 800, letterSpacing: '1px', fontFamily: "'Georgia',serif" }}>
-                  + Salvar Cenário
-                </button>
-              </div>
+              <button onClick={saveScenario} disabled={!scenarioName.trim() || !scenarioPhoto} style={{ background: scenarioName.trim() && scenarioPhoto ? C.blue : C.card, border: `1px solid ${scenarioName.trim() && scenarioPhoto ? C.blue : C.border}`, borderRadius: 10, padding: '10px 20px', cursor: scenarioName.trim() && scenarioPhoto ? 'pointer' : 'default', color: scenarioName.trim() && scenarioPhoto ? '#fff' : C.textDim, fontSize: 14, fontWeight: 600, fontFamily: 'inherit' }}>+ Salvar</button>
             </div>
+
             {scenarios.length === 0
-              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: '30px', textAlign: 'center', color: C.textDim }}><div style={{ fontSize: 24, marginBottom: 6 }}>🏠</div><div style={{ fontSize: 11 }}>Nenhum cenário salvo ainda.</div></div>
+              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhum cenário salvo.</div>
               : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
                   {scenarios.map(s => (
-                    <div key={s.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, overflow: 'hidden' }}>
+                    <div key={s.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
                       <img src={s.imageUrl} alt={s.name} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }} />
-                      <div style={{ padding: '12px' }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{s.name}</div>
-                        <div style={{ fontSize: 9, color: C.textDim, marginBottom: 8 }}>{s.createdAt}</div>
-                        <div style={{ display: 'flex', gap: 6 }}>
-                          <button onClick={() => { setTab('studio'); setMode('omni_reference'); const idx = refImgs.length + 1; setRefImgs(p => [...p, { url: s.imageUrl, label: `@image${idx}`, name: `Cenário · ${s.name}` }]) }} style={{ flex: 1, background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 7, padding: '5px', cursor: 'pointer', color: C.blue, fontSize: 10, fontWeight: 700, fontFamily: 'inherit' }}>Usar</button>
-                          <button onClick={() => setScenarios(p => p.filter(x => x.id !== s.id))} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 7, padding: '5px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>×</button>
+                      <div style={{ padding: '14px' }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{s.name}</div>
+                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 10 }}>{s.createdAt}</div>
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button onClick={() => { setTab('studio'); injectScenario(s) }} style={{ flex: 1, background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.blue, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Usar no Estúdio</button>
+                          <button onClick={() => deleteScenario(s.id)} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.red, fontSize: 14, fontFamily: 'inherit' }}>×</button>
                         </div>
                       </div>
                     </div>
@@ -781,7 +925,49 @@ export function AAZStudio() {
                 </div>
               )
             }
-          </div>
+          </>)}
+
+          {/* ═══ CENAS — Ideia 2 + 5 ═══ */}
+          {libTab === 'scenes' && (<>
+            {/* Episódios */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px' }}>
+              <Label>Episódios</Label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {episodes.map(ep => (
+                  <div key={ep.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button onClick={() => setCurrentEpisode(ep)} style={{ background: currentEpisode?.id === ep.id ? `${C.purple}20` : C.surface, border: `1px solid ${currentEpisode?.id === ep.id ? C.purple : C.border}`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: currentEpisode?.id === ep.id ? C.text : C.textDim, fontFamily: 'inherit' }}>{ep.name}</button>
+                    <button onClick={() => deleteEpisode(ep.id)} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Input placeholder="Nome do novo episódio..." value={newEpName} onChange={e => setNewEpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createEpisode()} />
+                <button onClick={createEpisode} disabled={!newEpName.trim()} style={{ background: newEpName.trim() ? C.purple : C.card, border: `1px solid ${newEpName.trim() ? C.purple : C.border}`, borderRadius: 8, padding: '8px 20px', cursor: newEpName.trim() ? 'pointer' : 'default', color: newEpName.trim() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar Episódio</button>
+              </div>
+            </div>
+
+            {/* Timeline de cenas */}
+            {!currentEpisode
+              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Selecione ou crie um episódio acima.</div>
+              : sceneAssets.filter(s => s.episodeId === currentEpisode.id).length === 0
+              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhuma cena em &quot;{currentEpisode.name}&quot;. Gere cenas no Estúdio com este episódio selecionado.</div>
+              : (
+                <div style={{ display: 'flex', gap: 16, overflowX: 'auto', padding: '4px 0' }}>
+                  {sceneAssets.filter(s => s.episodeId === currentEpisode.id).map(scene => (
+                    <div key={scene.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 240, flexShrink: 0, overflow: 'hidden' }}>
+                      <div style={{ background: C.bg, aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>🎬</div>
+                      <div style={{ padding: '14px' }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>Cena {scene.sceneNumber}</div>
+                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 4 }}>{scene.duration}s · {scene.cost}</div>
+                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 210 }}>{scene.prompt}</div>
+                        <button onClick={() => { setTab('studio'); injectSceneAsFirstFrame(scene) }} style={{ width: '100%', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Encadear próxima cena</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          </>)}
         </div>
       )}
 
