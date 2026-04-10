@@ -139,10 +139,10 @@ export function AAZStudio() {
       const p = data.prompts as { lang: string; prompt: string }[]
       setPrompts({
         pt: p.find(x => x.lang === 'pt-br')?.prompt ?? '',
-        es: p.find(x => x.lang === 'es')?.prompt ?? '',
+        es: '',
         en: p.find(x => x.lang === 'en')?.prompt ?? '',
       })
-      setSdStatus('success'); setSdMsg('Prompts gerados e injetados nas 3 abas!')
+      setSdStatus('success'); setSdMsg('Prompts gerados e injetados nas abas PT e EN!')
       setTab('studio')
     } catch (err: unknown) {
       setSdStatus('error'); setSdMsg(err instanceof Error ? err.message : 'Erro desconhecido')

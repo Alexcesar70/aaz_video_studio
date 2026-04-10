@@ -49,29 +49,40 @@ export async function POST(request: NextRequest) {
 
     const userMessage = parts.join('\n')
 
-    // ── Chamada à Claude API ────────────────────────────────────
+    // ── Chamada à Claude API com retry em overloaded ──────────
     const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'
-
-    const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': anthropicKey,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 4096,
-        system: SCENE_DIRECTOR_SYSTEM,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
+    const requestBody = JSON.stringify({
+      model,
+      max_tokens: 4096,
+      system: SCENE_DIRECTOR_SYSTEM,
+      messages: [{ role: 'user', content: userMessage }],
     })
 
-    if (!claudeRes.ok) {
-      const err = await claudeRes.json().catch(() => ({}))
+    let claudeRes: Response | null = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': anthropicKey,
+          'anthropic-version': '2023-06-01',
+          'content-type': 'application/json',
+        },
+        body: requestBody,
+      })
+
+      if (claudeRes.status === 529) {
+        // Overloaded — espera e tenta de novo
+        await new Promise(r => setTimeout(r, 3000 * (attempt + 1)))
+        continue
+      }
+      break
+    }
+
+    if (!claudeRes || !claudeRes.ok) {
+      const err = claudeRes ? await claudeRes.json().catch(() => ({})) : {}
       const message = (err as { error?: { message?: string } })?.error?.message
-        ?? `Claude API retornou ${claudeRes.status}`
-      return NextResponse.json({ error: message }, { status: claudeRes.status })
+        ?? `Claude API retornou ${claudeRes?.status ?? 'sem resposta'}`
+      return NextResponse.json({ error: message }, { status: claudeRes?.status ?? 502 })
     }
 
     const claudeData = await claudeRes.json() as {
@@ -105,7 +116,7 @@ export async function POST(request: NextRequest) {
       prompts = JSON.parse(match[0])
     }
 
-    if (!Array.isArray(prompts) || prompts.length !== 3) {
+    if (!Array.isArray(prompts) || prompts.length < 2) {
       return NextResponse.json(
         { error: 'Claude retornou array com tamanho incorreto.', raw: text },
         { status: 502 }

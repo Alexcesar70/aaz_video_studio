@@ -60,11 +60,10 @@ ALLOWED: "jaw tightens", "shoulders drop", "gaze drifts away", "fingers curl int
 
 ## OUTPUT FORMAT
 
-Return ONLY a raw JSON array (no markdown, no comments, no code fences) with exactly 3 objects:
+Return ONLY a raw JSON array (no markdown, no comments, no code fences) with exactly 2 objects:
 
 [
   { "lang": "pt-br", "prompt": "Estilo e Atmosfera: ... Descrição Dinâmica: ... Descrição Estática: ..." },
-  { "lang": "es",    "prompt": "Estilo y Atmósfera: ... Descripción Dinámica: ... Descripción Estática: ..." },
   { "lang": "en",    "prompt": "Style & Mood: ... Dynamic Description: ... Static Description: ..." }
 ]
 
