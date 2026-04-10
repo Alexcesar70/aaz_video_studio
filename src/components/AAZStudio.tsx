@@ -262,8 +262,31 @@ export function AAZStudio() {
   /* ── helpers ── */
   const toggleChar = (c: Character) => setSelChars(p => p.find(x => x.id === c.id) ? p.filter(x => x.id !== c.id) : [...p, c])
 
-  const toDataUrl = (file: File): Promise<string> => new Promise(res => {
-    const r = new FileReader(); r.onload = e => res(e.target?.result as string); r.readAsDataURL(file)
+  const toDataUrl = (file: File, maxSize = 1200): Promise<string> => new Promise(res => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string
+      // Compress if image
+      if (file.type.startsWith('image/')) {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let w = img.width, h = img.height
+          if (w > maxSize || h > maxSize) {
+            if (w > h) { h = Math.round(h * maxSize / w); w = maxSize }
+            else { w = Math.round(w * maxSize / h); h = maxSize }
+          }
+          canvas.width = w; canvas.height = h
+          const ctx = canvas.getContext('2d')!
+          ctx.drawImage(img, 0, 0, w, h)
+          res(canvas.toDataURL('image/jpeg', 0.85))
+        }
+        img.src = dataUrl
+      } else {
+        res(dataUrl)
+      }
+    }
+    reader.readAsDataURL(file)
   })
 
   const addRef = async (e: React.ChangeEvent<HTMLInputElement>, type: string, list: RefItem[], setter: React.Dispatch<React.SetStateAction<RefItem[]>>, max: number) => {
@@ -517,9 +540,15 @@ export function AAZStudio() {
                 style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 100 }}
                 rows={4}
               />
-              {selChars.length > 0 && (
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                  {selChars.map(c => <Pill key={c.id} color={c.color}>{c.emoji} {c.name}</Pill>)}
+              {/* Tags @ clicáveis — mostra qual @image pertence a qual personagem/cenário */}
+              {refImgs.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
+                  {refImgs.map((r, i) => (
+                    <button key={i} onClick={() => setPrompts(p => ({ ...p, [lang]: p[lang] + ` @image${i + 1}` }))} style={{ background: `${r.fromLib ? C.purple : C.blue}15`, border: `1px solid ${r.fromLib ? C.purple : C.blue}40`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: r.fromLib ? C.purple : C.blue, fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ fontFamily: 'inherit' }}>@image{i + 1}</span>
+                      <span style={{ fontFamily: 'sans-serif', fontSize: 11, opacity: 0.7 }}>{r.name}</span>
+                    </button>
+                  ))}
                 </div>
               )}
             </div>

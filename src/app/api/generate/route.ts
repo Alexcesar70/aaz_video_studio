@@ -20,7 +20,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const body = await request.json()
+    let body
+    try {
+      body = await request.json()
+    } catch {
+      return NextResponse.json({ error: 'Request body inválido ou muito grande. Reduza o número/tamanho das imagens.' }, { status: 413 })
+    }
 
     // Validação mínima
     if (!body.prompt?.trim()) {
