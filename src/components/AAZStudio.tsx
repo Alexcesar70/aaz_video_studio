@@ -347,8 +347,23 @@ export function AAZStudio() {
     if (!prompts[lang].trim()) { setStatus('error'); setStatusMsg('Escreva o prompt.'); return }
     setGenerating(true); setStatus('generating'); setStatusMsg('Enviando para Seedance 2.0...'); setResultUrl('')
 
+    // Substitui @NomePersonagem por @imageN automaticamente
+    let finalPrompt = prompts[lang]
+    refImgs.forEach((r, i) => {
+      if (r.name) {
+        // Substitui @Nome, @nome (case insensitive) pelo @imageN correto
+        const namePattern = new RegExp(`@${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
+        finalPrompt = finalPrompt.replace(namePattern, `@image${i + 1}`)
+        // Também substitui por charId se existir (ex: @tuba, @abraao)
+        if (r.charId) {
+          const idPattern = new RegExp(`@${r.charId}\\b`, 'gi')
+          finalPrompt = finalPrompt.replace(idPattern, `@image${i + 1}`)
+        }
+      }
+    })
+
     const body: Record<string, unknown> = {
-      prompt: prompts[lang],
+      prompt: finalPrompt,
       duration,
       aspect_ratio: ratio,
       resolution: '720p',
@@ -540,15 +555,19 @@ export function AAZStudio() {
                 style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 100 }}
                 rows={4}
               />
-              {/* Tags @ clicáveis — mostra qual @image pertence a qual personagem/cenário */}
+              {/* Tags @ clicáveis — insere @Nome no prompt, convertido para @imageN ao enviar */}
               {refImgs.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
-                  {refImgs.map((r, i) => (
-                    <button key={i} onClick={() => setPrompts(p => ({ ...p, [lang]: p[lang] + ` @image${i + 1}` }))} style={{ background: `${r.fromLib ? C.purple : C.blue}15`, border: `1px solid ${r.fromLib ? C.purple : C.blue}40`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: r.fromLib ? C.purple : C.blue, fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ fontFamily: 'inherit' }}>@image{i + 1}</span>
-                      <span style={{ fontFamily: 'sans-serif', fontSize: 11, opacity: 0.7 }}>{r.name}</span>
-                    </button>
-                  ))}
+                  {refImgs.map((r, i) => {
+                    const tag = r.charId ? `@${r.charId}` : `@image${i + 1}`
+                    const displayName = r.name || `image${i + 1}`
+                    return (
+                      <button key={i} onClick={() => setPrompts(p => ({ ...p, [lang]: p[lang] + ` ${tag}` }))} style={{ background: `${r.fromLib ? C.purple : C.blue}15`, border: `1px solid ${r.fromLib ? C.purple : C.blue}40`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: r.fromLib ? C.purple : C.blue, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontFamily: 'monospace' }}>{tag}</span>
+                        <span style={{ fontSize: 11, opacity: 0.6 }}>= @image{i + 1}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
