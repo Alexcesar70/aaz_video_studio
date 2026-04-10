@@ -2,13 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * POST /api/generate-sheet
- * Proxy server-side para Segmind Seedance 2.0 Character Sheet
- * Resolve CORS — a SEGMIND_API_KEY nunca chega ao browser
+ * Proxy server-side para Segmind Consistent Character AI Neolemon V3
+ * Gera character sheet multi-pose a partir de prompt + imagem de referência
  */
 
 export const maxDuration = 120
 
-const FETCH_TIMEOUT_MS = 110_000 // 110s (Vercel limit = 120s)
+const FETCH_TIMEOUT_MS = 110_000
+
+const ENDPOINT = 'https://api.segmind.com/v1/consistent-character-AI-neolemon-v3'
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,32 +24,41 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
-    if (!body.reference_images?.length) {
-      return NextResponse.json({ error: 'reference_images é obrigatório.' }, { status: 400 })
-    }
     if (!body.character_name?.trim()) {
       return NextResponse.json({ error: 'character_name é obrigatório.' }, { status: 400 })
     }
 
-    // ── Chamada ao Segmind (sem retry para evitar cobrança dupla) ──
-    const endpoint = process.env.SEGMIND_SHEET_ENDPOINT
-      ?? 'https://api.segmind.com/v1/seedance-2.0-character'
+    // Monta o prompt descritivo do personagem
+    const prompt = body.prompt || `${body.character_name} character sheet, multiple poses, full body, front view, side view, back view, 3/4 view, clay texture, 3D animation style, expressive eyes, rounded proportions, warm palette, white background`
 
+    // Monta payload para Neolemon V3
+    const payload: Record<string, unknown> = {
+      prompt,
+      steps: 10,
+      guidance_scale: 3,
+      width: 1024,
+      height: 1024,
+      seed: body.seed ?? Math.floor(Math.random() * 999999),
+    }
+
+    // Se tiver imagem de referência, usa como ip_image (primeira da lista)
+    if (body.reference_images?.length) {
+      payload.ip_image = body.reference_images[0]
+    }
+
+    // ── Chamada ao Segmind (sem retry para evitar cobrança dupla) ──
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
     let segmindRes: Response
     try {
-      segmindRes = await fetch(endpoint, {
-        method:  'POST',
+      segmindRes = await fetch(ENDPOINT, {
+        method: 'POST',
         headers: {
-          'x-api-key':    apiKey,
+          'x-api-key': apiKey,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          reference_images: body.reference_images,
-          character_name:   body.character_name,
-        }),
+        body: JSON.stringify(payload),
         signal: controller.signal,
       })
     } catch (err) {
@@ -72,9 +83,9 @@ export async function POST(request: NextRequest) {
     return new NextResponse(imageBlob, {
       status: 200,
       headers: {
-        'Content-Type':        'image/png',
+        'Content-Type': 'image/png',
         'Content-Disposition': `inline; filename="sheet-${body.character_id ?? 'char'}.png"`,
-        'Cache-Control':       'no-store',
+        'Cache-Control': 'no-store',
       },
     })
 

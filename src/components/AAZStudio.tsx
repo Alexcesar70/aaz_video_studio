@@ -18,13 +18,13 @@ const C = {
 }
 
 const CHARACTERS = [
-  { id: 'abraao', name: 'Abraão', emoji: '👴', color: '#C9A84C' },
-  { id: 'abigail', name: 'Abigail', emoji: '👧', color: '#D4A0C8' },
-  { id: 'zaqueu', name: 'Zaqueu', emoji: '🧔', color: '#7AB8D4' },
-  { id: 'tuba', name: 'Tuba', emoji: '🐕', color: '#C8A07A' },
-  { id: 'theos', name: 'Theos', emoji: '✨', color: '#A8D4FF' },
-  { id: 'miriam', name: 'Miriã', emoji: '👩', color: '#D4C0A0' },
-  { id: 'elias', name: 'Elias', emoji: '🧙', color: '#A0D4B0' },
+  { id: 'abraao', name: 'Abraão', emoji: '👴', color: '#C9A84C', desc: '8 year old boy, messy orange-red hair, fair skin with freckles, hazel-green eyes, slightly protruding ears, pink vest over teal t-shirt, gray cargo shorts, green-mint canvas sneakers' },
+  { id: 'abigail', name: 'Abigail', emoji: '👧', color: '#D4A0C8', desc: '7 year old girl, dark curly hair in two side puffs, warm brown skin, big brown eyes with defined lashes, rosy cheeks, multi-layered dress with colorful geometric print, colorful neck scarf, beaded bracelets, burgundy-pink flats' },
+  { id: 'zaqueu', name: 'Zaqueu', emoji: '🧔', color: '#7AB8D4', desc: '9 year old boy, mini-dreads with clay texture, deep dark skin, expressive brown eyes, wide smile, open olive-green jacket with gold buttons over orange t-shirt, geometric colorful shorts, colorful canvas sneakers with orange laces' },
+  { id: 'tuba', name: 'Tuba', emoji: '🐕', color: '#C8A07A', desc: 'medium dog, intense amber-orange fur with clay fiber texture, cream chest and belly, rounded black nose, expressive dark-brown eyes with articulated clay eyebrows, floppy ears, tail curled upward' },
+  { id: 'theos', name: 'Theos', emoji: '✨', color: '#A8D4FF', desc: '' },
+  { id: 'miriam', name: 'Miriã', emoji: '👩', color: '#D4C0A0', desc: 'adult woman, mother, curly hair, wears apron, welcoming warm eyes, kind expression' },
+  { id: 'elias', name: 'Elias', emoji: '🧙', color: '#A0D4B0', desc: 'adult man, father, short beard, large hands, calm presence, gentle expression' },
 ]
 
 const MODES = [
@@ -40,7 +40,7 @@ const COST_PER_SEC = parseFloat(process.env.NEXT_PUBLIC_COST_PER_SEC || '0.19')
 /* ── Storage — biblioteca de sheets compartilhada via Vercel KV ── */
 
 /* ── Types ── */
-interface Character { id: string; name: string; emoji: string; color: string }
+interface Character { id: string; name: string; emoji: string; color: string; desc: string }
 interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
 interface LibraryEntry { charId: string; name: string; emoji: string; sheetUrl: string; photos: number; createdAt: string }
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
@@ -237,19 +237,24 @@ export function AAZStudio() {
     router.refresh()
   }
 
-  /* ── Generate Sheet — via /api/generate-sheet (sem CORS) ── */
+  /* ── Generate Sheet — via /api/generate-sheet (Neolemon V3) ── */
   const genSheet = async () => {
     if (!sheetChar) { setSheetStatus('error'); setSheetMsg('Selecione um personagem.'); return }
-    if (!sheetPhotos.length) { setSheetStatus('error'); setSheetMsg('Adicione ao menos 1 foto.'); return }
-    setSheetStatus('generating'); setSheetMsg('Gerando character sheet 4K...')
+    setSheetStatus('generating'); setSheetMsg('Gerando character sheet (~$0.58)...')
     try {
+      const charData = CHARACTERS.find(c => c.id === sheetChar.id)
+      const prompt = charData?.desc
+        ? `${charData.desc}, character sheet, multiple poses, front view, side view, back view, 3/4 view, 3D clay texture animation style, expressive eyes, rounded proportions, warm palette, white background`
+        : `${sheetChar.name} character sheet, multiple poses, 3D clay texture style, white background`
+
       const res = await fetch('/api/generate-sheet', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          reference_images: sheetPhotos.map(p => p.url),
+          reference_images: sheetPhotos.length ? sheetPhotos.map(p => p.url) : undefined,
           character_name: sheetChar.name,
           character_id: sheetChar.id,
+          prompt,
         }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
