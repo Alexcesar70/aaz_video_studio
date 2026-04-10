@@ -42,7 +42,7 @@ const COST_PER_SEC = parseFloat(process.env.NEXT_PUBLIC_COST_PER_SEC || '0.19')
 /* ── Types ── */
 interface Character { id: string; name: string; emoji: string; color: string; desc: string }
 interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
-interface LibraryEntry { charId: string; name: string; emoji: string; sheetUrl: string; photos: number; createdAt: string }
+interface LibraryEntry { charId: string; name: string; emoji: string; images: string[]; createdAt: string }
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
 interface Episode { id: string; name: string; createdAt: string }
 interface SceneAsset { id: string; episodeId: string; sceneNumber: number; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string }
@@ -88,11 +88,25 @@ export function AAZStudio() {
     try { await fetch(`/api/library/${encodeURIComponent(charId)}`, { method: 'DELETE' }) } catch {}
   }
 
-  /* sheet builder */
+  /* character reference uploader */
   const [sheetChar, setSheetChar] = useState<Character | null>(null)
   const [sheetPhotos, setSheetPhotos] = useState<{ url: string; name: string }[]>([])
-  const [sheetStatus, setSheetStatus] = useState('idle')
-  const [sheetMsg, setSheetMsg] = useState('')
+
+  const addSheetPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []).slice(0, 5 - sheetPhotos.length)
+    for (const f of files) { const url = await toDataUrl(f); setSheetPhotos(p => [...p, { url, name: f.name }]) }
+  }
+
+  const saveCharRefs = async () => {
+    if (!sheetChar || !sheetPhotos.length) return
+    const entry: LibraryEntry = {
+      charId: sheetChar.id, name: sheetChar.name, emoji: sheetChar.emoji,
+      images: sheetPhotos.map(p => p.url), createdAt: new Date().toLocaleDateString('pt-BR'),
+    }
+    setLibrary(prev => ({ ...prev, [sheetChar.id]: entry }))
+    await saveToKV(entry)
+    setSheetPhotos([]); setSheetChar(null)
+  }
 
   /* scenarios — persisted to KV */
   const [scenarios, setScenarios] = useState<ScenarioEntry[]>([])
@@ -262,16 +276,18 @@ export function AAZStudio() {
     }
   }
 
-  const addSheetPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []).slice(0, 3 - sheetPhotos.length)
-    for (const f of files) { const url = await toDataUrl(f); setSheetPhotos(p => [...p, { url, name: f.name }]) }
-  }
-
   const addFromLibrary = (charId: string) => {
     const entry = library[charId]
     if (!entry || refImgs.length >= 9) return
-    const idx = refImgs.length + 1
-    setRefImgs(p => [...p, { url: entry.sheetUrl, label: `@image${idx}`, name: `Sheet · ${entry.name}`, fromLib: true, charId }])
+    setMode('omni_reference')
+    for (const img of entry.images) {
+      if (refImgs.length >= 9) break
+      const idx = refImgs.length + 1
+      setRefImgs(p => {
+        if (p.length >= 9) return p
+        return [...p, { url: img, label: `@image${p.length + 1}`, name: `${entry.name}`, fromLib: true, charId }]
+      })
+    }
   }
 
   /* Ideia 3: one-click inject any asset */
@@ -301,47 +317,6 @@ export function AAZStudio() {
     await fetch('/api/auth/logout', { method: 'POST' })
     router.push('/login')
     router.refresh()
-  }
-
-  /* ── Generate Sheet — via /api/generate-sheet (Neolemon V3) ── */
-  const genSheet = async () => {
-    if (!sheetChar) { setSheetStatus('error'); setSheetMsg('Selecione um personagem.'); return }
-    if (!sheetPhotos.length) { setSheetStatus('error'); setSheetMsg('Suba ao menos 1 foto de referência.'); return }
-    setSheetStatus('generating'); setSheetMsg('Gerando character sheet (~$0.58)...')
-    try {
-      const charData = CHARACTERS.find(c => c.id === sheetChar.id)
-      const prompt = charData?.desc
-        ? `${charData.desc}. Character reference sheet showing multiple poses: front view, side view, back view, 3/4 view. 3D clay texture animation style, rounded proportions, warm palette, clean white background.`
-        : `${sheetChar.name} character reference sheet, multiple poses, front view, side view, back view, 3D clay texture style, white background`
-
-      const res = await fetch('/api/generate-sheet', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          reference_images: sheetPhotos.length ? sheetPhotos.map(p => p.url) : undefined,
-          character_name: sheetChar.name,
-          character_id: sheetChar.id,
-          prompt,
-        }),
-      })
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
-      const blob = await res.blob()
-      const sheetUrl = await new Promise<string>(resolve => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.readAsDataURL(blob)
-      })
-      const entry: LibraryEntry = {
-        charId: sheetChar.id, name: sheetChar.name, emoji: sheetChar.emoji,
-        sheetUrl, photos: sheetPhotos.length, createdAt: new Date().toLocaleDateString('pt-BR'),
-      }
-      setLibrary(prev => ({ ...prev, [sheetChar.id]: entry }))
-      await saveToKV(entry)
-      setSheetStatus('success'); setSheetMsg(`Sheet de ${sheetChar.name} salvo!`)
-      setSheetPhotos([]); setSheetChar(null)
-    } catch (err: unknown) {
-      setSheetStatus('error'); setSheetMsg(err instanceof Error ? err.message : 'Erro desconhecido')
-    }
   }
 
   /* ── Generate Video — via /api/generate (sem CORS) ── */
@@ -470,8 +445,8 @@ export function AAZStudio() {
                 {libTab === 'chars' && (
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     {Object.values(library).length === 0 ? <div style={{ color: C.textDim, fontSize: 13 }}>Nenhum personagem salvo.</div> : Object.values(library).map(entry => (
-                      <button key={entry.charId} onClick={() => { addFromLibrary(entry.charId); setMode('omni_reference') }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 80 }}>
-                        {entry.sheetUrl && <img src={entry.sheetUrl} alt={entry.name} style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} />}
+                      <button key={entry.charId} onClick={() => addFromLibrary(entry.charId)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 80 }}>
+                        {entry.images?.[0] && <img src={entry.images[0]} alt={entry.name} style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} />}
                         <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{entry.emoji} {entry.name}</span>
                       </button>
                     ))}
@@ -816,15 +791,15 @@ export function AAZStudio() {
 
           {/* ═══ PERSONAGENS ═══ */}
           {libTab === 'chars' && (<>
-            {/* Gerador */}
+            {/* Upload de referências */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px' }}>
-              <Label>Gerar Character Sheet</Label>
+              <Label>Adicionar Referências de Personagem</Label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
                   <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Personagem</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
                     {CHARACTERS.map(char => (
-                      <button key={char.id} onClick={() => { setSheetChar(char); setSheetPhotos([]); setSheetStatus('idle'); setSheetMsg('') }} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                      <button key={char.id} onClick={() => { setSheetChar(char); setSheetPhotos([]) }} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                         <span style={{ fontSize: 20 }}>{char.emoji}</span>
                         <span style={{ fontSize: 11, fontWeight: 600, color: sheetChar?.id === char.id ? char.color : C.textDim }}>{char.name}</span>
                       </button>
@@ -832,48 +807,51 @@ export function AAZStudio() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Foto de referência ({sheetPhotos.length}/3) — obrigatória</div>
+                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Imagens de referência ({sheetPhotos.length}/5)</div>
                   {sheetPhotos.length > 0 && (
-                    <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
                       {sheetPhotos.map((p, i) => (
                         <div key={i} style={{ position: 'relative' }}>
-                          <img src={p.url} alt={p.name} style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                          <img src={p.url} alt={p.name} style={{ width: 70, height: 70, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
                           <button onClick={() => setSheetPhotos(prev => prev.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                         </div>
                       ))}
                     </div>
                   )}
-                  <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = (e) => addSheetPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Upload fotos</div>
+                  <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = (e) => addSheetPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Upload imagens</div>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
-                <button onClick={genSheet} disabled={sheetStatus === 'generating'} style={{ background: sheetStatus === 'generating' ? C.card : C.purple, border: `1px solid ${sheetStatus === 'generating' ? C.border : C.purple}`, borderRadius: 10, padding: '12px 24px', cursor: sheetStatus === 'generating' ? 'not-allowed' : 'pointer', color: sheetStatus === 'generating' ? C.textDim : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit' }}>
-                  {sheetStatus === 'generating' ? '⟳ Gerando...' : 'Gerar Sheet (~$0.58)'}
+              <div style={{ marginTop: 16 }}>
+                <button onClick={saveCharRefs} disabled={!sheetChar || !sheetPhotos.length} style={{ background: sheetChar && sheetPhotos.length ? C.purple : C.card, border: `1px solid ${sheetChar && sheetPhotos.length ? C.purple : C.border}`, borderRadius: 10, padding: '12px 24px', cursor: sheetChar && sheetPhotos.length ? 'pointer' : 'default', color: sheetChar && sheetPhotos.length ? '#fff' : C.textDim, fontSize: 14, fontWeight: 700, fontFamily: 'inherit' }}>
+                  Salvar Referências
                 </button>
-                {sheetStatus !== 'idle' && <Pill color={sheetStatus === 'success' ? C.green : sheetStatus === 'error' ? C.red : C.purple}>{sheetMsg}</Pill>}
               </div>
             </div>
 
             {/* Grid de personagens salvos */}
             {Object.keys(library).length === 0
-              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhum personagem salvo. Gere o primeiro acima.</div>
+              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhum personagem salvo. Suba imagens de referência acima.</div>
               : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
                   {Object.values(library).map(entry => {
                     const char = CHARACTERS.find(c => c.id === entry.charId)
                     return (
                       <div key={entry.charId} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-                        {entry.sheetUrl && <img src={entry.sheetUrl} alt={entry.name} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover' }} />}
+                        <div style={{ display: 'flex', gap: 4, padding: 8, overflowX: 'auto' }}>
+                          {entry.images.map((img, i) => (
+                            <img key={i} src={img} alt={`${entry.name} ref ${i + 1}`} style={{ width: 90, height: 90, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: `1px solid ${C.border}` }} />
+                          ))}
+                        </div>
                         <div style={{ padding: '14px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                             <span style={{ fontSize: 20 }}>{entry.emoji}</span>
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: char?.color || C.text }}>{entry.name}</div>
-                              <div style={{ fontSize: 12, color: C.textDim }}>{entry.createdAt}</div>
+                              <div style={{ fontSize: 12, color: C.textDim }}>{entry.images.length} referências · {entry.createdAt}</div>
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: 8 }}>
-                            <button onClick={() => { setTab('studio'); setMode('omni_reference'); setTimeout(() => addFromLibrary(entry.charId), 150) }} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Usar no Estúdio</button>
+                            <button onClick={() => { setTab('studio'); addFromLibrary(entry.charId) }} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Usar no Estúdio</button>
                             <button onClick={() => { const next = { ...library }; delete next[entry.charId]; setLibrary(next); deleteFromKV(entry.charId) }} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.red, fontSize: 14, fontFamily: 'inherit' }}>×</button>
                           </div>
                         </div>
