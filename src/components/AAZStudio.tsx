@@ -21,7 +21,7 @@ const CHARACTERS = [
   { id: 'abraao', name: 'Abraão', emoji: '👴', color: '#C9A84C', desc: '8 year old boy, messy orange-red hair, fair skin with freckles, hazel-green eyes, slightly protruding ears, pink vest over teal t-shirt, gray cargo shorts, green-mint canvas sneakers' },
   { id: 'abigail', name: 'Abigail', emoji: '👧', color: '#D4A0C8', desc: '7 year old girl, dark curly hair in two side puffs, warm brown skin, big brown eyes with defined lashes, rosy cheeks, multi-layered dress with colorful geometric print, colorful neck scarf, beaded bracelets, burgundy-pink flats' },
   { id: 'zaqueu', name: 'Zaqueu', emoji: '🧔', color: '#7AB8D4', desc: '9 year old boy, mini-dreads with clay texture, deep dark skin, expressive brown eyes, wide smile, open olive-green jacket with gold buttons over orange t-shirt, geometric colorful shorts, colorful canvas sneakers with orange laces' },
-  { id: 'tuba', name: 'Tuba', emoji: '🐕', color: '#C8A07A', desc: 'medium dog, intense amber-orange fur with clay fiber texture, cream chest and belly, rounded black nose, expressive dark-brown eyes with articulated clay eyebrows, floppy ears, tail curled upward' },
+  { id: 'tuba', name: 'Tuba', emoji: '🐕', color: '#C8A07A', desc: 'a cartoon dog, medium sized dog character, four legs, amber-orange fur, cream chest and belly, rounded black nose, expressive dark-brown eyes, floppy ears, curled tail, NOT a human' },
   { id: 'theos', name: 'Theos', emoji: '✨', color: '#A8D4FF', desc: '' },
   { id: 'miriam', name: 'Miriã', emoji: '👩', color: '#D4C0A0', desc: 'adult woman, mother, curly hair, wears apron, welcoming warm eyes, kind expression' },
   { id: 'elias', name: 'Elias', emoji: '🧙', color: '#A0D4B0', desc: 'adult man, father, short beard, large hands, calm presence, gentle expression' },
@@ -244,8 +244,8 @@ export function AAZStudio() {
     try {
       const charData = CHARACTERS.find(c => c.id === sheetChar.id)
       const prompt = charData?.desc
-        ? `${charData.desc}, character sheet, multiple poses, front view, side view, back view, 3/4 view, 3D clay texture animation style, expressive eyes, rounded proportions, warm palette, white background`
-        : `${sheetChar.name} character sheet, multiple poses, 3D clay texture style, white background`
+        ? `${charData.desc}. Character reference sheet showing multiple poses: front view, side view, back view, 3/4 view. 3D clay texture animation style, rounded proportions, warm palette, clean white background.`
+        : `${sheetChar.name} character reference sheet, multiple poses, front view, side view, back view, 3D clay texture style, white background`
 
       const res = await fetch('/api/generate-sheet', {
         method: 'POST',

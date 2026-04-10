@@ -28,43 +28,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'character_name é obrigatório.' }, { status: 400 })
     }
 
-    // Monta o prompt descritivo do personagem
     const prompt = body.prompt || `${body.character_name} character sheet, multiple poses, full body, front view, side view, back view, 3/4 view, clay texture, 3D animation style, expressive eyes, rounded proportions, warm palette, white background`
 
-    // Monta payload para Neolemon V3
     const payload: Record<string, unknown> = {
       prompt,
-      steps: 10,
-      guidance_scale: 3,
+      steps: 20,
+      guidance_scale: 5,
       width: 1024,
       height: 1024,
       seed: body.seed ?? Math.floor(Math.random() * 999999),
     }
 
-    // ip_image aceita apenas URLs públicas — se for base64, faz upload primeiro
+    // Tenta usar a imagem de referência como ip_image
     if (body.reference_images?.length) {
       const img = body.reference_images[0] as string
+
       if (img.startsWith('http')) {
         payload.ip_image = img
       } else if (img.startsWith('data:')) {
-        // Upload base64 para Segmind Storage e pega a URL pública
-        const uploadRes = await fetch('https://api.segmind.com/v1/upload-image', {
-          method: 'POST',
-          headers: {
-            'x-api-key': apiKey,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ image: img }),
-        })
-        if (uploadRes.ok) {
-          const uploadData = await uploadRes.json() as { url?: string; image_url?: string }
-          const publicUrl = uploadData.url ?? uploadData.image_url
-          if (publicUrl) payload.ip_image = publicUrl
+        // Tenta upload para obter URL pública
+        try {
+          const uploadRes = await fetch('https://workflows-api.segmind.com/upload-asset', {
+            method: 'POST',
+            headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: img }),
+          })
+          if (uploadRes.ok) {
+            const data = await uploadRes.json() as Record<string, string>
+            const publicUrl = data.url ?? data.image_url ?? data.asset_url
+            if (publicUrl) payload.ip_image = publicUrl
+          }
+        } catch {
+          // Upload falhou — gera sem referência, prompt descritivo basta
+          console.warn('[/api/generate-sheet] Upload falhou, gerando sem ip_image')
         }
       }
     }
 
-    // ── Chamada ao Segmind (sem retry para evitar cobrança dupla) ──
+    // ── Chamada ao Segmind ──
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
@@ -81,11 +82,38 @@ export async function POST(request: NextRequest) {
       })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        return NextResponse.json({ error: 'Segmind não respondeu no tempo limite (110s).' }, { status: 504 })
+        return NextResponse.json({ error: 'Segmind não respondeu no tempo limite.' }, { status: 504 })
       }
       throw err
     } finally {
       clearTimeout(timeout)
+    }
+
+    // Se deu erro de ip_image, tenta de novo sem ela
+    if (!segmindRes.ok && payload.ip_image) {
+      const errText = await segmindRes.text().catch(() => '')
+      if (errText.toLowerCase().includes('ip') || errText.toLowerCase().includes('image')) {
+        console.warn('[/api/generate-sheet] ip_image rejeitada, tentando sem referência')
+        delete payload.ip_image
+
+        const controller2 = new AbortController()
+        const timeout2 = setTimeout(() => controller2.abort(), FETCH_TIMEOUT_MS)
+        try {
+          segmindRes = await fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: controller2.signal,
+          })
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            return NextResponse.json({ error: 'Segmind não respondeu no tempo limite.' }, { status: 504 })
+          }
+          throw err
+        } finally {
+          clearTimeout(timeout2)
+        }
+      }
     }
 
     if (!segmindRes.ok) {
