@@ -55,8 +55,12 @@ export async function POST(request: NextRequest) {
     if (body.first_frame_url) segmindPayload.first_frame_url = body.first_frame_url
     if (body.last_frame_url)  segmindPayload.last_frame_url  = body.last_frame_url
 
-    // ── Chamada ao Segmind (sem retry para evitar cobrança dupla) ──
+    // ── Chamada ao Segmind ──
     const endpoint = process.env.SEGMIND_VIDEO_ENDPOINT ?? 'https://api.segmind.com/v1/seedance-2.0'
+
+    const payloadStr = JSON.stringify(segmindPayload)
+    const payloadSizeMB = (payloadStr.length / 1024 / 1024).toFixed(2)
+    console.log(`[/api/generate] Payload: ${payloadSizeMB}MB, mode: ${body.mode}, refs: ${body.reference_images?.length ?? 0}`)
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
@@ -69,7 +73,7 @@ export async function POST(request: NextRequest) {
           'x-api-key':     apiKey,
           'Content-Type':  'application/json',
         },
-        body: JSON.stringify(segmindPayload),
+        body: payloadStr,
         signal: controller.signal,
       })
     } catch (err) {
@@ -82,10 +86,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (!segmindRes.ok) {
-      const errorData = await segmindRes.json().catch(() => ({}))
-      const message = (errorData as { detail?: string; error?: string })?.detail
-        ?? (errorData as { detail?: string; error?: string })?.error
-        ?? `Segmind retornou ${segmindRes.status}`
+      const errorText = await segmindRes.text().catch(() => '')
+      let message = `Segmind retornou ${segmindRes.status}`
+      try {
+        const errorData = JSON.parse(errorText)
+        message = errorData?.detail ?? errorData?.error ?? errorData?.message ?? message
+      } catch {
+        if (errorText) message = errorText.slice(0, 200)
+      }
+      console.error('[/api/generate] Segmind error:', segmindRes.status, message)
       return NextResponse.json({ error: message }, { status: segmindRes.status })
     }
 
