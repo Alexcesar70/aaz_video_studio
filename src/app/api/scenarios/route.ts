@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { getRedis } from '@/lib/redis'
 
 const PREFIX = 'aaz:scenario:'
 
-interface ScenarioEntry {
-  id: string
-  name: string
-  imageUrl: string
-  createdAt: string
-}
+interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
 
 export async function GET() {
   try {
-    const keys = await kv.keys(`${PREFIX}*`)
+    const redis = await getRedis()
+    const keys = await redis.keys(`${PREFIX}*`)
     if (keys.length === 0) return NextResponse.json([])
-    const values = await kv.mget<ScenarioEntry[]>(...keys)
-    return NextResponse.json(values.filter(Boolean))
+    const scenarios: ScenarioEntry[] = []
+    for (const key of keys) {
+      const val = await redis.get(key)
+      if (val) scenarios.push(JSON.parse(val))
+    }
+    return NextResponse.json(scenarios)
   } catch (err) {
     console.error('[/api/scenarios GET]', err)
     return NextResponse.json({ error: 'Erro ao carregar cenários.' }, { status: 500 })
@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
     if (!entry.id || !entry.name?.trim()) {
       return NextResponse.json({ error: 'id e name são obrigatórios.' }, { status: 400 })
     }
-    await kv.set(`${PREFIX}${entry.id}`, entry)
+    const redis = await getRedis()
+    await redis.set(`${PREFIX}${entry.id}`, JSON.stringify(entry))
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[/api/scenarios POST]', err)

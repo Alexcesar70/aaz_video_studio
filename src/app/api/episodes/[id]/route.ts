@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { kv } from '@vercel/kv'
+import { getRedis } from '@/lib/redis'
 
 export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await kv.del(`aaz:ep:${params.id}`)
-    // Also delete all scenes in this episode
-    const sceneKeys = await kv.keys(`aaz:scene:${params.id}:*`)
-    if (sceneKeys.length) await kv.del(...sceneKeys)
+    const redis = await getRedis()
+    await redis.del(`aaz:ep:${params.id}`)
+    const sceneKeys = await redis.keys(`aaz:scene:${params.id}:*`)
+    if (sceneKeys.length) for (const k of sceneKeys) await redis.del(k)
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[/api/episodes DELETE]', err)
