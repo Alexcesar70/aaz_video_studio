@@ -6,9 +6,9 @@ import { NextRequest, NextResponse } from 'next/server'
  * Gera character sheet multi-pose a partir de prompt + imagem de referência
  */
 
-export const maxDuration = 120
+export const maxDuration = 300
 
-const FETCH_TIMEOUT_MS = 110_000
+const FETCH_TIMEOUT_MS = 290_000
 
 const ENDPOINT = 'https://api.segmind.com/v1/consistent-character-AI-neolemon-v3'
 
