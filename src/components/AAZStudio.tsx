@@ -10,11 +10,11 @@ import { useRouter } from 'next/navigation'
 ═══════════════════════════════════════════════════════════════ */
 
 const C = {
-  bg: '#080A0F', surface: '#0F1218', card: '#151A24', border: '#1E2535',
-  borderHi: '#2A3348', gold: '#C9A84C', goldLight: '#E8C96A', goldDim: '#6A5828',
-  goldGlow: '#C9A84C30', blue: '#3A7BD5', blueGlow: '#3A7BD520',
-  green: '#2ECC71', greenGlow: '#2ECC7120', red: '#E74C3C', purple: '#9B59B6',
-  purpleGlow: '#9B59B620', text: '#DCE1EE', textDim: '#8A93A8',
+  bg: '#13131a', surface: '#1a1a24', card: '#22222e', border: '#2e2e3e',
+  borderHi: '#3a3a4e', gold: '#C9A84C', goldLight: '#E8C96A', goldDim: '#6A5828',
+  goldGlow: '#C9A84C30', blue: '#5B8DEF', blueGlow: '#5B8DEF20',
+  green: '#4ADE80', greenGlow: '#4ADE8020', red: '#F87171', purple: '#A78BFA',
+  purpleGlow: '#A78BFA20', text: '#E8E8F0', textDim: '#9898B0',
 }
 
 const CHARACTERS = [
@@ -48,17 +48,17 @@ interface HistoryItem { id: number; prompt: string; chars: string; mode: string;
 
 /* ── Atoms ── */
 const Pill = ({ children, color = C.gold, style = {} }: { children: React.ReactNode; color?: string; style?: React.CSSProperties }) => (
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 9px', borderRadius: 20, fontSize: 10, fontWeight: 700, background: `${color}20`, color, border: `1px solid ${color}40`, letterSpacing: '0.5px', whiteSpace: 'nowrap', ...style }}>{children}</span>
+  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: `${color}18`, color, border: `1px solid ${color}35`, whiteSpace: 'nowrap', ...style }}>{children}</span>
 )
 
 const Label = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ fontSize: 10, fontWeight: 700, color: C.gold, letterSpacing: '2.5px', textTransform: 'uppercase', fontFamily: "'Georgia',serif", marginBottom: 8 }}>{children}</div>
+  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '0.5px', marginBottom: 10 }}>{children}</div>
 )
 
-const Divider = () => <div style={{ borderTop: `1px solid ${C.border}`, margin: '6px 0' }} />
+const Divider = () => <div style={{ borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />
 
 const Input = ({ style = {}, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box', ...style }} {...props} />
+  <input style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box', ...style }} {...props} />
 )
 
 export function AAZStudio() {
@@ -325,25 +325,20 @@ export function AAZStudio() {
 
   /* ─────────────────────────── RENDER ─────────────────────────── */
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'Palatino Linotype','Book Antiqua',Palatino,serif", fontSize: 13 }}>
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
 
       {/* Header */}
-      <div style={{ background: `linear-gradient(180deg,${C.surface},${C.bg})`, borderBottom: `1px solid ${C.border}`, padding: '14px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ width: 40, height: 40, background: `linear-gradient(135deg,${C.gold},${C.goldDim})`, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, boxShadow: `0 0 18px ${C.goldGlow}` }}>✝</div>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.gold, letterSpacing: 1, fontFamily: "'Georgia',serif" }}>AAZ com Jesus</div>
-            <div style={{ fontSize: 9, color: C.textDim, letterSpacing: 3, textTransform: 'uppercase' }}>Production Studio · Seedance 2.0</div>
-          </div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>AAZ Studio</div>
+          <Pill color={C.textDim}>Seedance 2.0</Pill>
         </div>
-        <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-          <Pill color={C.green}>● Segmind Fast</Pill>
-          <Pill color={C.gold}>${COST_PER_SEC}/seg</Pill>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <Pill color={C.green}>${COST_PER_SEC}/s</Pill>
           <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
-          <Pill color={C.textDim}>{history.length} cenas</Pill>
           <button
             onClick={handleLogout}
-            style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 7, padding: '4px 10px', cursor: 'pointer', color: C.textDim, fontSize: 10, fontFamily: 'inherit', letterSpacing: '0.5px' }}
+            style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}
           >
             Sair
           </button>
@@ -352,39 +347,83 @@ export function AAZStudio() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
-        {[['studio', '🎬 Estúdio'], ['director', '✨ Assistente de Prompt'], ['library', '📚 Biblioteca'], ['history', '📋 Histórico']].map(([id, lbl]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.gold}` : '2px solid transparent', color: tab === id ? C.gold : C.textDim, padding: '11px 18px', cursor: 'pointer', fontSize: 11, fontWeight: 700, letterSpacing: '0.8px', fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
+        {[['studio', 'Estúdio'], ['director', 'Assistente de Prompt'], ['library', 'Biblioteca'], ['history', 'Histórico']].map(([id, lbl]) => (
+          <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
 
       {/* ══════════ ESTÚDIO ══════════ */}
       {tab === 'studio' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 390px', minHeight: 'calc(100vh - 105px)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', minHeight: 'calc(100vh - 100px)' }}>
 
-          {/* ── Esquerda ── */}
-          <div style={{ padding: '22px 26px', borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
+          {/* ── Esquerda: Preview grande + Prompt ── */}
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 20, overflowY: 'auto' }}>
 
-            <div style={{ background: `${C.blue}10`, border: `1px solid ${C.blue}30`, borderRadius: 9, padding: '10px 14px', fontSize: 11, color: C.blue }}>
-              ✓ API keys protegidas server-side — as chamadas ao Segmind passam pelo backend
+            {/* Video Preview — grande */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+              {resultUrl
+                ? <video src={resultUrl} controls autoPlay loop style={{ width: '100%', borderRadius: 8 }} />
+                : <div style={{ textAlign: 'center', color: C.textDim, padding: 60 }}><div style={{ fontSize: 48, marginBottom: 12 }}>🎬</div><div style={{ fontSize: 16 }}>O vídeo aparecerá aqui</div></div>
+              }
             </div>
 
-            <Divider />
+            {/* Download + Status */}
+            {resultUrl && (
+              <a href={resultUrl} download={`aaz-${Date.now()}.mp4`} style={{ display: 'block', textAlign: 'center', padding: '12px', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 10, color: C.purple, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>↓ Baixar MP4</a>
+            )}
+
+            {status !== 'idle' && (
+              <div style={{ textAlign: 'center' }}>
+                <Pill color={statusColor}>{status === 'generating' && '⟳ '}{status === 'success' && '✓ '}{status === 'error' && '✕ '}{statusMsg}</Pill>
+              </div>
+            )}
+
+            {/* Prompt — abaixo do vídeo */}
+            <div>
+              <Label>Prompt</Label>
+              <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+                {[['pt', 'PT-BR'], ['es', 'ES'], ['en', 'EN']].map(([l, lbl]) => (
+                  <button key={l} onClick={() => setLang(l as 'pt' | 'es' | 'en')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: lang === l ? C.surface : 'transparent', border: lang === l ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: lang === l ? C.text : C.textDim, transition: 'all 0.15s', fontFamily: 'inherit' }}>{lbl}</button>
+                ))}
+              </div>
+              <textarea
+                placeholder={lang === 'pt' ? 'Descreva a cena...' : lang === 'es' ? 'Describe la escena...' : 'Describe the scene...'}
+                value={prompts[lang]}
+                onChange={e => setPrompts(p => ({ ...p, [lang]: e.target.value }))}
+                style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 100 }}
+                rows={4}
+              />
+              {selChars.length > 0 && (
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                  {selChars.map(c => <Pill key={c.id} color={c.color}>{c.emoji} {c.name}</Pill>)}
+                </div>
+              )}
+            </div>
+
+            {/* Generate button — grande e visível */}
+            <button onClick={generate} disabled={generating} style={{ background: generating ? C.card : C.purple, border: `1px solid ${generating ? C.border : C.purple}`, borderRadius: 12, padding: '16px', cursor: generating ? 'not-allowed' : 'pointer', color: generating ? C.textDim : '#fff', fontSize: 16, fontWeight: 700, width: '100%', fontFamily: 'inherit', transition: 'all 0.2s' }}>
+              {generating ? '⟳ Gerando...' : 'Gerar Cena'}
+            </button>
+          </div>
+
+          {/* ── Direita: Settings ── */}
+          <div style={{ padding: '20px', borderLeft: `1px solid ${C.border}`, background: C.surface, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
             {/* Personagens */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                 <Label>Personagens</Label>
-                {selChars.length > 0 && <button onClick={injectTags} style={{ background: `${C.gold}20`, border: `1px solid ${C.gold}40`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: C.gold, fontSize: 10, fontWeight: 700, fontFamily: 'inherit' }}>Injetar tags</button>}
+                {selChars.length > 0 && <button onClick={injectTags} style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>Injetar tags</button>}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 7 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
                 {CHARACTERS.map(char => {
                   const sel = selChars.find(c => c.id === char.id)
                   const hasSheet = !!library[char.id]
                   return (
-                    <button key={char.id} onClick={() => toggleChar(char)} style={{ background: sel ? `${char.color}18` : C.card, border: `1px solid ${sel ? char.color : C.border}`, borderRadius: 9, padding: '9px 5px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, position: 'relative', transition: 'all 0.15s' }}>
-                      {hasSheet && <div style={{ position: 'absolute', top: 4, right: 4, width: 6, height: 6, background: C.green, borderRadius: '50%' }} />}
-                      <span style={{ fontSize: 20 }}>{char.emoji}</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: sel ? char.color : C.textDim }}>{char.name}</span>
+                    <button key={char.id} onClick={() => toggleChar(char)} style={{ background: sel ? `${char.color}18` : C.card, border: `1px solid ${sel ? char.color : C.border}`, borderRadius: 10, padding: '10px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, position: 'relative', transition: 'all 0.15s' }}>
+                      {hasSheet && <div style={{ position: 'absolute', top: 4, right: 4, width: 7, height: 7, background: C.green, borderRadius: '50%' }} />}
+                      <span style={{ fontSize: 22 }}>{char.emoji}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: sel ? char.color : C.textDim }}>{char.name}</span>
                     </button>
                   )
                 })}
@@ -392,7 +431,7 @@ export function AAZStudio() {
               {selChars.filter(c => library[c.id]).length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
                   {selChars.filter(c => library[c.id]).map(c => (
-                    <button key={c.id} onClick={() => { setMode('omni_reference'); addFromLibrary(c.id) }} style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '4px 10px', cursor: 'pointer', color: C.purple, fontSize: 10, fontWeight: 700, fontFamily: 'inherit' }}>+ Sheet de {c.name}</button>
+                    <button key={c.id} onClick={() => { setMode('omni_reference'); addFromLibrary(c.id) }} style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>+ Sheet {c.name}</button>
                   ))}
                 </div>
               )}
@@ -402,13 +441,15 @@ export function AAZStudio() {
 
             {/* Modo */}
             <div>
-              <Label>Modo de Geração</Label>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+              <Label>Modo</Label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {MODES.map(m => (
-                  <button key={m.id} onClick={() => setMode(m.id)} style={{ background: mode === m.id ? `${C.gold}14` : C.card, border: `1px solid ${mode === m.id ? C.gold : C.border}`, borderRadius: 10, padding: '11px 7px', cursor: 'pointer', textAlign: 'center', transition: 'all 0.15s' }}>
-                    <div style={{ fontSize: 16, marginBottom: 4 }}>{m.icon}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: mode === m.id ? C.gold : C.text, marginBottom: 2 }}>{m.label}</div>
-                    <div style={{ fontSize: 9, color: C.textDim }}>{m.desc}</div>
+                  <button key={m.id} onClick={() => setMode(m.id)} style={{ background: mode === m.id ? `${C.purple}18` : C.card, border: `1px solid ${mode === m.id ? C.purple : C.border}`, borderRadius: 10, padding: '10px 14px', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 18 }}>{m.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: mode === m.id ? C.text : C.textDim }}>{m.label}</div>
+                      <div style={{ fontSize: 11, color: C.textDim }}>{m.desc}</div>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -416,67 +457,67 @@ export function AAZStudio() {
 
             {/* OMNI REFERENCE */}
             {mode === 'omni_reference' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <Label>Imagens ({refImgs.length}/9)</Label>
-                    <button disabled={refImgs.length >= 9} onClick={() => imgRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 7, padding: '3px 10px', cursor: 'pointer', color: C.blue, fontSize: 10, fontWeight: 700, fontFamily: 'inherit', opacity: refImgs.length >= 9 ? 0.4 : 1 }}>+ Adicionar</button>
+                    <button disabled={refImgs.length >= 9} onClick={() => imgRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refImgs.length >= 9 ? 0.4 : 1 }}>+ Adicionar</button>
                     <input ref={imgRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { Array.from(e.target.files || []).forEach(async f => { if (refImgs.length < 9) { const url = await toDataUrl(f); setRefImgs(p => [...p, { url, label: `@image${p.length + 1}`, name: f.name }]) } }) }} />
                   </div>
                   {refImgs.length > 0 ? (
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       {refImgs.map((r, i) => (
                         <div key={i} style={{ position: 'relative' }}>
-                          <img src={r.url} alt={r.label} style={{ width: 62, height: 62, borderRadius: 7, objectFit: 'cover', border: `1px solid ${r.fromLib ? C.purple : C.border}` }} />
-                          <div style={{ position: 'absolute', top: -5, left: -5, background: r.fromLib ? C.purple : C.gold, color: '#000', borderRadius: 9, fontSize: 8, fontWeight: 800, padding: '1px 4px', fontFamily: 'monospace' }}>{r.label}</div>
-                          <button onClick={() => setRefImgs(p => p.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -5, right: -5, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 15, height: 15, cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                          <img src={r.url} alt={r.label} style={{ width: 70, height: 70, borderRadius: 8, objectFit: 'cover', border: `1px solid ${r.fromLib ? C.purple : C.border}` }} />
+                          <div style={{ position: 'absolute', top: -5, left: -5, background: r.fromLib ? C.purple : C.blue, color: '#fff', borderRadius: 10, fontSize: 9, fontWeight: 700, padding: '2px 5px', fontFamily: 'monospace' }}>{r.label}</div>
+                          <button onClick={() => setRefImgs(p => p.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -5, right: -5, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div onClick={() => imgRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '12px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer' }}>📎 Personagem · Cenário · Estilo</div>
+                    <div onClick={() => imgRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '16px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Personagem, cenário ou estilo</div>
                   )}
                 </div>
 
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Label>Vídeos de Referência ({refVids.length}/3)</Label>
-                    <button disabled={refVids.length >= 3} onClick={() => vidRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 7, padding: '3px 10px', cursor: 'pointer', color: C.blue, fontSize: 10, fontWeight: 700, fontFamily: 'inherit', opacity: refVids.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
+                    <Label>Vídeos ({refVids.length}/3)</Label>
+                    <button disabled={refVids.length >= 3} onClick={() => vidRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refVids.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
                     <input ref={vidRef} type="file" accept="video/mp4,video/mov" multiple style={{ display: 'none' }} onChange={e => addRef(e, 'video', refVids, setRefVids, 3)} />
                   </div>
                   {refVids.length > 0 ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {refVids.map((r, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px' }}>
-                          <span style={{ fontSize: 10, fontFamily: 'monospace', color: C.blue }}>{r.label}</span>
-                          <span style={{ fontSize: 10, color: C.textDim, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-                          <button onClick={() => setRefVids(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 12, padding: 0 }}>×</button>
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px' }}>
+                          <span style={{ fontSize: 12, fontFamily: 'monospace', color: C.blue }}>{r.label}</span>
+                          <span style={{ fontSize: 12, color: C.textDim, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                          <button onClick={() => setRefVids(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div onClick={() => vidRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '12px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer' }}>🎥 Movimento de câmera · Estilo de cena</div>
+                    <div onClick={() => vidRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Movimento de câmera ou estilo</div>
                   )}
                 </div>
 
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <Label>Áudios de Referência ({refAuds.length}/3)</Label>
-                    <button disabled={refAuds.length >= 3} onClick={() => audRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 7, padding: '3px 10px', cursor: 'pointer', color: C.blue, fontSize: 10, fontWeight: 700, fontFamily: 'inherit', opacity: refAuds.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
+                    <Label>Áudios ({refAuds.length}/3)</Label>
+                    <button disabled={refAuds.length >= 3} onClick={() => audRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refAuds.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
                     <input ref={audRef} type="file" accept="audio/mp3,audio/wav" multiple style={{ display: 'none' }} onChange={e => addRef(e, 'audio', refAuds, setRefAuds, 3)} />
                   </div>
                   {refAuds.length > 0 ? (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {refAuds.map((r, i) => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, background: C.card, border: `1px solid ${C.border}`, borderRadius: 7, padding: '6px 10px' }}>
-                          <span style={{ fontSize: 10, fontFamily: 'monospace', color: C.purple }}>{r.label}</span>
-                          <span style={{ fontSize: 10, color: C.textDim, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-                          <button onClick={() => setRefAuds(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 12, padding: 0 }}>×</button>
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px' }}>
+                          <span style={{ fontSize: 12, fontFamily: 'monospace', color: C.purple }}>{r.label}</span>
+                          <span style={{ fontSize: 12, color: C.textDim, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                          <button onClick={() => setRefAuds(p => p.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div onClick={() => audRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '12px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer' }}>🎵 Voz · Música · Ambiente (max 15s)</div>
+                    <div onClick={() => audRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Voz, música ou ambiente</div>
                   )}
                 </div>
               </div>
@@ -486,32 +527,28 @@ export function AAZStudio() {
             {mode === 'first_last_frames' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <Label>Frames de Início e Fim</Label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <div style={{ fontSize: 10, color: C.textDim, marginBottom: 6, letterSpacing: '1px' }}>PRIMEIRO FRAME</div>
+                    <div style={{ fontSize: 12, color: C.textDim, marginBottom: 6 }}>Primeiro</div>
                     {firstPreview ? (
                       <div style={{ position: 'relative' }}>
                         <img src={firstPreview} alt="First frame" style={{ width: '100%', borderRadius: 8, border: `1px solid ${C.border}`, aspectRatio: '16/9', objectFit: 'cover' }} />
                         <button onClick={() => { setFirstUrl(''); setFirstPreview('') }} style={{ position: 'absolute', top: -6, right: -6, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                       </div>
                     ) : (
-                      <div onClick={() => firstFrameRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '24px 12px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer', aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        📷 Upload imagem
-                      </div>
+                      <div onClick={() => firstFrameRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '20px', textAlign: 'center', color: C.textDim, fontSize: 12, cursor: 'pointer', aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Upload</div>
                     )}
                     <input ref={firstFrameRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadFrame(f, setFirstUrl, setFirstPreview) }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: C.textDim, marginBottom: 6, letterSpacing: '1px' }}>ÚLTIMO FRAME</div>
+                    <div style={{ fontSize: 12, color: C.textDim, marginBottom: 6 }}>Último</div>
                     {lastPreview ? (
                       <div style={{ position: 'relative' }}>
                         <img src={lastPreview} alt="Last frame" style={{ width: '100%', borderRadius: 8, border: `1px solid ${C.border}`, aspectRatio: '16/9', objectFit: 'cover' }} />
                         <button onClick={() => { setLastUrl(''); setLastPreview('') }} style={{ position: 'absolute', top: -6, right: -6, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                       </div>
                     ) : (
-                      <div onClick={() => lastFrameRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '24px 12px', textAlign: 'center', color: C.textDim, fontSize: 11, cursor: 'pointer', aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        📷 Upload imagem
-                      </div>
+                      <div onClick={() => lastFrameRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '20px', textAlign: 'center', color: C.textDim, fontSize: 12, cursor: 'pointer', aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Upload</div>
                     )}
                     <input ref={lastFrameRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) uploadFrame(f, setLastUrl, setLastPreview) }} />
                   </div>
@@ -521,12 +558,12 @@ export function AAZStudio() {
 
             <Divider />
 
-            {/* Formato */}
+            {/* Settings compactos */}
             <div>
-              <Label>Aspect Ratio</Label>
+              <Label>Ratio</Label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                 {RATIOS.map(r => (
-                  <button key={r} onClick={() => setRatio(r)} style={{ background: ratio === r ? `${C.blue}20` : C.card, border: `1px solid ${ratio === r ? C.blue : C.border}`, borderRadius: 7, padding: '5px 13px', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: ratio === r ? C.blue : C.textDim, fontFamily: 'monospace', transition: 'all 0.15s' }}>{r}</button>
+                  <button key={r} onClick={() => setRatio(r)} style={{ background: ratio === r ? `${C.purple}20` : C.card, border: `1px solid ${ratio === r ? C.purple : C.border}`, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: ratio === r ? C.text : C.textDim, fontFamily: 'monospace', transition: 'all 0.15s' }}>{r}</button>
                 ))}
               </div>
             </div>
@@ -535,70 +572,22 @@ export function AAZStudio() {
               <Label>Duração</Label>
               <div style={{ display: 'flex', gap: 6 }}>
                 {DURATIONS.map(d => (
-                  <button key={d} onClick={() => setDuration(d)} style={{ background: duration === d ? `${C.blue}20` : C.card, border: `1px solid ${duration === d ? C.blue : C.border}`, borderRadius: 7, padding: '5px 13px', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: duration === d ? C.blue : C.textDim, fontFamily: 'monospace', transition: 'all 0.15s' }}>{d}s</button>
+                  <button key={d} onClick={() => setDuration(d)} style={{ background: duration === d ? `${C.purple}20` : C.card, border: `1px solid ${duration === d ? C.purple : C.border}`, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: duration === d ? C.text : C.textDim, fontFamily: 'monospace', transition: 'all 0.15s' }}>{d}s</button>
                 ))}
               </div>
+            </div>
+
+            {/* Custo */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · ${COST_PER_SEC}/s</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${cost}</div>
             </div>
 
             {lastResult && (
-              <div style={{ background: C.card, border: `1px solid ${C.green}40`, borderRadius: 9, padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                <input type="checkbox" id="chain" checked={chain} onChange={e => setChain(e.target.checked)} style={{ accentColor: C.gold, width: 15, height: 15 }} />
-                <label htmlFor="chain" style={{ cursor: 'pointer', fontSize: 12 }}>Encadear do último frame gerado</label>
-                <Pill color={C.green}>Disponível</Pill>
+              <div style={{ background: C.card, border: `1px solid ${C.green}40`, borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input type="checkbox" id="chain" checked={chain} onChange={e => setChain(e.target.checked)} style={{ accentColor: C.purple, width: 16, height: 16 }} />
+                <label htmlFor="chain" style={{ cursor: 'pointer', fontSize: 13 }}>Encadear do último frame</label>
               </div>
-            )}
-          </div>
-
-          {/* ── Direita ── */}
-          <div style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16, background: C.surface, overflowY: 'auto' }}>
-            <div>
-              <Label>Prompt da Cena</Label>
-              <div style={{ display: 'flex', gap: 4, background: C.card, padding: 3, borderRadius: 9, border: `1px solid ${C.border}`, marginBottom: 10 }}>
-                {[['pt', 'PT-BR'], ['es', 'ES'], ['en', 'EN']].map(([l, lbl]) => (
-                  <button key={l} onClick={() => setLang(l as 'pt' | 'es' | 'en')} style={{ flex: 1, padding: '6px', borderRadius: 7, background: lang === l ? C.surface : 'transparent', border: lang === l ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 10, fontWeight: 700, color: lang === l ? C.gold : C.textDim, transition: 'all 0.15s', fontFamily: 'inherit', letterSpacing: '0.5px' }}>{lbl}</button>
-                ))}
-              </div>
-              <textarea
-                placeholder={lang === 'pt' ? 'Descreva a cena...' : lang === 'es' ? 'Describe la escena...' : 'Describe the scene...'}
-                value={prompts[lang]}
-                onChange={e => setPrompts(p => ({ ...p, [lang]: e.target.value }))}
-                style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: '11px 12px', color: C.text, fontSize: 12, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 130 }}
-                rows={6}
-              />
-              {selChars.length > 0 && (
-                <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 7 }}>
-                  {selChars.map(c => <Pill key={c.id} color={c.color}>{c.emoji} {library[c.id] ? '@image' : '@character:' + c.id}</Pill>)}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: `${C.green}10`, border: `1px solid ${C.green}30`, borderRadius: 9, padding: '11px 14px' }}>
-              <div>
-                <div style={{ fontSize: 10, color: C.textDim, letterSpacing: '1.5px', textTransform: 'uppercase' }}>Custo estimado</div>
-                <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>{duration}s · Segmind · ${COST_PER_SEC}/s</div>
-              </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: C.green, fontFamily: 'monospace' }}>${cost}</div>
-            </div>
-
-            <button onClick={generate} disabled={generating} style={{ background: generating ? C.card : `linear-gradient(135deg,${C.gold},${C.goldDim})`, border: `1px solid ${generating ? C.border : C.gold}`, borderRadius: 11, padding: '15px', cursor: generating ? 'not-allowed' : 'pointer', color: generating ? C.textDim : '#000', fontSize: 13, fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase', width: '100%', fontFamily: "'Georgia',serif", boxShadow: generating ? 'none' : `0 0 22px ${C.goldGlow}`, transition: 'all 0.2s' }}>
-              {generating ? '⟳ Gerando...' : '✝ Gerar Cena'}
-            </button>
-
-            {status !== 'idle' && (
-              <div style={{ textAlign: 'center' }}>
-                <Pill color={statusColor}>{status === 'generating' && '⟳ '}{status === 'success' && '✓ '}{status === 'error' && '✕ '}{statusMsg}</Pill>
-              </div>
-            )}
-
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, overflow: 'hidden', minHeight: 170, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 10 }}>
-              {resultUrl
-                ? <video src={resultUrl} controls autoPlay loop style={{ width: '100%', borderRadius: 7 }} />
-                : <div style={{ textAlign: 'center', color: C.textDim }}><div style={{ fontSize: 34, marginBottom: 7 }}>🎬</div><div style={{ fontSize: 12 }}>O vídeo aparecerá aqui</div></div>
-              }
-            </div>
-
-            {resultUrl && (
-              <a href={resultUrl} download={`aaz-${Date.now()}.mp4`} style={{ display: 'block', textAlign: 'center', padding: '9px', background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 7, color: C.blue, fontSize: 12, fontWeight: 700, textDecoration: 'none' }}>↓ Baixar MP4</a>
             )}
           </div>
         </div>
