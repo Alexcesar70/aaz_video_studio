@@ -41,11 +41,26 @@ export async function POST(request: NextRequest) {
       seed: body.seed ?? Math.floor(Math.random() * 999999),
     }
 
-    // ip_image aceita apenas URLs públicas, não base64
+    // ip_image aceita apenas URLs públicas — se for base64, faz upload primeiro
     if (body.reference_images?.length) {
       const img = body.reference_images[0] as string
       if (img.startsWith('http')) {
         payload.ip_image = img
+      } else if (img.startsWith('data:')) {
+        // Upload base64 para Segmind Storage e pega a URL pública
+        const uploadRes = await fetch('https://api.segmind.com/v1/upload-image', {
+          method: 'POST',
+          headers: {
+            'x-api-key': apiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ image: img }),
+        })
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json() as { url?: string; image_url?: string }
+          const publicUrl = uploadData.url ?? uploadData.image_url
+          if (publicUrl) payload.ip_image = publicUrl
+        }
       }
     }
 
