@@ -306,6 +306,7 @@ export function AAZStudio() {
   /* ── Generate Sheet — via /api/generate-sheet (Neolemon V3) ── */
   const genSheet = async () => {
     if (!sheetChar) { setSheetStatus('error'); setSheetMsg('Selecione um personagem.'); return }
+    if (!sheetPhotos.length) { setSheetStatus('error'); setSheetMsg('Suba ao menos 1 foto de referência.'); return }
     setSheetStatus('generating'); setSheetMsg('Gerando character sheet (~$0.58)...')
     try {
       const charData = CHARACTERS.find(c => c.id === sheetChar.id)
@@ -822,7 +823,7 @@ export function AAZStudio() {
                 <div>
                   <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Personagem</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
-                    {CHARACTERS.map(char => (
+                    {CHARACTERS.filter(c => c.id !== 'theos').map(char => (
                       <button key={char.id} onClick={() => { setSheetChar(char); setSheetPhotos([]); setSheetStatus('idle'); setSheetMsg('') }} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                         <span style={{ fontSize: 20 }}>{char.emoji}</span>
                         <span style={{ fontSize: 11, fontWeight: 600, color: sheetChar?.id === char.id ? char.color : C.textDim }}>{char.name}</span>
@@ -831,7 +832,7 @@ export function AAZStudio() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Referência ({sheetPhotos.length}/3) — opcional</div>
+                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Foto de referência ({sheetPhotos.length}/3) — obrigatória</div>
                   {sheetPhotos.length > 0 && (
                     <div style={{ display: 'flex', gap: 7, marginBottom: 10 }}>
                       {sheetPhotos.map((p, i) => (
