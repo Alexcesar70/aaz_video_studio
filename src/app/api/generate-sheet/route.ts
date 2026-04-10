@@ -41,9 +41,12 @@ export async function POST(request: NextRequest) {
       seed: body.seed ?? Math.floor(Math.random() * 999999),
     }
 
-    // Se tiver imagem de referência, usa como ip_image (primeira da lista)
+    // ip_image aceita apenas URLs públicas, não base64
     if (body.reference_images?.length) {
-      payload.ip_image = body.reference_images[0]
+      const img = body.reference_images[0] as string
+      if (img.startsWith('http')) {
+        payload.ip_image = img
+      }
     }
 
     // ── Chamada ao Segmind (sem retry para evitar cobrança dupla) ──
