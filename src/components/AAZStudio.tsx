@@ -1633,8 +1633,11 @@ export function AAZStudio() {
                             onDragOver={e => {
                               if (!draggingSceneId || draggingSceneId === scene.id) return
                               e.preventDefault()
-                              // Se arrasta por cima do card, considera dropar depois dele
-                              setDragOverIdx(idx + 1)
+                              // Decide antes ou depois do card baseado na metade do mouse
+                              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                              const midX = rect.left + rect.width / 2
+                              const dropBefore = e.clientX < midX
+                              setDragOverIdx(dropBefore ? idx : idx + 1)
                             }}
                             style={{
                               flexShrink: 0,
