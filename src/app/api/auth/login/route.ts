@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { SignJWT } from 'jose'
+import {
+  getUserByEmail,
+  verifyPassword,
+  bootstrapAdminIfEmpty,
+  touchLastActive,
+} from '@/lib/users'
 
 const SESSION_COOKIE = 'aaz_session'
 
@@ -11,22 +17,74 @@ function getSecret() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { password } = await request.json()
+    const body = await request.json() as { email?: string; password?: string }
+    const email = body.email?.trim().toLowerCase()
+    const password = body.password
 
-    if (!password || password !== process.env.SITE_PASSWORD) {
+    if (!email || !password) {
       return NextResponse.json(
-        { error: 'Senha incorreta.' },
+        { error: 'Email e senha são obrigatórios.' },
+        { status: 400 }
+      )
+    }
+
+    // Bootstrap do admin se Redis estiver vazio (primeira inicialização).
+    // Idempotente: só cria se não houver nenhum user.
+    try {
+      await bootstrapAdminIfEmpty()
+    } catch (err) {
+      console.error('[auth/login] bootstrap falhou:', err)
+      // Não bloqueia o login — tenta continuar; se nenhum user existir,
+      // o getUserByEmail abaixo vai falhar com mensagem própria.
+    }
+
+    const user = await getUserByEmail(email)
+    if (!user) {
+      // Mensagem genérica pra não vazar existência de email
+      return NextResponse.json(
+        { error: 'Email ou senha incorretos.' },
         { status: 401 }
       )
     }
 
-    const token = await new SignJWT({ authenticated: true })
+    if (user.status === 'revoked') {
+      return NextResponse.json(
+        { error: 'Acesso revogado. Fale com o admin.' },
+        { status: 403 }
+      )
+    }
+
+    const passwordOk = await verifyPassword(password, user.passwordHash)
+    if (!passwordOk) {
+      return NextResponse.json(
+        { error: 'Email ou senha incorretos.' },
+        { status: 401 }
+      )
+    }
+
+    // Touch lastActive (não bloqueia login se falhar)
+    touchLastActive(user.id).catch(() => {})
+
+    const token = await new SignJWT({
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    })
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d')
       .sign(getSecret())
 
-    const response = NextResponse.json({ ok: true })
+    const response = NextResponse.json({
+      ok: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+    })
 
     response.cookies.set(SESSION_COOKIE, token, {
       httpOnly: true,

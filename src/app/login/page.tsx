@@ -5,22 +5,24 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
 
 function LoginForm() {
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [shake, setShake] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const from = searchParams.get('from') || '/studio'
 
   useEffect(() => {
-    inputRef.current?.focus()
+    emailRef.current?.focus()
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!password.trim()) return
+    if (!email.trim() || !password.trim()) return
     setLoading(true)
     setError('')
 
@@ -28,7 +30,7 @@ function LoginForm() {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ email: email.trim(), password }),
       })
 
       if (res.ok) {
@@ -36,11 +38,11 @@ function LoginForm() {
         router.refresh()
       } else {
         const data = await res.json()
-        setError(data.error || 'Senha incorreta.')
+        setError(data.error || 'Email ou senha incorretos.')
         setShake(true)
         setTimeout(() => setShake(false), 500)
         setPassword('')
-        inputRef.current?.focus()
+        passwordRef.current?.focus()
       }
     } catch {
       setError('Erro de conexão. Tente novamente.')
@@ -90,7 +92,7 @@ function LoginForm() {
         }} />
 
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div style={{
             width: 56, height: 56,
             background: 'linear-gradient(135deg, #C9A84C, #6A5828)',
@@ -109,18 +111,53 @@ function LoginForm() {
           <div style={{
             fontSize: 10, color: '#8A93A8',
             letterSpacing: 3, textTransform: 'uppercase',
-          }}>Production Studio · Uso interno</div>
+          }}>Production Studio</div>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <div style={{
               fontSize: 10, fontWeight: 700, color: '#C9A84C',
               letterSpacing: '2.5px', textTransform: 'uppercase',
               marginBottom: 8,
-            }}>Senha de acesso</div>
+            }}>Email</div>
             <input
-              ref={inputRef}
+              ref={emailRef}
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="voce@exemplo.com"
+              autoComplete="email"
+              style={{
+                width: '100%',
+                background: '#151A24',
+                border: `1px solid ${error ? '#E74C3C60' : '#1E2535'}`,
+                borderRadius: 10,
+                padding: '12px 14px',
+                color: '#DCE1EE',
+                fontSize: 14,
+                outline: 'none',
+                fontFamily: 'inherit',
+                boxSizing: 'border-box',
+                transition: 'border-color 0.15s',
+              }}
+              onFocus={e => {
+                if (!error) e.target.style.borderColor = '#2A3348'
+              }}
+              onBlur={e => {
+                if (!error) e.target.style.borderColor = '#1E2535'
+              }}
+            />
+          </div>
+
+          <div>
+            <div style={{
+              fontSize: 10, fontWeight: 700, color: '#C9A84C',
+              letterSpacing: '2.5px', textTransform: 'uppercase',
+              marginBottom: 8,
+            }}>Senha</div>
+            <input
+              ref={passwordRef}
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
@@ -165,24 +202,25 @@ function LoginForm() {
 
           <button
             type="submit"
-            disabled={loading || !password.trim()}
+            disabled={loading || !email.trim() || !password.trim()}
             style={{
-              background: loading || !password.trim()
+              background: loading || !email.trim() || !password.trim()
                 ? '#151A24'
                 : 'linear-gradient(135deg, #C9A84C, #6A5828)',
-              border: `1px solid ${loading || !password.trim() ? '#1E2535' : '#C9A84C'}`,
+              border: `1px solid ${loading || !email.trim() || !password.trim() ? '#1E2535' : '#C9A84C'}`,
               borderRadius: 10,
               padding: '13px',
-              color: loading || !password.trim() ? '#8A93A8' : '#000',
+              color: loading || !email.trim() || !password.trim() ? '#8A93A8' : '#000',
               fontSize: 12,
               fontWeight: 800,
               letterSpacing: '2px',
               textTransform: 'uppercase',
-              cursor: loading || !password.trim() ? 'not-allowed' : 'pointer',
+              cursor: loading || !email.trim() || !password.trim() ? 'not-allowed' : 'pointer',
               fontFamily: "'Georgia',serif",
-              boxShadow: loading || !password.trim() ? 'none' : '0 0 20px #C9A84C28',
+              boxShadow: loading || !email.trim() || !password.trim() ? 'none' : '0 0 20px #C9A84C28',
               transition: 'all 0.2s',
               width: '100%',
+              marginTop: 4,
             }}
           >
             {loading ? '⟳ Entrando...' : '✝ Entrar'}
@@ -190,15 +228,15 @@ function LoginForm() {
         </form>
 
         <div style={{
-          marginTop: 32,
-          paddingTop: 20,
+          marginTop: 28,
+          paddingTop: 18,
           borderTop: '1px solid #1E2535',
           textAlign: 'center',
           fontSize: 10,
           color: '#8A93A850',
           letterSpacing: '1px',
         }}>
-          Alexandre · AAZ com Jesus
+          Esqueceu a senha? Fale com o admin.
         </div>
       </div>
 

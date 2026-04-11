@@ -28,8 +28,25 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    await jwtVerify(token, getSecret())
-    return NextResponse.next()
+    const { payload } = await jwtVerify(token, getSecret())
+
+    // Encaminha userId/role como headers de request pro backend saber
+    // quem está chamando sem precisar re-parsear o JWT em cada route.
+    const requestHeaders = new Headers(request.headers)
+    if (payload.userId) requestHeaders.set('x-user-id', String(payload.userId))
+    if (payload.role) requestHeaders.set('x-user-role', String(payload.role))
+    if (payload.email) requestHeaders.set('x-user-email', String(payload.email))
+    if (payload.name) requestHeaders.set('x-user-name', String(payload.name))
+
+    // Bloqueio de rotas /admin/* pra não-admins
+    if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
+      if (payload.role !== 'admin') {
+        const studioUrl = new URL('/studio', request.url)
+        return NextResponse.redirect(studioUrl)
+      }
+    }
+
+    return NextResponse.next({ request: { headers: requestHeaders } })
   } catch {
     // Token inválido ou expirado
     const loginUrl = new URL('/login', request.url)
@@ -49,8 +66,8 @@ export const config = {
 
 // ── Helpers exportados para uso nas API routes ──────────────────
 
-export async function createSessionToken(): Promise<string> {
-  return new SignJWT({ authenticated: true })
+export async function createSessionToken(payload: Record<string, unknown> = {}): Promise<string> {
+  return new SignJWT({ ...payload, authenticated: true })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
