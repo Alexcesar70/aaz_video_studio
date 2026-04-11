@@ -364,7 +364,18 @@ function AtelierLibraryView({ type, assets, loading, onDelete }: {
   loading: boolean
   onDelete: (a: Asset) => void
 }) {
-  const filtered = assets.filter(a => a.type === type)
+  const [search, setSearch] = useState('')
+  const q = search.trim().toLowerCase()
+
+  const filtered = assets.filter(a => a.type === type).filter(a => {
+    if (!q) return true
+    return (
+      a.name.toLowerCase().includes(q) ||
+      a.id.toLowerCase().includes(q) ||
+      (a.description ?? '').toLowerCase().includes(q) ||
+      (a.tags ?? []).some(t => t.toLowerCase().includes(q))
+    )
+  })
   const leads = filtered.filter(a => a.isOfficial)
   const customs = filtered.filter(a => !a.isOfficial)
 
@@ -373,7 +384,14 @@ function AtelierLibraryView({ type, assets, loading, onDelete }: {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <input
+        type="text"
+        placeholder="Buscar por nome, id, descrição ou tag..."
+        value={search}
+        onChange={e => setSearch(e.target.value)}
+        style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', width: '100%', maxWidth: 420, boxSizing: 'border-box' }}
+      />
       {leads.length > 0 && (
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -392,7 +410,7 @@ function AtelierLibraryView({ type, assets, loading, onDelete }: {
         </div>
         {customs.length === 0 ? (
           <div style={{ padding: 32, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
-            Nenhum {type === 'character' ? 'personagem' : type === 'scenario' ? 'cenário' : 'item'} criado ainda. Use a aba "Criar" pra gerar o primeiro.
+            {q ? `Nada corresponde a "${q}".` : `Nenhum ${type === 'character' ? 'personagem' : type === 'scenario' ? 'cenário' : 'item'} criado ainda. Use a aba "Criar" pra gerar o primeiro.`}
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
@@ -400,6 +418,150 @@ function AtelierLibraryView({ type, assets, loading, onDelete }: {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SceneAssetsStrip — faixa visual sempre presente no Estúdio
+   mostrando os assets que estão linkados à cena em edição.
+
+   Fontes:
+     1) refImgs — agrupados por charId (ou label quando sem charId)
+     2) @mentions no texto do prompt atual (detectadas por regex)
+
+   Mostra chips clicáveis. Click = remover o asset da cena.
+═══════════════════════════════════════════════════════════════ */
+
+function SceneAssetsStrip({
+  refImgs,
+  promptText,
+  atAssets,
+  onRemove,
+  onOpenAtelier,
+}: {
+  refImgs: RefItem[]
+  promptText: string
+  atAssets: Asset[]
+  onRemove: (charId: string) => void
+  onOpenAtelier: () => void
+}) {
+  // Agrupa refImgs por charId (asset único) — conta quantas imagens cada um tem
+  const grouped = new Map<string, { name: string; count: number; emoji: string; color: string; type: AssetType; fromLib: boolean }>()
+  for (const r of refImgs) {
+    const key = r.charId ?? `anon_${r.label}`
+    const existing = grouped.get(key)
+    if (existing) {
+      existing.count += 1
+    } else {
+      // Resolve emoji/color a partir dos leads, assets custom ou padrão
+      const leadChar = CHARACTERS.find(c => c.id === r.charId)
+      const customAsset = atAssets.find(a => a.id === r.charId && !a.isOfficial)
+      grouped.set(key, {
+        name: r.name || r.charId || r.label,
+        count: 1,
+        emoji: leadChar?.emoji ?? customAsset?.emoji ?? '📎',
+        color: leadChar?.color ?? (customAsset?.type === 'scenario' ? C.blue : customAsset?.type === 'item' ? C.gold : C.purple),
+        type: (customAsset?.type ?? 'character') as AssetType,
+        fromLib: !!r.fromLib,
+      })
+    }
+  }
+
+  // Extrai @mentions do prompt
+  const mentionedIds = new Set<string>()
+  const mentionRegex = /@(\w+)/g
+  let m: RegExpExecArray | null
+  while ((m = mentionRegex.exec(promptText)) !== null) {
+    const id = m[1].toLowerCase()
+    // Ignora @imageN / @videoN / @audioN (são tags técnicas já resolvidas)
+    if (/^(image|video|audio)\d+$/.test(id)) continue
+    mentionedIds.add(id)
+  }
+
+  // Mentions não resolvidas (aparecem no prompt mas não há ref)
+  const pendingMentions: string[] = []
+  for (const id of Array.from(mentionedIds)) {
+    if (!grouped.has(id)) pendingMentions.push(id)
+  }
+
+  if (grouped.size === 0 && pendingMentions.length === 0) return null
+
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 8,
+      padding: '10px 14px',
+      background: C.card,
+      border: `1px solid ${C.border}`,
+      borderRadius: 10,
+      marginBottom: 12,
+      flexWrap: 'wrap',
+    }}>
+      <span style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
+        ASSETS DA CENA
+      </span>
+
+      {Array.from(grouped.entries()).map(([key, g]) => (
+        <div
+          key={key}
+          title={`${g.name} · ${g.count} ${g.count === 1 ? 'imagem' : 'imagens'}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: `${g.color}18`,
+            border: `1px solid ${g.color}50`,
+            borderRadius: 20,
+            padding: '4px 10px 4px 8px',
+            fontSize: 12,
+          }}
+        >
+          <span style={{ fontSize: 16 }}>{g.emoji}</span>
+          <span style={{ fontWeight: 600, color: g.color }}>{g.name}</span>
+          <span style={{ fontSize: 10, color: g.color, opacity: 0.7 }}>×{g.count}</span>
+          {key && !key.startsWith('anon_') && (
+            <button
+              onClick={() => onRemove(key)}
+              title="Remover desta cena"
+              style={{ background: 'transparent', border: 'none', color: g.color, cursor: 'pointer', fontSize: 14, padding: 0, marginLeft: 2, lineHeight: 1 }}
+            >
+              ×
+            </button>
+          )}
+        </div>
+      ))}
+
+      {pendingMentions.map(id => (
+        <div
+          key={`pending-${id}`}
+          title={`@${id} foi mencionado no prompt mas não tem imagem de referência`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: `${C.gold}12`,
+            border: `1px dashed ${C.gold}60`,
+            borderRadius: 20,
+            padding: '4px 10px',
+            fontSize: 12,
+            color: C.gold,
+          }}
+        >
+          <span style={{ fontSize: 12 }}>⚠</span>
+          <span style={{ fontFamily: 'monospace' }}>@{id}</span>
+          <span style={{ fontSize: 10, opacity: 0.7 }}>sem ref</span>
+        </div>
+      ))}
+
+      <button
+        onClick={onOpenAtelier}
+        title="Abrir o Atelier de imagens"
+        style={{ marginLeft: 'auto', background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 16, padding: '4px 12px', cursor: 'pointer', color: C.textDim, fontSize: 11, fontFamily: 'inherit' }}
+      >
+        🎨 Atelier
+      </button>
     </div>
   )
 }
@@ -2603,6 +2765,18 @@ export function AAZStudio() {
                   )}
                 </div>
               )}
+
+              {/* Scene strip — visualização dos assets usados na cena */}
+              <SceneAssetsStrip
+                refImgs={refImgs}
+                promptText={prompts[lang]}
+                atAssets={atAssets}
+                onRemove={(charId) => {
+                  setRefImgs(p => p.filter(r => r.charId !== charId).map((r, i) => ({ ...r, label: `@image${i + 1}` })))
+                  setSelChars(p => p.filter(c => c.id !== charId))
+                }}
+                onOpenAtelier={() => setTab('atelier')}
+              />
 
               {/* Prompt textarea — sempre visível (editável tanto no modo Livre quanto após gerar no Assistente) */}
               <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 8 }}>
