@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
 /* ═══════════════════════════════════════════════════════════════
@@ -570,16 +570,124 @@ export function AAZStudio() {
   const [sdStatus, setSdStatus] = useState('idle')
   const [sdMsg, setSdMsg] = useState('')
 
+  /* Mention @ no textarea do Assistente */
+  const sdDescRef = useRef<HTMLTextAreaElement>(null)
+  const [mention, setMention] = useState<{ start: number; query: string; highlightIdx: number } | null>(null)
+
+  // Dado o conteúdo atual e a posição do cursor, detecta se o usuário
+  // está digitando um mention @xxx. Retorna { start, query } ou null.
+  const detectMention = (text: string, cursor: number) => {
+    // Procura o último @ antes do cursor
+    let i = cursor - 1
+    while (i >= 0) {
+      const ch = text[i]
+      if (ch === '@') {
+        // Achou. Garante que @ está no início do texto ou depois de um espaço
+        if (i === 0 || /\s/.test(text[i - 1])) {
+          const query = text.slice(i + 1, cursor)
+          // Se a query contém espaço, já não é mais mention
+          if (/\s/.test(query)) return null
+          return { start: i, query }
+        }
+        return null
+      }
+      if (/\s/.test(ch)) return null
+      i--
+    }
+    return null
+  }
+
+  // Lista de personagens disponíveis para mention, filtrada por query
+  const mentionMatches = useMemo(() => {
+    if (!mention) return [] as Character[]
+    const q = mention.query.toLowerCase()
+    // Prioriza personagens que têm imagens salvas na biblioteca
+    const all = CHARACTERS
+      .filter(c => c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q))
+      .sort((a, b) => {
+        const aHas = library[a.id]?.images?.length ? 1 : 0
+        const bHas = library[b.id]?.images?.length ? 1 : 0
+        return bHas - aHas
+      })
+    return all.slice(0, 7)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mention, library])
+
+  const handleSdDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    const cursor = e.target.selectionStart ?? value.length
+    setSdDesc(value)
+    const detected = detectMention(value, cursor)
+    if (detected) {
+      setMention({ start: detected.start, query: detected.query, highlightIdx: 0 })
+    } else {
+      setMention(null)
+    }
+  }
+
+  const selectMention = (char: Character) => {
+    if (!mention) return
+    const before = sdDesc.slice(0, mention.start)
+    const after = sdDesc.slice(mention.start + 1 + mention.query.length)
+    const replacement = `@${char.id} `
+    const newText = before + replacement + after
+    setSdDesc(newText)
+    setMention(null)
+    // Adiciona ao sidebar direito (se não estiver) — traz imagens para Omni
+    if (!selChars.find(c => c.id === char.id)) {
+      toggleChar(char)
+    }
+    // Reposiciona o cursor depois do nome inserido
+    window.setTimeout(() => {
+      const ta = sdDescRef.current
+      if (ta) {
+        const pos = before.length + replacement.length
+        ta.focus()
+        ta.setSelectionRange(pos, pos)
+      }
+    }, 0)
+  }
+
+  const handleSdDescKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!mention || mentionMatches.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setMention(m => m ? { ...m, highlightIdx: (m.highlightIdx + 1) % mentionMatches.length } : m)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setMention(m => m ? { ...m, highlightIdx: (m.highlightIdx - 1 + mentionMatches.length) % mentionMatches.length } : m)
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      selectMention(mentionMatches[mention.highlightIdx])
+    } else if (e.key === 'Escape') {
+      setMention(null)
+    }
+  }
+
   const runSceneDirector = async () => {
     if (!sdDesc.trim()) { setSdStatus('error'); setSdMsg('Descreva a cena.'); return }
     setSdStatus('generating'); setSdMsg('Claude está escrevendo os prompts...')
     try {
+      // Extrai @nomes do texto (personagens mencionados via autocomplete)
+      const mentionRegex = /@(\w+)/g
+      const mentionedIds = new Set<string>()
+      let match
+      while ((match = mentionRegex.exec(sdDesc)) !== null) {
+        const id = match[1].toLowerCase()
+        if (CHARACTERS.find(c => c.id === id)) mentionedIds.add(id)
+      }
+      // Une @nomes com os já selecionados no sidebar
+      const allCharIdsSet = new Set<string>()
+      selChars.forEach(c => allCharIdsSet.add(c.id))
+      mentionedIds.forEach(id => allCharIdsSet.add(id))
+      const allCharIds = Array.from(allCharIdsSet)
+
       const res = await fetch('/api/scene-director', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scene_description: sdDesc,
-          characters: selChars.length ? selChars.map(c => c.id) : undefined,
+          characters: allCharIds.length ? allCharIds : undefined,
           setting: sdSetting || undefined,
           duration,
           emotion: sdEmotion || undefined,
@@ -1317,15 +1425,54 @@ export function AAZStudio() {
               {/* MODO ASSISTENTE — formulário guiado */}
               {promptMode === 'assistant' && (
                 <div style={{ background: `${C.purple}08`, border: `1px solid ${C.purple}30`, borderRadius: 12, padding: 16, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>DESCREVA A CENA EM PORTUGUÊS</div>
+                  <div style={{ position: 'relative' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>DESCREVA A CENA EM PORTUGUÊS <span style={{ color: C.textDim, fontWeight: 400, textTransform: 'none' }}>— digite @ para mencionar um personagem</span></div>
                     <textarea
-                      placeholder="Ex: Abigail está no parque. Ela encontra Tuba e corre feliz pra abraçá-lo. Os dois brincam juntos."
+                      ref={sdDescRef}
+                      placeholder="Ex: @abigail está no parque. Ela encontra @tuba e corre feliz pra abraçá-lo. Os dois brincam juntos."
                       value={sdDesc}
-                      onChange={e => setSdDesc(e.target.value)}
+                      onChange={handleSdDescChange}
+                      onKeyDown={handleSdDescKeyDown}
+                      onBlur={() => window.setTimeout(() => setMention(null), 150)}
                       style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 80 }}
                       rows={3}
                     />
+                    {/* Dropdown de mention */}
+                    {mention && mentionMatches.length > 0 && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
+                        <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+                          PERSONAGEM {mention.query && `· "${mention.query}"`}
+                        </div>
+                        {mentionMatches.map((char, i) => {
+                          const hasRefs = !!library[char.id]?.images?.length
+                          const isHighlighted = i === mention.highlightIdx
+                          return (
+                            <button
+                              key={char.id}
+                              onMouseDown={e => { e.preventDefault(); selectMention(char) }}
+                              onMouseEnter={() => setMention(m => m ? { ...m, highlightIdx: i } : m)}
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: isHighlighted ? `${C.purple}20` : 'transparent', border: 'none', cursor: 'pointer', color: C.text, fontSize: 13, fontFamily: 'inherit', textAlign: 'left' }}
+                            >
+                              <span style={{ fontSize: 20 }}>{char.emoji}</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                                <span style={{ fontWeight: 600, color: isHighlighted ? C.purple : C.text }}>{char.name}</span>
+                                <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace' }}>@{char.id}</span>
+                              </div>
+                              {hasRefs ? (
+                                <span style={{ fontSize: 9, color: C.green, background: `${C.green}15`, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.green}40`, whiteSpace: 'nowrap' }}>
+                                  {library[char.id].images.length} refs
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: 9, color: C.textDim, whiteSpace: 'nowrap' }}>sem refs</span>
+                              )}
+                            </button>
+                          )
+                        })}
+                        <div style={{ padding: '6px 12px', fontSize: 10, color: C.textDim, borderTop: `1px solid ${C.border}` }}>
+                          ↑↓ navegar · Enter selecionar · Esc fechar
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
