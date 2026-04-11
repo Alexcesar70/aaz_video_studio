@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Project, Episode, Scene, Shot, LibraryCharacter, LibraryScenario, EpisodeStatus } from '@/lib/types'
-import { C, CHARACTERS } from '@/lib/constants'
+import type { Project, Episode, Scene, Shot, Version, LibraryCharacter, LibraryScenario, EpisodeStatus, ShotEmotion, CameraMode } from '@/lib/types'
+import { C, CHARACTERS, RATIOS, DURATIONS, EMOTIONS, CAMERA_FIXED_OPTIONS, COST_PER_SEC } from '@/lib/constants'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ Production Studio — Workflow Hierárquico
@@ -150,6 +150,33 @@ export function AAZStudio() {
     setScenes(prev => prev.filter(s => s.id !== id))
     setShots(prev => prev.filter(s => s.sceneId !== id))
     await fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  /* ── CRUD: Shots ── */
+  const createShot = async (sceneId: string, episodeId: string) => {
+    const scShots = shots.filter(sh => sh.sceneId === sceneId)
+    const shot: Shot = {
+      id: `sh_${Date.now()}`, sceneId, episodeId,
+      order: scShots.length + 1,
+      action: '', emotion: 'tensao',
+      cameraMode: 'fixed', cameraFixed: 'Medium shot',
+      duration: 5, ratio: '16:9',
+      versions: [], activeVersionId: null,
+      createdAt: new Date().toISOString(),
+    }
+    setShots(prev => [...prev, shot])
+    await fetch('/api/shots', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(shot) })
+    setCurShotId(shot.id)
+    setView('shot')
+  }
+  const updateShot = async (id: string, updates: Partial<Shot>) => {
+    setShots(prev => prev.map(sh => sh.id === id ? { ...sh, ...updates } : sh))
+    await fetch(`/api/shots/${encodeURIComponent(id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) })
+  }
+  const deleteShot = async (id: string) => {
+    if (!confirm('Deletar este shot e todas suas versões?')) return
+    setShots(prev => prev.filter(s => s.id !== id))
+    await fetch(`/api/shots/${encodeURIComponent(id)}`, { method: 'DELETE' })
   }
 
   /* ── Breadcrumb ── */
@@ -425,9 +452,306 @@ export function AAZStudio() {
         </div>
 
         {/* Shots */}
-        <Label>Shots</Label>
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: C.textDim, fontSize: 14 }}>
-          Editor de Shot em construção (próximo commit)
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <Label>Shots</Label>
+          <PrimaryButton onClick={() => createShot(curScene.id, curEpisode.id)}>+ Novo Shot</PrimaryButton>
+        </div>
+        {scShots.length === 0 ? (
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: C.textDim, fontSize: 14 }}>Sem shots. Crie o primeiro acima.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(240px,1fr))', gap: 14 }}>
+            {scShots.map(sh => {
+              const active = sh.versions.find(v => v.id === sh.activeVersionId)
+              return (
+                <div key={sh.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, cursor: 'pointer' }} onClick={() => goShot(sh.id)}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: C.text, marginBottom: 4 }}>Shot {sh.order}</div>
+                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sh.action || '(sem ação)'}</div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <Pill color={active?.status === 'aprovado' ? C.green : active?.status === 'rejeitado' ? C.red : C.textDim}>
+                      {sh.versions.length} versão{sh.versions.length !== 1 ? 'ões' : ''}
+                    </Pill>
+                    <Pill color={C.blue}>{sh.duration}s</Pill>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  /* ── SHOT EDITOR ── */
+  const ShotEditor = () => {
+    const [promptStatus, setPromptStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle')
+    const [promptMsg, setPromptMsg] = useState('')
+    const [generatedPt, setGeneratedPt] = useState('')
+    const [generatedEn, setGeneratedEn] = useState('')
+    const [advancedMode, setAdvancedMode] = useState(false)
+    const [promptLang, setPromptLang] = useState<'pt' | 'en'>('en')
+    const [videoStatus, setVideoStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle')
+    const [videoMsg, setVideoMsg] = useState('')
+
+    if (!curShot || !curScene || !curEpisode) return null
+
+    // Carrega versão ativa se houver
+    const activeVersion = curShot.versions.find(v => v.id === curShot.activeVersionId) ?? curShot.versions[curShot.versions.length - 1]
+    // Sincroniza prompts gerados com a versão ativa na primeira abertura
+    useEffect(() => {
+      if (activeVersion && !generatedPt && !generatedEn) {
+        setGeneratedPt(activeVersion.prompt_pt)
+        setGeneratedEn(activeVersion.prompt_en)
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [curShot.id])
+
+    const scenarioObj = scenarios.find(sc => sc.id === curScene.scenarioId)
+    const sceneChars = curScene.characterIds.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean) as { id: string; name: string; emoji: string; color: string }[]
+
+    const canGeneratePrompt = curShot.action.trim().length > 0 && !!curShot.emotion && (
+      (curShot.cameraMode === 'fixed' && !!curShot.cameraFixed) ||
+      (curShot.cameraMode === 'movement' && !!curShot.cameraMovement?.trim())
+    )
+
+    const runGeneratePrompt = async () => {
+      setPromptStatus('generating'); setPromptMsg('Claude está escrevendo os prompts...')
+      try {
+        const charsDesc = sceneChars.map(c => {
+          const lib = characters[c.id]
+          return lib ? `${c.name} (${lib.images.length} reference images available)` : c.name
+        })
+        const body = {
+          shot: {
+            action: curShot.action,
+            emotion: curShot.emotion === 'outro' ? curShot.emotionCustom : EMOTIONS.find(e => e.id === curShot.emotion)?.label,
+            camera_fixed: curShot.cameraMode === 'fixed' ? curShot.cameraFixed : undefined,
+            camera_movement: curShot.cameraMode === 'movement' ? curShot.cameraMovement : undefined,
+            duration: curShot.duration,
+          },
+          scene: {
+            name: curScene.name,
+            general_action: curScene.generalAction,
+            scenario_name: scenarioObj?.name,
+            scenario_desc: undefined,
+          },
+          episode: {
+            title: curEpisode.title,
+            synopsis: curEpisode.synopsis,
+            characters_desc: charsDesc,
+          },
+        }
+        const res = await fetch('/api/scene-director', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+        const data = await res.json()
+        const p = data.prompts as { lang: string; prompt: string }[]
+        setGeneratedPt(p.find(x => x.lang === 'pt-br')?.prompt ?? '')
+        setGeneratedEn(p.find(x => x.lang === 'en')?.prompt ?? '')
+        setPromptStatus('success'); setPromptMsg('Prompts gerados!')
+      } catch (err: unknown) {
+        setPromptStatus('error'); setPromptMsg(err instanceof Error ? err.message : 'Erro ao gerar prompt.')
+      }
+    }
+
+    const runGenerateVideo = async () => {
+      if (!generatedEn.trim()) { setVideoStatus('error'); setVideoMsg('Gere o prompt primeiro.'); return }
+      setVideoStatus('generating'); setVideoMsg('Enviando para Seedance 2.0...')
+      try {
+        // Coleta imagens de referência dos personagens presentes na cena
+        const refImages: string[] = []
+        for (const c of sceneChars) {
+          const lib = characters[c.id]
+          if (lib?.images?.length) refImages.push(...lib.images.slice(0, 2))
+        }
+        const body: Record<string, unknown> = {
+          prompt: generatedEn,
+          duration: curShot.duration,
+          aspect_ratio: curShot.ratio,
+          resolution: '720p',
+          generate_audio: false,
+          mode: refImages.length ? 'omni_reference' : 'text_to_video',
+        }
+        if (refImages.length) body.reference_images = refImages.slice(0, 9)
+
+        const res = await fetch('/api/generate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+        if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+
+        // Salva como nova versão do shot
+        const newVersion: Version = {
+          id: `v_${Date.now()}`, timestamp: new Date().toISOString(),
+          prompt_pt: generatedPt, prompt_en: generatedEn,
+          videoUrl: url, status: 'gerado',
+        }
+        const newVersions = [...curShot.versions, newVersion]
+        await updateShot(curShot.id, { versions: newVersions, activeVersionId: newVersion.id })
+
+        setVideoStatus('success'); setVideoMsg('Vídeo gerado!')
+      } catch (err: unknown) {
+        setVideoStatus('error'); setVideoMsg(err instanceof Error ? err.message : 'Erro ao gerar vídeo.')
+      }
+    }
+
+    return (
+      <div style={{ padding: '32px 32px 64px', maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: C.text, margin: 0 }}>Shot {curShot.order}</h1>
+          <SecondaryButton onClick={() => { deleteShot(curShot.id); goScene(curScene.id) }} style={{ color: C.red, borderColor: `${C.red}40` }}>Deletar Shot</SecondaryButton>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+          {/* Coluna esquerda — Form + Contexto herdado */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Contexto herdado */}
+            <div style={{ background: `${C.blue}08`, border: `1px solid ${C.blue}30`, borderRadius: 12, padding: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.blue, marginBottom: 10, letterSpacing: '0.5px' }}>⬆ CONTEXTO HERDADO DA CENA (automático no prompt)</div>
+              <div style={{ fontSize: 13, color: C.textDim, marginBottom: 6 }}><strong style={{ color: C.text }}>Episódio:</strong> {curEpisode.title}</div>
+              <div style={{ fontSize: 13, color: C.textDim, marginBottom: 6 }}><strong style={{ color: C.text }}>Cena:</strong> {curScene.name}</div>
+              {scenarioObj && <div style={{ fontSize: 13, color: C.textDim, marginBottom: 6 }}><strong style={{ color: C.text }}>Localização:</strong> {scenarioObj.name}</div>}
+              {sceneChars.length > 0 && (
+                <div style={{ fontSize: 13, color: C.textDim, marginBottom: 6 }}>
+                  <strong style={{ color: C.text }}>Personagens:</strong>{' '}
+                  {sceneChars.map(c => <span key={c.id} style={{ marginRight: 6 }}>{c.emoji} {c.name}</span>)}
+                </div>
+              )}
+              {curScene.generalAction && <div style={{ fontSize: 13, color: C.textDim }}><strong style={{ color: C.text }}>Ação geral:</strong> {curScene.generalAction}</div>}
+            </div>
+
+            {/* Form: Action */}
+            <div>
+              <Label>Ação específica do beat *</Label>
+              <Textarea value={curShot.action} onChange={e => updateShot(curShot.id, { action: e.target.value.slice(0, 200) })} rows={3} placeholder="Ex: Abraão vira o rosto devagar. Tuba para e olha para ele." />
+              <div style={{ fontSize: 11, color: C.textDim, textAlign: 'right', marginTop: 4 }}>{curShot.action.length}/200</div>
+            </div>
+
+            {/* Form: Emotion */}
+            <div>
+              <Label>Emoção / tom *</Label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {EMOTIONS.map(e => (
+                  <button key={e.id} onClick={() => updateShot(curShot.id, { emotion: e.id as ShotEmotion })} style={{ background: curShot.emotion === e.id ? `${C.purple}20` : C.card, border: `1px solid ${curShot.emotion === e.id ? C.purple : C.border}`, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: curShot.emotion === e.id ? C.text : C.textDim, fontFamily: 'inherit' }}>
+                    {e.label}
+                  </button>
+                ))}
+              </div>
+              {curShot.emotion === 'outro' && (
+                <Input value={curShot.emotionCustom ?? ''} onChange={e => updateShot(curShot.id, { emotionCustom: e.target.value })} placeholder="Descreva a emoção..." style={{ marginTop: 8 }} />
+              )}
+            </div>
+
+            {/* Form: Camera */}
+            <div>
+              <Label>Câmera *</Label>
+              <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 8 }}>
+                {(['fixed', 'movement'] as CameraMode[]).map(m => (
+                  <button key={m} onClick={() => updateShot(curShot.id, { cameraMode: m })} style={{ flex: 1, padding: '8px', borderRadius: 8, background: curShot.cameraMode === m ? C.surface : 'transparent', border: curShot.cameraMode === m ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: curShot.cameraMode === m ? C.text : C.textDim, fontFamily: 'inherit' }}>
+                    {m === 'fixed' ? 'Fixa' : 'Em Movimento'}
+                  </button>
+                ))}
+              </div>
+              {curShot.cameraMode === 'fixed' ? (
+                <select value={curShot.cameraFixed ?? ''} onChange={e => updateShot(curShot.id, { cameraFixed: e.target.value })} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%' }}>
+                  <option value="">— Selecione —</option>
+                  {CAMERA_FIXED_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                </select>
+              ) : (
+                <>
+                  <Textarea value={curShot.cameraMovement ?? ''} onChange={e => updateShot(curShot.id, { cameraMovement: e.target.value })} rows={2} placeholder="Ex: Começa wide no Clube e fecha lentamente no rosto de Zaqueu capturando a emoção" />
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>A IA traduz para linguagem técnica do Seedance (dolly, crane, push-in, aerial, etc.)</div>
+                </>
+              )}
+            </div>
+
+            {/* Duração + Ratio */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <Label>Duração</Label>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {DURATIONS.map(d => (
+                    <button key={d} onClick={() => updateShot(curShot.id, { duration: d })} style={{ background: curShot.duration === d ? `${C.purple}20` : C.card, border: `1px solid ${curShot.duration === d ? C.purple : C.border}`, borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: curShot.duration === d ? C.text : C.textDim, fontFamily: 'monospace' }}>{d}s</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <Label>Ratio</Label>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {RATIOS.map(r => (
+                    <button key={r} onClick={() => updateShot(curShot.id, { ratio: r })} style={{ background: curShot.ratio === r ? `${C.purple}20` : C.card, border: `1px solid ${curShot.ratio === r ? C.purple : C.border}`, borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: curShot.ratio === r ? C.text : C.textDim, fontFamily: 'monospace' }}>{r}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Gerar Prompt */}
+            <PrimaryButton onClick={runGeneratePrompt} disabled={!canGeneratePrompt || promptStatus === 'generating'} style={{ padding: '14px', fontSize: 15 }}>
+              {promptStatus === 'generating' ? '⟳ Gerando Prompt...' : '⚡ Gerar Prompt'}
+            </PrimaryButton>
+            {promptStatus !== 'idle' && (
+              <div style={{ textAlign: 'center' }}>
+                <Pill color={promptStatus === 'success' ? C.green : promptStatus === 'error' ? C.red : C.purple}>{promptMsg}</Pill>
+              </div>
+            )}
+          </div>
+
+          {/* Coluna direita — Prompt + Vídeo */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Prompt gerado */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Label>Prompt Gerado</Label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: C.textDim, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={advancedMode} onChange={e => setAdvancedMode(e.target.checked)} style={{ accentColor: C.purple }} />
+                  Modo avançado (editar)
+                </label>
+              </div>
+              <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 8 }}>
+                {(['pt', 'en'] as const).map(l => (
+                  <button key={l} onClick={() => setPromptLang(l)} style={{ flex: 1, padding: '8px', borderRadius: 8, background: promptLang === l ? C.surface : 'transparent', border: promptLang === l ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: promptLang === l ? C.text : C.textDim, fontFamily: 'inherit' }}>{l === 'pt' ? 'PT-BR' : 'EN'}</button>
+                ))}
+              </div>
+              <Textarea
+                value={promptLang === 'pt' ? generatedPt : generatedEn}
+                onChange={e => promptLang === 'pt' ? setGeneratedPt(e.target.value) : setGeneratedEn(e.target.value)}
+                readOnly={!advancedMode}
+                rows={6}
+                placeholder={promptStatus === 'idle' ? 'Clique em "Gerar Prompt" para criar o prompt automaticamente' : ''}
+                style={{ opacity: advancedMode ? 1 : 0.9 }}
+              />
+            </div>
+
+            {/* Gerar Vídeo */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
+              <div style={{ fontSize: 13, color: C.textDim }}>{curShot.duration}s · ${COST_PER_SEC}/s</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${(curShot.duration * COST_PER_SEC).toFixed(2)}</div>
+            </div>
+
+            <PrimaryButton onClick={runGenerateVideo} disabled={!generatedEn.trim() || videoStatus === 'generating'} style={{ padding: '14px', fontSize: 15 }}>
+              {videoStatus === 'generating' ? '⟳ Gerando Vídeo...' : 'Gerar Vídeo'}
+            </PrimaryButton>
+            {videoStatus !== 'idle' && (
+              <div style={{ textAlign: 'center' }}>
+                <Pill color={videoStatus === 'success' ? C.green : videoStatus === 'error' ? C.red : C.purple}>{videoMsg}</Pill>
+              </div>
+            )}
+
+            {/* Vídeo */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', minHeight: 240, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {activeVersion ? (
+                <video src={activeVersion.videoUrl} controls autoPlay loop style={{ width: '100%', borderRadius: 8 }} />
+              ) : (
+                <div style={{ textAlign: 'center', color: C.textDim, padding: 40 }}>
+                  <div style={{ fontSize: 42, marginBottom: 10 }}>🎬</div>
+                  <div>O vídeo aparecerá aqui</div>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -455,9 +779,7 @@ export function AAZStudio() {
       {view === 'project' && <ProjectView />}
       {view === 'episode' && <EpisodeView />}
       {view === 'scene' && <SceneView />}
-      {view === 'shot' && (
-        <div style={{ padding: 40, textAlign: 'center', color: C.textDim }}>Editor de Shot em construção</div>
-      )}
+      {view === 'shot' && <ShotEditor />}
       {view === 'library' && (
         <div style={{ padding: 40, textAlign: 'center', color: C.textDim }}>
           Biblioteca em refatoração.{' '}
