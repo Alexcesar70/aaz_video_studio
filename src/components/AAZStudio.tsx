@@ -520,8 +520,9 @@ export function AAZStudio() {
         body: JSON.stringify(body),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
+      // Servidor agora retorna { videoUrl } — URL permanente no Vercel Blob
+      const data = await res.json() as { videoUrl: string }
+      const url = data.videoUrl
       setResultUrl(url); setLastResult(url); setStatus('success'); setStatusMsg('Vídeo gerado!')
       const now = Date.now()
       setHistory(p => [{

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { put } from '@vercel/blob'
 
 /**
  * POST /api/generate
  * Proxy server-side para Segmind Seedance 2.0
- * Resolve CORS — a SEGMIND_API_KEY nunca chega ao browser
+ * Recebe o vídeo gerado, faz upload ao Vercel Blob e retorna a URL pública.
+ *
+ * Resposta: { videoUrl: string }
  */
 
 export const maxDuration = 300
@@ -98,16 +101,32 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: segmindRes.status })
     }
 
-    // Pass-through do blob de vídeo
-    const videoBlob = await segmindRes.arrayBuffer()
+    // Recebe o vídeo do Segmind
+    const videoBuffer = await segmindRes.arrayBuffer()
+    const videoSizeMB = (videoBuffer.byteLength / 1024 / 1024).toFixed(2)
+    console.log(`[/api/generate] Video recebido: ${videoSizeMB}MB`)
 
-    return new NextResponse(videoBlob, {
-      status: 200,
-      headers: {
-        'Content-Type':        'video/mp4',
-        'Content-Disposition': 'inline; filename="aaz-scene.mp4"',
-        'Cache-Control':       'no-store',
-      },
+    // Upload permanente ao Vercel Blob
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      return NextResponse.json(
+        { error: 'BLOB_READ_WRITE_TOKEN não configurado — vídeo não pode ser persistido.' },
+        { status: 500 }
+      )
+    }
+
+    const filename = `scene-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.mp4`
+    const blob = await put(filename, Buffer.from(videoBuffer), {
+      access: 'public',
+      contentType: 'video/mp4',
+      addRandomSuffix: false,
+    })
+
+    console.log(`[/api/generate] Vídeo salvo no Blob: ${blob.url}`)
+
+    return NextResponse.json({
+      videoUrl: blob.url,
+      pathname: blob.pathname,
+      sizeMB: videoSizeMB,
     })
 
   } catch (err) {
