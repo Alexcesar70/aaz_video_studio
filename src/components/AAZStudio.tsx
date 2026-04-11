@@ -521,7 +521,9 @@ export function AAZStudio() {
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
       // Servidor agora retorna { videoUrl } — URL permanente no Vercel Blob
-      const data = await res.json() as { videoUrl: string }
+      const data = await res.json() as { videoUrl?: string }
+      console.log('[/api/generate] resposta:', data)
+      if (!data.videoUrl) throw new Error('Servidor não retornou videoUrl. Resposta: ' + JSON.stringify(data))
       const url = data.videoUrl
       setResultUrl(url); setLastResult(url); setStatus('success'); setStatusMsg('Vídeo gerado!')
       const now = Date.now()
