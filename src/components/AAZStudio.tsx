@@ -382,6 +382,30 @@ export function AAZStudio() {
     return data.url as string
   }
 
+  /**
+   * Força download de uma URL cross-origin (ex: Vercel Blob).
+   * O atributo <a download> só funciona same-origin, então precisamos
+   * baixar como blob no cliente e disparar click sintético.
+   */
+  const downloadVideo = async (url: string, filename: string) => {
+    try {
+      const res = await fetch(url)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = objectUrl
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    } catch (err) {
+      console.error('[downloadVideo]', err)
+      alert('Falha ao baixar. Tente de novo.')
+    }
+  }
+
   const compressImage = (file: File, maxSize = 1200, quality = 0.85): Promise<Blob> => new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = e => {
@@ -695,7 +719,10 @@ export function AAZStudio() {
 
             {/* Download + Status */}
             {resultUrl && (
-              <a href={resultUrl} download={`aaz-${Date.now()}.mp4`} style={{ display: 'block', textAlign: 'center', padding: '12px', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 10, color: C.purple, fontSize: 14, fontWeight: 600, textDecoration: 'none' }}>↓ Baixar MP4</a>
+              <button
+                onClick={() => downloadVideo(resultUrl, `aaz-${Date.now()}.mp4`)}
+                style={{ display: 'block', width: '100%', textAlign: 'center', padding: '12px', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 10, color: C.purple, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+              >↓ Baixar MP4</button>
             )}
 
             {status !== 'idle' && (
@@ -1201,7 +1228,10 @@ export function AAZStudio() {
                       <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginBottom: 4 }}>{item.prompt}</div>
                       {item.chars && <div style={{ fontSize: 11, color: C.gold }}>{item.chars}</div>}
                     </div>
-                    <a href={item.url} download={`aaz-${item.id}.mp4`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 7, color: C.blue, textDecoration: 'none', fontSize: 16 }}>↓</a>
+                    <button
+                      onClick={() => downloadVideo(item.url, `aaz-${item.id}.mp4`)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 7, color: C.blue, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >↓</button>
                   </div>
                 ))}
               </div>
