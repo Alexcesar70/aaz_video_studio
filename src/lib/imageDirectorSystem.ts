@@ -8,7 +8,11 @@ import type { AssetType } from './assets'
 
 const AAZ_STYLE_BLOCK = `3D character/prop/environment with clay texture and handcrafted look. Smooth clay surface with slightly rough handmade finish suggesting hand-sculpted figures, large expressive eyes with subtle clay sheen, rounded proportions with soft edges, warm palette (ochre, cream, teal, soft pink, olive green), soft ambient occlusion, volumetric lighting, cinematic depth of field. Pixar/DreamWorks look.`
 
-const BLOCKED_VOCABULARY = `angel→winged boy/winged figure; wings on humanoid→feathered wings; God/Lord/Jesus/Holy Spirit→never name directly; pray/prayer→describe physical posture (hands folded, eyes closed); heaven/paradise→sky/star-filled sky; miracle→unexpected event; blessed/sacred/divine→warm/luminous/glowing; demon/devil→avoid; church→building/large hall; Bible/scripture→book/old book; cross(religious)→wooden structure; prophecy→mission/signal/sign`
+// Jesus IS a canonical character of the AAZ com Jesus universe and CAN be named
+// directly when referenced as a character. God/Lord/Holy Spirit stay blocked
+// (not named directly in prompts). The rest of the list avoids Seedance/Gemini
+// content filter rejections.
+const BLOCKED_VOCABULARY = `angel→winged boy/winged figure; wings on humanoid→feathered wings; God/Lord/Holy Spirit→never name directly (Jesus IS allowed as character name); pray/prayer→describe physical posture (hands folded, eyes closed); heaven/paradise→sky/star-filled sky; miracle→unexpected event; blessed/sacred/divine→warm/luminous/glowing; demon/devil→avoid; church→building/large hall; Bible/scripture→book/old book; cross(religious)→wooden structure; prophecy→mission/signal/sign`
 
 const CHARACTER_GUIDE = `For CHARACTERS:
 - Full-body or 3/4 portrait, neutral pose, facing camera or slight 3/4

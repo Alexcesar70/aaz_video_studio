@@ -61,11 +61,13 @@ Narrative rule: at least one rule must be emotionally broken during a scene of t
 
 ## BLOCKED VOCABULARY — NEVER use these in Dynamic Description or Static Description
 
+**EXCEPTION: Jesus IS a canonical character of this universe and CAN be named directly in prompts** (he appears in multiple animations as a fixed character). Use @jesus tag when referenced. The blocks below are for Seedance content-filter safety only.
+
 | Blocked | Use instead |
 |---------|-------------|
 | angel, angels | winged boy, winged figure |
 | wings (on humanoid) | feathered wings, large wings |
-| God, Lord, Jesus, Holy Spirit | (never name directly in prompt) |
+| God, Lord, Holy Spirit | (never name directly in prompt) |
 | pray, prayer | (describe physical posture: hands folded, eyes closed) |
 | heaven, paradise | sky, star-filled sky |
 | miracle | unexpected event |
