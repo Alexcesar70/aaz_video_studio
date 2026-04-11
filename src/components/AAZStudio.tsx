@@ -46,7 +46,7 @@ interface LibraryEntry { charId: string; name: string; emoji: string; images: st
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
 interface Project { id: string; name: string; createdAt: string }
 interface Episode { id: string; name: string; projectId?: string | null; createdAt: string }
-interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null }
+interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
 /* ── Atoms ── */
@@ -95,10 +95,16 @@ function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene }: { scene
         </div>
       </div>
       <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Título da cena (se houver) + número */}
+        {(scene.title || scene.sceneNumber > 0) && (
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>
+            {scene.sceneNumber > 0 && <span style={{ color: C.purple }}>#{scene.sceneNumber}</span>}
+            {scene.title && <span style={{ marginLeft: scene.sceneNumber > 0 ? 6 : 0 }}>— {scene.title}</span>}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
           <Pill color={C.blue}>{scene.duration}s</Pill>
           <Pill color={C.green}>${scene.cost}</Pill>
-          {scene.sceneNumber > 0 && <Pill color={C.textDim}>#{scene.sceneNumber}</Pill>}
         </div>
         <div title={scene.prompt} style={{ fontSize: 12, color: C.textDim, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{scene.prompt}</div>
         <div style={{ fontSize: 11, color: C.textDim }}>{dateStr}</div>
@@ -630,6 +636,10 @@ export function AAZStudio() {
   const [generateAudio, setGenerateAudio] = useState(true)
   const [promptMode, setPromptMode] = useState<'assistant' | 'free'>('assistant')
 
+  /* Metadados da cena em edição */
+  const [sceneNumberInput, setSceneNumberInput] = useState('')
+  const [sceneTitleInput, setSceneTitleInput] = useState('')
+
   /* geração */
   const [generating, setGenerating] = useState(false)
   const [status, setStatus] = useState('idle')
@@ -818,7 +828,9 @@ export function AAZStudio() {
       refImgs.length > 0 ||
       refVids.length > 0 ||
       refAuds.length > 0 ||
-      !!firstUrl || !!lastUrl
+      !!firstUrl || !!lastUrl ||
+      sceneNumberInput.trim().length > 0 ||
+      sceneTitleInput.trim().length > 0
 
     const doReset = () => {
       setPrompts({ pt: '', en: '' })
@@ -828,6 +840,7 @@ export function AAZStudio() {
       setFirstUrl(''); setLastUrl(''); setFirstPreview(''); setLastPreview('')
       setResultUrl(''); setStatus('idle'); setStatusMsg('')
       setChain(false)
+      setSceneNumberInput(''); setSceneTitleInput('')
       setToast(currentEpisode ? `Pronto para criar nova cena em "${currentEpisode.name?.trim() || '(sem nome)'}"` : 'Pronto para criar nova cena')
       window.setTimeout(() => setToast(''), 3500)
       // Sobe pro topo do Estúdio
@@ -927,11 +940,17 @@ export function AAZStudio() {
       const epScenes = currentEpisode
         ? sceneAssets.filter(s => s.episodeId === currentEpisode.id)
         : sceneAssets.filter(s => !s.episodeId)
+      // Número: usa o manual se preenchido, senão max + 1 (ou 1 se vazio)
+      const manualNumber = parseInt(sceneNumberInput.trim(), 10)
+      const sceneNumber = !isNaN(manualNumber) && manualNumber > 0
+        ? manualNumber
+        : (epScenes.length ? Math.max(...epScenes.map(s => s.sceneNumber)) + 1 : 1)
       const scene: SceneAsset = {
         id: `scene_${now}`,
         episodeId: currentEpisode?.id ?? null,
         projectId: currentProject?.id ?? null,
-        sceneNumber: epScenes.length + 1,
+        sceneNumber,
+        title: sceneTitleInput.trim() || undefined,
         prompt: prompts[lang],
         videoUrl: url, lastFrameUrl: url,
         characters: selChars.map(c => c.id), duration, cost,
@@ -1092,13 +1111,19 @@ export function AAZStudio() {
                               <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(167,139,250,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff' }}>▶</div>
                             </div>
                           </div>
-                          <div style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
-                            <span style={{ fontSize: 11, fontWeight: 600, color: C.text }}>#{scene.sceneNumber} · {scene.duration}s</span>
-                            <button
-                              onClick={() => injectSceneAsFirstFrame(scene)}
-                              title="Usar como referência para encadear a próxima cena"
-                              style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.gold, fontSize: 11, fontFamily: 'inherit' }}
-                            >🔗</button>
+                          <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <span style={{ color: C.purple }}>#{scene.sceneNumber}</span>
+                              {scene.title && <span style={{ opacity: 0.85 }}> {scene.title}</span>}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                              <span style={{ fontSize: 10, color: C.textDim }}>{scene.duration}s</span>
+                              <button
+                                onClick={() => injectSceneAsFirstFrame(scene)}
+                                title="Usar como referência para encadear a próxima cena"
+                                style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.gold, fontSize: 11, fontFamily: 'inherit' }}
+                              >🔗</button>
+                            </div>
                           </div>
                         </div>
                       ))}
@@ -1129,6 +1154,27 @@ export function AAZStudio() {
                 <Pill color={statusColor}>{status === 'generating' && '⟳ '}{status === 'success' && '✓ '}{status === 'error' && '✕ '}{statusMsg}</Pill>
               </div>
             )}
+
+            {/* Metadados da cena — número e título (opcionais) */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ fontSize: 11, color: C.textDim, fontWeight: 600, letterSpacing: '0.3px' }}>CENA</div>
+              <Input
+                type="number"
+                placeholder="Nº"
+                min={1}
+                value={sceneNumberInput}
+                onChange={e => setSceneNumberInput(e.target.value)}
+                style={{ width: 70, textAlign: 'center' }}
+                title="Número da cena (opcional — se vazio, numera automaticamente)"
+              />
+              <Input
+                placeholder="Título (opcional) — ex: Encontro no parque"
+                value={sceneTitleInput}
+                onChange={e => setSceneTitleInput(e.target.value)}
+                style={{ flex: 1, minWidth: 200 }}
+                title="Título curto para identificar a cena depois"
+              />
+            </div>
 
             {/* Prompt — abaixo do vídeo */}
             <div>

@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
 
 interface SceneAsset {
-  id: string; episodeId: string | null; sceneNumber: number; prompt: string
+  id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string
   videoUrl: string; lastFrameUrl: string; characters: string[]
-  duration: number; cost: string; createdAt: string
+  duration: number; cost: string; createdAt: string; projectId?: string | null
 }
 
 const ORPHAN = '__orphan__'

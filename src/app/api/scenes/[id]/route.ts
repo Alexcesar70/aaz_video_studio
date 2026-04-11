@@ -3,7 +3,7 @@ import { getRedis } from '@/lib/redis'
 
 interface SceneAsset {
   id: string; episodeId: string | null; projectId?: string | null
-  sceneNumber: number; prompt: string
+  sceneNumber: number; title?: string; prompt: string
   videoUrl: string; lastFrameUrl: string; characters: string[]
   duration: number; cost: string; createdAt: string
 }
