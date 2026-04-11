@@ -317,6 +317,7 @@ export function AAZStudio() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null)
   const [newEpName, setNewEpName] = useState('')
+  const [newEpError, setNewEpError] = useState('')
 
   const loadEpisodes = useCallback(async () => {
     try { const r = await fetch('/api/episodes'); if (r.ok) { const eps = await r.json(); setEpisodes(eps); if (eps.length && !currentEpisode) setCurrentEpisode(eps[0]) } } catch {}
@@ -324,7 +325,12 @@ export function AAZStudio() {
 
   const createEpisode = async () => {
     const trimmed = newEpName.trim()
-    if (!trimmed) return
+    if (!trimmed) {
+      setNewEpError('Digite o nome do episódio antes de criar.')
+      setTimeout(() => setNewEpError(''), 3000)
+      return
+    }
+    setNewEpError('')
     const ep: Episode = {
       id: `ep_${Date.now()}`,
       name: trimmed,
@@ -953,9 +959,26 @@ export function AAZStudio() {
                 {filteredEpisodes.map(ep => <option key={ep.id} value={ep.id}>{ep.name}</option>)}
               </select>
 
-              <Input placeholder="Novo episódio..." value={newEpName} onChange={e => setNewEpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createEpisode()} style={{ width: 180 }} />
-              <button onClick={createEpisode} disabled={!newEpName.trim()} style={{ background: newEpName.trim() ? C.purple : C.card, border: `1px solid ${newEpName.trim() ? C.purple : C.border}`, borderRadius: 8, padding: '8px 16px', cursor: newEpName.trim() ? 'pointer' : 'default', color: newEpName.trim() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar</button>
+              <Input
+                placeholder="Novo episódio..."
+                value={newEpName}
+                onChange={e => { setNewEpName(e.target.value); if (newEpError) setNewEpError('') }}
+                onKeyDown={e => e.key === 'Enter' && createEpisode()}
+                style={{ width: 180, borderColor: newEpError ? C.red : undefined }}
+              />
+              <button
+                onClick={createEpisode}
+                title={newEpName.trim() ? 'Criar novo episódio' : 'Digite o nome antes de criar'}
+                style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+              >+ Criar</button>
             </div>
+
+            {/* Feedback de erro inline para criação de episódio */}
+            {newEpError && (
+              <div style={{ background: `${C.red}10`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', fontSize: 12, color: C.red, display: 'flex', alignItems: 'center', gap: 8 }}>
+                ⚠ {newEpError}
+              </div>
+            )}
 
             {/* Input inline para novo projeto */}
             {showNewProjectInput && (
