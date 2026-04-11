@@ -473,15 +473,12 @@ export function AAZStudio() {
 
   const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'scenes'>('chars')
 
-  /* scene director */
+  /* scene director — compartilhado entre modo inline (Estúdio) e aba separada (legada) */
   const [sdDesc, setSdDesc] = useState('')
-  const [sdChars, setSdChars] = useState<string[]>([])
   const [sdSetting, setSdSetting] = useState('')
   const [sdEmotion, setSdEmotion] = useState('')
   const [sdStatus, setSdStatus] = useState('idle')
   const [sdMsg, setSdMsg] = useState('')
-
-  const toggleSdChar = (id: string) => setSdChars(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id])
 
   const runSceneDirector = async () => {
     if (!sdDesc.trim()) { setSdStatus('error'); setSdMsg('Descreva a cena.'); return }
@@ -492,7 +489,7 @@ export function AAZStudio() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scene_description: sdDesc,
-          characters: sdChars.length ? sdChars : undefined,
+          characters: selChars.length ? selChars.map(c => c.id) : undefined,
           setting: sdSetting || undefined,
           duration,
           emotion: sdEmotion || undefined,
@@ -505,8 +502,7 @@ export function AAZStudio() {
         pt: p.find(x => x.lang === 'pt-br')?.prompt ?? '',
         en: p.find(x => x.lang === 'en')?.prompt ?? '',
       })
-      setSdStatus('success'); setSdMsg('Prompts gerados e injetados nas abas PT e EN!')
-      setTab('studio')
+      setSdStatus('success'); setSdMsg('Prompts gerados!')
     } catch (err: unknown) {
       setSdStatus('error'); setSdMsg(err instanceof Error ? err.message : 'Erro desconhecido')
     }
@@ -626,6 +622,7 @@ export function AAZStudio() {
   const [chain, setChain] = useState(false)
   const [lastResult, setLastResult] = useState('')
   const [generateAudio, setGenerateAudio] = useState(true)
+  const [promptMode, setPromptMode] = useState<'assistant' | 'free'>('assistant')
 
   /* geração */
   const [generating, setGenerating] = useState(false)
@@ -921,7 +918,7 @@ export function AAZStudio() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
-        {[['studio', 'Estúdio'], ['director', 'Assistente de Prompt'], ['library', 'Assets']].map(([id, lbl]) => (
+        {[['studio', 'Estúdio'], ['library', 'Assets']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
@@ -1057,11 +1054,73 @@ export function AAZStudio() {
 
             {/* Prompt — abaixo do vídeo */}
             <div>
-              <Label>Prompt</Label>
-              <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 12 }}>
+              {/* Toggle Assistente | Livre */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <Label>Prompt</Label>
+                <div style={{ display: 'flex', gap: 4, background: C.card, padding: 3, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                  <button onClick={() => setPromptMode('assistant')} style={{ padding: '6px 14px', borderRadius: 6, background: promptMode === 'assistant' ? C.purple : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: promptMode === 'assistant' ? '#fff' : C.textDim, fontFamily: 'inherit' }}>✨ Assistente</button>
+                  <button onClick={() => setPromptMode('free')} style={{ padding: '6px 14px', borderRadius: 6, background: promptMode === 'free' ? C.purple : 'transparent', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: promptMode === 'free' ? '#fff' : C.textDim, fontFamily: 'inherit' }}>✍ Livre</button>
+                </div>
+              </div>
+
+              {/* MODO ASSISTENTE — formulário guiado */}
+              {promptMode === 'assistant' && (
+                <div style={{ background: `${C.purple}08`, border: `1px solid ${C.purple}30`, borderRadius: 12, padding: 16, marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>DESCREVA A CENA EM PORTUGUÊS</div>
+                    <textarea
+                      placeholder="Ex: Abigail está no parque. Ela encontra Tuba e corre feliz pra abraçá-lo. Os dois brincam juntos."
+                      value={sdDesc}
+                      onChange={e => setSdDesc(e.target.value)}
+                      style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 80 }}
+                      rows={3}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>LOCALIZAÇÃO (opcional)</div>
+                      <Input placeholder="Ex: Parque, Clube da Aliança..." value={sdSetting} onChange={e => setSdSetting(e.target.value)} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>EMOÇÃO / TOM (opcional)</div>
+                      <Input placeholder="Ex: alegria, tensão, reflexão..." value={sdEmotion} onChange={e => setSdEmotion(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* Contexto herdado do Estúdio */}
+                  <div style={{ fontSize: 11, color: C.textDim, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                    <span style={{ opacity: 0.7 }}>Usando do Estúdio:</span>
+                    <Pill color={C.blue} style={{ fontSize: 10, padding: '2px 8px' }}>⏱ {duration}s</Pill>
+                    {selChars.length > 0 ? selChars.map(c => (
+                      <Pill key={c.id} color={c.color} style={{ fontSize: 10, padding: '2px 8px' }}>{c.emoji} {c.name}</Pill>
+                    )) : <span style={{ opacity: 0.6 }}>nenhum personagem selecionado</span>}
+                  </div>
+
+                  <button
+                    onClick={runSceneDirector}
+                    disabled={!sdDesc.trim() || sdStatus === 'generating'}
+                    style={{ background: !sdDesc.trim() || sdStatus === 'generating' ? C.card : C.purple, border: `1px solid ${!sdDesc.trim() || sdStatus === 'generating' ? C.border : C.purple}`, borderRadius: 10, padding: '12px', cursor: !sdDesc.trim() || sdStatus === 'generating' ? 'not-allowed' : 'pointer', color: !sdDesc.trim() || sdStatus === 'generating' ? C.textDim : '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit' }}
+                  >
+                    {sdStatus === 'generating' ? '⟳ Claude escrevendo...' : '⚡ Gerar Prompt com IA'}
+                  </button>
+
+                  {sdStatus !== 'idle' && sdStatus !== 'generating' && (
+                    <div style={{ textAlign: 'center' }}>
+                      <Pill color={sdStatus === 'success' ? C.green : C.red}>{sdMsg}</Pill>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Prompt textarea — sempre visível (editável tanto no modo Livre quanto após gerar no Assistente) */}
+              <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 8 }}>
                 {[['pt', 'PT-BR'], ['en', 'EN']].map(([l, lbl]) => (
                   <button key={l} onClick={() => setLang(l as 'pt' | 'en')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: lang === l ? C.surface : 'transparent', border: lang === l ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: lang === l ? C.text : C.textDim, transition: 'all 0.15s', fontFamily: 'inherit' }}>{lbl}</button>
                 ))}
+              </div>
+              <div style={{ fontSize: 11, color: C.textDim, marginBottom: 6 }}>
+                {promptMode === 'assistant' ? 'Prompt gerado (editável antes de gerar o vídeo)' : 'Escreva o prompt diretamente'}
               </div>
               <textarea
                 placeholder={lang === 'pt' ? 'Descreva a cena...' : 'Describe the scene...'}
@@ -1075,7 +1134,6 @@ export function AAZStudio() {
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
                   {refImgs.map((r, i) => {
                     const tag = r.charId ? `@${r.charId}` : `@image${i + 1}`
-                    const displayName = r.name || `image${i + 1}`
                     return (
                       <button key={i} onClick={() => setPrompts(p => ({ ...p, [lang]: p[lang] + ` ${tag}` }))} style={{ background: `${r.fromLib ? C.purple : C.blue}15`, border: `1px solid ${r.fromLib ? C.purple : C.blue}40`, borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: r.fromLib ? C.purple : C.blue, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontFamily: 'monospace' }}>{tag}</span>
@@ -1289,68 +1347,7 @@ export function AAZStudio() {
         </div>
       )}
 
-      {/* ══════════ ASSISTENTE DE PROMPT ══════════ */}
-      {tab === 'director' && (
-        <div style={{ padding: '26px', maxWidth: 700 }}>
-          <Label>✨ Assistente de Prompt — Claude AI</Label>
-          <div style={{ background: `${C.purple}10`, border: `1px solid ${C.purple}30`, borderRadius: 9, padding: '10px 14px', fontSize: 11, color: C.purple, marginBottom: 18 }}>
-            Descreva a cena em texto livre. O Claude gera prompts otimizados para Seedance 2.0 em PT-BR, ES e EN e injeta automaticamente nas 3 abas do Estúdio.
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>DESCRIÇÃO DA CENA</div>
-              <textarea
-                placeholder="Ex: Abraão e Abigail estão no Clube da Aliança. Abraão pega o brinquedo da Abigail sem pedir. Ela fica com o maxilar apertado, olhos marejados. Tuba late baixo, as sobrancelhas caem. Até que Abraão percebe e devolve..."
-                value={sdDesc}
-                onChange={e => setSdDesc(e.target.value)}
-                style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: '11px 12px', color: C.text, fontSize: 12, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 120 }}
-                rows={5}
-              />
-            </div>
-
-            <div>
-              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>PERSONAGENS NA CENA</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
-                {CHARACTERS.map(char => {
-                  const sel = sdChars.includes(char.id)
-                  return (
-                    <button key={char.id} onClick={() => toggleSdChar(char.id)} style={{ background: sel ? `${char.color}18` : C.card, border: `1px solid ${sel ? char.color : C.border}`, borderRadius: 9, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, transition: 'all 0.15s' }}>
-                      <span style={{ fontSize: 18 }}>{char.emoji}</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: sel ? char.color : C.textDim }}>{char.name}</span>
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>CENÁRIO (opcional)</div>
-                <Input placeholder="Ex: Clube da Aliança, cozinha..." value={sdSetting} onChange={e => setSdSetting(e.target.value)} />
-              </div>
-              <div>
-                <div style={{ fontSize: 10, color: C.textDim, marginBottom: 8, letterSpacing: '1px' }}>CONFLITO EMOCIONAL (opcional)</div>
-                <Input placeholder="Ex: egoísmo vs. compartilhar" value={sdEmotion} onChange={e => setSdEmotion(e.target.value)} />
-              </div>
-            </div>
-
-            <button onClick={runSceneDirector} disabled={sdStatus === 'generating'} style={{ background: sdStatus === 'generating' ? C.card : `linear-gradient(135deg,${C.purple},#6B3FA0)`, border: `1px solid ${sdStatus === 'generating' ? C.border : C.purple}`, borderRadius: 11, padding: '14px', cursor: sdStatus === 'generating' ? 'not-allowed' : 'pointer', color: sdStatus === 'generating' ? C.textDim : '#fff', fontSize: 13, fontWeight: 800, letterSpacing: '1.5px', textTransform: 'uppercase', width: '100%', fontFamily: "'Georgia',serif", boxShadow: sdStatus === 'generating' ? 'none' : `0 0 22px ${C.purpleGlow}`, transition: 'all 0.2s' }}>
-              {sdStatus === 'generating' ? '⟳ Claude escrevendo...' : '✨ Gerar Prompts Trilíngues'}
-            </button>
-
-            {sdStatus !== 'idle' && (
-              <div style={{ textAlign: 'center' }}>
-                <Pill color={sdStatus === 'success' ? C.green : sdStatus === 'error' ? C.red : C.purple}>
-                  {sdStatus === 'generating' && '⟳ '}{sdStatus === 'success' && '✓ '}{sdStatus === 'error' && '✕ '}{sdMsg}
-                </Pill>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ══════════ BIBLIOTECA — Ideia 1: categorias separadas ══════════ */}
+      {/* ══════════ ASSETS — Personagens, Cenários, Cenas ══════════ */}
       {tab === 'library' && (
         <div style={{ padding: '26px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
