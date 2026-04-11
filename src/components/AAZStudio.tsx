@@ -133,9 +133,9 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
   )
 
   return (
-    <div style={{ padding: '26px', maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0 }}>📋 Histórico ({total} cena{total !== 1 ? 's' : ''})</h1>
+    <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, marginTop: 4 }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>🎬 Cenas ({total})</h1>
       </div>
 
       {total === 0 ? (
@@ -888,7 +888,7 @@ export function AAZStudio() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
-        {[['studio', 'Estúdio'], ['director', 'Assistente de Prompt'], ['library', 'Biblioteca'], ['history', 'Histórico']].map(([id, lbl]) => (
+        {[['studio', 'Estúdio'], ['director', 'Assistente de Prompt'], ['library', 'Assets']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
@@ -1426,65 +1426,23 @@ export function AAZStudio() {
           </>)}
 
           {/* ═══ CENAS — Ideia 2 + 5 ═══ */}
-          {libTab === 'scenes' && (<>
-            {/* Episódios */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px' }}>
-              <Label>Episódios</Label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
-                {episodes.map(ep => (
-                  <div key={ep.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <button onClick={() => setCurrentEpisode(ep)} style={{ background: currentEpisode?.id === ep.id ? `${C.purple}20` : C.surface, border: `1px solid ${currentEpisode?.id === ep.id ? C.purple : C.border}`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: currentEpisode?.id === ep.id ? C.text : C.textDim, fontFamily: 'inherit' }}>{ep.name}</button>
-                    <button onClick={() => deleteEpisode(ep.id)} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', fontSize: 14, padding: 0 }}>×</button>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Input placeholder="Nome do novo episódio..." value={newEpName} onChange={e => setNewEpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createEpisode()} />
-                <button onClick={createEpisode} disabled={!newEpName.trim()} style={{ background: newEpName.trim() ? C.purple : C.card, border: `1px solid ${newEpName.trim() ? C.purple : C.border}`, borderRadius: 8, padding: '8px 20px', cursor: newEpName.trim() ? 'pointer' : 'default', color: newEpName.trim() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar Episódio</button>
-              </div>
-            </div>
-
-            {/* Timeline de cenas */}
-            {!currentEpisode
-              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Selecione ou crie um episódio acima.</div>
-              : sceneAssets.filter(s => s.episodeId === currentEpisode.id).length === 0
-              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhuma cena em &quot;{currentEpisode.name}&quot;. Gere cenas no Estúdio com este episódio selecionado.</div>
-              : (
-                <div style={{ display: 'flex', gap: 16, overflowX: 'auto', padding: '4px 0' }}>
-                  {sceneAssets.filter(s => s.episodeId === currentEpisode.id).map(scene => (
-                    <div key={scene.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 240, flexShrink: 0, overflow: 'hidden' }}>
-                      <div style={{ background: C.bg, aspectRatio: '16/9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32 }}>🎬</div>
-                      <div style={{ padding: '14px' }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>Cena {scene.sceneNumber}</div>
-                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 4 }}>{scene.duration}s · {scene.cost}</div>
-                        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 210 }}>{scene.prompt}</div>
-                        <button onClick={() => { setTab('studio'); injectSceneAsFirstFrame(scene) }} style={{ width: '100%', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Encadear próxima cena</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            }
-          </>)}
+          {libTab === 'scenes' && (
+            <HistoryTab
+              scenes={sceneAssets}
+              projects={projects}
+              episodes={episodes}
+              onPlay={(s) => setPlayerModalScene(s)}
+              onDownload={downloadVideo}
+              onDelete={async (id) => {
+                if (!confirm('Remover esta cena? (o vídeo original permanece no Blob)')) return
+                setSceneAssets(prev => prev.filter(s => s.id !== id))
+                await fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+              }}
+              onMoveScene={(s) => setMoveSceneModal(s)}
+              onMoveEpisode={(e) => setMoveEpisodeModal(e)}
+            />
+          )}
         </div>
-      )}
-
-      {/* ══════════ HISTÓRICO ══════════ */}
-      {tab === 'history' && (
-        <HistoryTab
-          scenes={sceneAssets}
-          projects={projects}
-          episodes={episodes}
-          onPlay={(s) => setPlayerModalScene(s)}
-          onDownload={downloadVideo}
-          onDelete={async (id) => {
-            if (!confirm('Remover esta cena do histórico? (o vídeo original permanece no Blob)')) return
-            setSceneAssets(prev => prev.filter(s => s.id !== id))
-            await fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' })
-          }}
-          onMoveScene={(s) => setMoveSceneModal(s)}
-          onMoveEpisode={(e) => setMoveEpisodeModal(e)}
-        />
       )}
 
       {/* Modal do player */}
