@@ -342,6 +342,7 @@ export function AAZStudio() {
   /* chain */
   const [chain, setChain] = useState(false)
   const [lastResult, setLastResult] = useState('')
+  const [generateAudio, setGenerateAudio] = useState(true)
 
   /* geração */
   const [generating, setGenerating] = useState(false)
@@ -497,7 +498,7 @@ export function AAZStudio() {
       duration,
       aspect_ratio: ratio,
       resolution: '720p',
-      generate_audio: false,
+      generate_audio: generateAudio,
       mode,
     }
 
@@ -907,6 +908,15 @@ export function AAZStudio() {
                   <button key={d} onClick={() => setDuration(d)} style={{ background: duration === d ? `${C.purple}20` : C.card, border: `1px solid ${duration === d ? C.purple : C.border}`, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: duration === d ? C.text : C.textDim, fontFamily: 'monospace', transition: 'all 0.15s' }}>{d}s</button>
                 ))}
               </div>
+            </div>
+
+            {/* Áudio */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="checkbox" id="generate-audio" checked={generateAudio} onChange={e => setGenerateAudio(e.target.checked)} style={{ accentColor: C.purple, width: 16, height: 16 }} />
+              <label htmlFor="generate-audio" style={{ cursor: 'pointer', fontSize: 13, flex: 1 }}>
+                Gerar com áudio
+                <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>Sons ambiente e diálogo são gerados junto</div>
+              </label>
             </div>
 
             {/* Custo */}
