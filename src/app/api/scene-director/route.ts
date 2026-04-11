@@ -32,20 +32,30 @@ export async function POST(request: NextRequest) {
 
     // ── Monta o user message ────────────────────────────────────
     const parts: string[] = []
-    parts.push(`Scene description: ${body.scene_description}`)
+    parts.push(`The creator wrote this scene description (in Portuguese, may contain @charid references):`)
+    parts.push(body.scene_description)
+    parts.push('')
 
     if (body.characters?.length) {
-      parts.push(`Characters in this scene: ${body.characters.join(', ')}`)
+      const ids = (body.characters as string[]).map(c => `@${c}`).join(', ')
+      parts.push(`Characters in this scene (write as tags in the prompt): ${ids}`)
+      parts.push(`CRITICAL: Every time you reference these characters in Dynamic Description, Static Description, or Audio, use the @id tag (not the name). These tags link to Omni Reference images.`)
     }
     if (body.setting) {
-      parts.push(`Setting: ${body.setting}`)
+      parts.push(`Setting / location: ${body.setting}`)
     }
     if (body.duration) {
-      parts.push(`Video duration: ${body.duration} seconds`)
+      parts.push(`Target video duration: ${body.duration} seconds — calibrate the number of beats accordingly.`)
     }
     if (body.emotion) {
-      parts.push(`Emotional conflict: ${body.emotion}`)
+      parts.push(`Emotional tone / conflict: ${body.emotion} — express through body physics.`)
     }
+
+    parts.push('')
+    parts.push('REMINDERS:')
+    parts.push('- If the creator included dialogue (even implied), preserve it verbatim in the Audio section.')
+    parts.push('- Use @charid tags for every character mention.')
+    parts.push('- Return ONLY the JSON array with PT-BR and EN objects, each with the 4 sections.')
 
     const userMessage = parts.join('\n')
 
