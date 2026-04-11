@@ -46,7 +46,7 @@ interface LibraryEntry { charId: string; name: string; emoji: string; images: st
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
 interface Project { id: string; name: string; createdAt: string }
 interface Episode { id: string; name: string; projectId?: string | null; createdAt: string }
-interface SceneAsset { id: string; episodeId: string; sceneNumber: number; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string }
+interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
 /* ── Atoms ── */
@@ -63,6 +63,127 @@ const Divider = () => <div style={{ borderTop: `1px solid ${C.border}`, margin: 
 const Input = ({ style = {}, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
   <input style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box', ...style }} {...props} />
 )
+
+/* ═══════════════════════════════════════════════════════════════
+   HistoryTab — aba Histórico
+   Declarado fora do AAZStudio para não ser recriado a cada render.
+═══════════════════════════════════════════════════════════════ */
+
+interface HistoryTabProps {
+  scenes: SceneAsset[]
+  projects: Project[]
+  episodes: Episode[]
+  onPlay: (scene: SceneAsset) => void
+  onDownload: (url: string, filename: string) => void
+  onDelete: (id: string) => void
+}
+
+function SceneCard({ scene, onPlay, onDownload, onDelete }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void }) {
+  const d = new Date(scene.createdAt)
+  const dateStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return (
+    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ position: 'relative', aspectRatio: '16/9', background: '#000', cursor: 'pointer' }} onClick={() => onPlay(scene)}>
+        <video src={scene.videoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play().catch(() => {})} onMouseLeave={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0 }} />
+        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.25)', opacity: 0.9 }}>
+          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(167,139,250,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#fff' }}>▶</div>
+        </div>
+      </div>
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <Pill color={C.blue}>{scene.duration}s</Pill>
+          <Pill color={C.green}>${scene.cost}</Pill>
+          {scene.sceneNumber > 0 && <Pill color={C.textDim}>#{scene.sceneNumber}</Pill>}
+        </div>
+        <div title={scene.prompt} style={{ fontSize: 12, color: C.textDim, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{scene.prompt}</div>
+        <div style={{ fontSize: 11, color: C.textDim }}>{dateStr}</div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button onClick={() => onPlay(scene)} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '7px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>▶ Assistir</button>
+          <button onClick={() => onDownload(scene.videoUrl, `aaz-${scene.id}.mp4`)} style={{ background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.blue, fontSize: 12, fontFamily: 'inherit' }}>↓</button>
+          <button onClick={() => onDelete(scene.id)} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.red, fontSize: 12, fontFamily: 'inherit' }}>×</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete }: HistoryTabProps) {
+  const total = scenes.length
+  const orphans = scenes.filter(s => !s.episodeId)
+  const episodesWithScenes = episodes.filter(ep => scenes.some(s => s.episodeId === ep.id))
+  const projectsWithContent = projects.filter(p => episodesWithScenes.some(ep => ep.projectId === p.id))
+  const standaloneEpisodes = episodesWithScenes.filter(ep => !ep.projectId)
+  const sceneGrid = (arr: SceneAsset[]) => (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 14 }}>
+      {arr.map(s => <SceneCard key={s.id} scene={s} onPlay={onPlay} onDownload={onDownload} onDelete={onDelete} />)}
+    </div>
+  )
+
+  return (
+    <div style={{ padding: '26px', maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 700, color: C.text, margin: 0 }}>📋 Histórico ({total} cena{total !== 1 ? 's' : ''})</h1>
+      </div>
+
+      {total === 0 ? (
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '48px', textAlign: 'center', color: C.textDim }}>
+          <div style={{ fontSize: 42, marginBottom: 10 }}>🎬</div>
+          <div style={{ fontSize: 14 }}>Nenhuma cena gerada ainda. Volte ao Estúdio e crie a primeira.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+          {/* Projetos */}
+          {projectsWithContent.map(proj => {
+            const projEps = episodesWithScenes.filter(ep => ep.projectId === proj.id)
+            return (
+              <section key={proj.id}>
+                <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>📁 {proj.name}</h2>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, borderLeft: `2px solid ${C.border}` }}>
+                  {projEps.map(ep => {
+                    const epScenes = scenes.filter(s => s.episodeId === ep.id)
+                    return (
+                      <div key={ep.id}>
+                        <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0, marginBottom: 10, marginLeft: 8 }}>🎬 {ep.name} <span style={{ opacity: 0.6 }}>({epScenes.length})</span></h3>
+                        <div style={{ marginLeft: 8 }}>{sceneGrid(epScenes)}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
+
+          {/* Episódios avulsos */}
+          {standaloneEpisodes.length > 0 && (
+            <section>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, marginBottom: 12 }}>🎬 Episódios Avulsos</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {standaloneEpisodes.map(ep => {
+                  const epScenes = scenes.filter(s => s.episodeId === ep.id)
+                  return (
+                    <div key={ep.id}>
+                      <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0, marginBottom: 10 }}>{ep.name} <span style={{ opacity: 0.6 }}>({epScenes.length})</span></h3>
+                      {sceneGrid(epScenes)}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* Cenas órfãs (sem episódio) */}
+          {orphans.length > 0 && (
+            <section>
+              <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>🎞 Cenas sem episódio</h2>
+              <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>Cenas geradas sem um episódio selecionado</div>
+              {sceneGrid(orphans)}
+            </section>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
 
 export function AAZStudio() {
   const router = useRouter()
@@ -193,7 +314,27 @@ export function AAZStudio() {
   const [sceneAssets, setSceneAssets] = useState<SceneAsset[]>([])
 
   const loadScenes = useCallback(async () => {
-    try { const r = await fetch('/api/scenes'); if (r.ok) setSceneAssets(await r.json()) } catch {}
+    try {
+      const r = await fetch('/api/scenes')
+      if (!r.ok) return
+      const data = await r.json() as SceneAsset[]
+      // Filtra cenas com URLs mortas (URLs blob: de antes da persistência no Vercel Blob)
+      const valid: SceneAsset[] = []
+      const brokenIds: string[] = []
+      for (const s of data) {
+        if (s.videoUrl && !s.videoUrl.startsWith('blob:')) {
+          valid.push(s)
+        } else {
+          brokenIds.push(s.id)
+        }
+      }
+      setSceneAssets(valid)
+      // Limpa cenas órfãs do Redis silenciosamente
+      for (const id of brokenIds) {
+        fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {})
+      }
+      if (brokenIds.length) console.log(`[loadScenes] ${brokenIds.length} cenas com URLs mortas removidas`)
+    } catch {}
   }, [])
 
   /* load all data */
@@ -332,6 +473,15 @@ export function AAZStudio() {
   const [lastPreview, setLastPreview] = useState('')
   const firstFrameRef = useRef<HTMLInputElement>(null)
   const lastFrameRef = useRef<HTMLInputElement>(null)
+
+  /* Player modal */
+  const [playerModalScene, setPlayerModalScene] = useState<SceneAsset | null>(null)
+  useEffect(() => {
+    if (!playerModalScene) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPlayerModalScene(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [playerModalScene])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
@@ -559,19 +709,22 @@ export function AAZStudio() {
         timestamp: new Date().toLocaleTimeString('pt-BR'),
       }, ...p.slice(0, 19)])
 
-      // Ideia 2: salvar cena como asset persistente
-      if (currentEpisode) {
-        const epScenes = sceneAssets.filter(s => s.episodeId === currentEpisode.id)
-        const scene: SceneAsset = {
-          id: `scene_${now}`, episodeId: currentEpisode.id,
-          sceneNumber: epScenes.length + 1, prompt: prompts[lang],
-          videoUrl: url, lastFrameUrl: url,
-          characters: selChars.map(c => c.id), duration, cost,
-          createdAt: new Date().toISOString(),
-        }
-        setSceneAssets(p => [...p, scene])
-        fetch('/api/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scene) }).catch(() => {})
+      // Salva cena como asset persistente (sempre — com ou sem episódio)
+      const epScenes = currentEpisode
+        ? sceneAssets.filter(s => s.episodeId === currentEpisode.id)
+        : sceneAssets.filter(s => !s.episodeId)
+      const scene: SceneAsset = {
+        id: `scene_${now}`,
+        episodeId: currentEpisode?.id ?? null,
+        projectId: currentProject?.id ?? null,
+        sceneNumber: epScenes.length + 1,
+        prompt: prompts[lang],
+        videoUrl: url, lastFrameUrl: url,
+        characters: selChars.map(c => c.id), duration, cost,
+        createdAt: new Date().toISOString(),
       }
+      setSceneAssets(p => [...p, scene])
+      fetch('/api/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scene) }).catch(() => {})
     } catch (err: unknown) {
       setStatus('error'); setStatusMsg(err instanceof Error ? err.message : 'Erro Segmind.')
     } finally {
@@ -1200,43 +1353,52 @@ export function AAZStudio() {
 
       {/* ══════════ HISTÓRICO ══════════ */}
       {tab === 'history' && (
-        <div style={{ padding: '26px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <Label>Histórico ({history.length} cenas)</Label>
-            {history.length > 0 && <button onClick={() => setHistory([])} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 7, padding: '4px 11px', cursor: 'pointer', color: C.red, fontSize: 10, fontWeight: 700, fontFamily: 'inherit' }}>Limpar</button>}
-          </div>
-          {history.length > 0 && (
-            <div style={{ background: `${C.green}10`, border: `1px solid ${C.green}30`, borderRadius: 9, padding: '11px 16px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 10, color: C.textDim, letterSpacing: '1px', textTransform: 'uppercase' }}>Total gasto nesta sessão</div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: C.green, fontFamily: 'monospace' }}>${totalCost}</div>
-            </div>
-          )}
-          {history.length === 0
-            ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 11, padding: '48px', textAlign: 'center', color: C.textDim }}><div style={{ fontSize: 38, marginBottom: 8 }}>🎬</div><div>Nenhuma cena ainda.</div></div>
-            : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {history.map(item => (
-                  <div key={item.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, padding: '13px 15px', display: 'grid', gridTemplateColumns: '1fr auto', gap: 12, alignItems: 'center' }}>
-                    <div>
-                      <div style={{ display: 'flex', gap: 5, marginBottom: 6, flexWrap: 'wrap' }}>
-                        <Pill color={C.textDim}>{item.timestamp}</Pill>
-                        <Pill color={C.blue}>{item.ratio}</Pill>
-                        <Pill color={C.blue}>{item.duration}s</Pill>
-                        <Pill color={C.purple}>{item.mode}</Pill>
-                        <Pill color={C.green}>${item.cost}</Pill>
-                      </div>
-                      <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5, marginBottom: 4 }}>{item.prompt}</div>
-                      {item.chars && <div style={{ fontSize: 11, color: C.gold }}>{item.chars}</div>}
-                    </div>
-                    <button
-                      onClick={() => downloadVideo(item.url, `aaz-${item.id}.mp4`)}
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 7, color: C.blue, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}
-                    >↓</button>
-                  </div>
-                ))}
+        <HistoryTab
+          scenes={sceneAssets}
+          projects={projects}
+          episodes={episodes}
+          onPlay={(s) => setPlayerModalScene(s)}
+          onDownload={downloadVideo}
+          onDelete={async (id) => {
+            if (!confirm('Remover esta cena do histórico? (o vídeo original permanece no Blob)')) return
+            setSceneAssets(prev => prev.filter(s => s.id !== id))
+            await fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+          }}
+        />
+      )}
+
+      {/* Modal do player */}
+      {playerModalScene && (
+        <div
+          onClick={() => setPlayerModalScene(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.92)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ position: 'relative', maxWidth: '92vw', maxHeight: '92vh', display: 'flex', flexDirection: 'column', gap: 14 }}
+          >
+            <button
+              onClick={() => setPlayerModalScene(null)}
+              aria-label="Fechar"
+              style={{ position: 'absolute', top: -14, right: -14, width: 36, height: 36, borderRadius: '50%', background: C.card, border: `1px solid ${C.border}`, color: C.text, fontSize: 18, cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}
+            >×</button>
+            <video
+              src={playerModalScene.videoUrl}
+              controls
+              autoPlay
+              style={{ maxWidth: '92vw', maxHeight: '80vh', borderRadius: 10, background: '#000' }}
+            />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '0 4px' }}>
+              <div style={{ color: C.text, fontSize: 14, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {playerModalScene.prompt}
               </div>
-            )
-          }
+              <button
+                onClick={() => downloadVideo(playerModalScene.videoUrl, `aaz-${playerModalScene.id}.mp4`)}
+                style={{ background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', color: C.blue, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+              >↓ Baixar</button>
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Pressione ESC ou clique fora para fechar</div>
+          </div>
         </div>
       )}
     </div>

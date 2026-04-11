@@ -2,24 +2,37 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
 
 interface SceneAsset {
-  id: string; episodeId: string; sceneNumber: number; prompt: string
+  id: string; episodeId: string | null; sceneNumber: number; prompt: string
   videoUrl: string; lastFrameUrl: string; characters: string[]
   duration: number; cost: string; createdAt: string
 }
+
+const ORPHAN = '__orphan__'
 
 export async function GET(request: NextRequest) {
   try {
     const redis = await getRedis()
     const episodeId = request.nextUrl.searchParams.get('episodeId')
-    const pattern = episodeId ? `aaz:scene:${episodeId}:*` : 'aaz:scene:*'
+    let pattern = 'aaz:scene:*'
+    if (episodeId === 'null' || episodeId === '__orphan__') {
+      pattern = `aaz:scene:${ORPHAN}:*`
+    } else if (episodeId) {
+      pattern = `aaz:scene:${episodeId}:*`
+    }
     const keys = await redis.keys(pattern)
     if (keys.length === 0) return NextResponse.json([])
     const scenes: SceneAsset[] = []
     for (const key of keys) {
       const val = await redis.get(key)
-      if (val) scenes.push(JSON.parse(val))
+      if (val) {
+        const s = JSON.parse(val) as SceneAsset
+        // Normaliza episodeId orphan
+        if (s.episodeId === ORPHAN) s.episodeId = null
+        scenes.push(s)
+      }
     }
-    scenes.sort((a, b) => a.sceneNumber - b.sceneNumber)
+    // Ordena por createdAt desc (mais recentes primeiro)
+    scenes.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
     return NextResponse.json(scenes)
   } catch (err) {
     console.error('[/api/scenes GET]', err)
@@ -30,14 +43,16 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const entry: SceneAsset = await request.json()
-    if (!entry.id || !entry.episodeId) {
-      return NextResponse.json({ error: 'id e episodeId são obrigatórios.' }, { status: 400 })
+    if (!entry.id) {
+      return NextResponse.json({ error: 'id é obrigatório.' }, { status: 400 })
     }
     const redis = await getRedis()
-    await redis.set(`aaz:scene:${entry.episodeId}:${entry.id}`, JSON.stringify(entry))
+    const epKey = entry.episodeId || ORPHAN
+    await redis.set(`aaz:scene:${epKey}:${entry.id}`, JSON.stringify(entry))
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[/api/scenes POST]', err)
     return NextResponse.json({ error: 'Erro ao salvar cena.' }, { status: 500 })
   }
 }
+
