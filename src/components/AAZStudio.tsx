@@ -573,8 +573,19 @@ export function AAZStudio() {
   /* Mention @ no textarea do Assistente */
   const sdDescRef = useRef<HTMLTextAreaElement>(null)
   const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
-  const [mention, setMention] = useState<{ start: number; query: string; highlightIdx: number } | null>(null)
-  const [promptMention, setPromptMention] = useState<{ start: number; query: string; highlightIdx: number } | null>(null)
+  const [mention, setMention] = useState<{ start: number; query: string; highlightIdx: number; dir: 'up' | 'down' } | null>(null)
+  const [promptMention, setPromptMention] = useState<{ start: number; query: string; highlightIdx: number; dir: 'up' | 'down' } | null>(null)
+
+  // Decide se o dropdown cabe abaixo do textarea ou precisa aparecer acima
+  const computeDropdownDirection = (el: HTMLTextAreaElement | null, dropdownHeight = 280): 'up' | 'down' => {
+    if (!el) return 'down'
+    const rect = el.getBoundingClientRect()
+    const spaceBelow = window.innerHeight - rect.bottom
+    const spaceAbove = rect.top
+    // Se não cabe abaixo mas cabe acima, abre pra cima
+    if (spaceBelow < dropdownHeight && spaceAbove > spaceBelow) return 'up'
+    return 'down'
+  }
 
   // Dado o conteúdo atual e a posição do cursor, detecta se o usuário
   // está digitando um mention @xxx. Retorna { start, query } ou null.
@@ -621,7 +632,8 @@ export function AAZStudio() {
     setSdDesc(value)
     const detected = detectMention(value, cursor)
     if (detected) {
-      setMention({ start: detected.start, query: detected.query, highlightIdx: 0 })
+      const dir = computeDropdownDirection(sdDescRef.current)
+      setMention({ start: detected.start, query: detected.query, highlightIdx: 0, dir })
     } else {
       setMention(null)
     }
@@ -706,7 +718,8 @@ export function AAZStudio() {
     setPrompts(p => ({ ...p, [lang]: value }))
     const detected = detectMention(value, cursor)
     if (detected) {
-      setPromptMention({ start: detected.start, query: detected.query, highlightIdx: 0 })
+      const dir = computeDropdownDirection(promptTextareaRef.current)
+      setPromptMention({ start: detected.start, query: detected.query, highlightIdx: 0, dir })
     } else {
       setPromptMention(null)
     }
@@ -1642,7 +1655,7 @@ export function AAZStudio() {
                     />
                     {/* Dropdown de mention */}
                     {mention && mentionMatches.length > 0 && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
+                      <div style={{ position: 'absolute', ...(mention.dir === 'up' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), left: 0, right: 0, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
                         <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
                           PERSONAGEM {mention.query && `· "${mention.query}"`}
                         </div>
@@ -1736,7 +1749,7 @@ export function AAZStudio() {
                 />
                 {/* Dropdown de mention (prompt) */}
                 {promptMention && promptMentionMatches.length > 0 && (
-                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
+                  <div style={{ position: 'absolute', ...(promptMention.dir === 'up' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), left: 0, right: 0, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
                     <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
                       PERSONAGEM {promptMention.query && `· "${promptMention.query}"`}
                     </div>
