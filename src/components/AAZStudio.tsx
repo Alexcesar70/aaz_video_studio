@@ -481,6 +481,187 @@ export function AAZStudio() {
     )
   }
 
+  /* ── Helpers ── */
+  const toDataUrlCompressed = (file: File, maxSize = 1200): Promise<string> => new Promise(res => {
+    const reader = new FileReader()
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string
+      if (file.type.startsWith('image/')) {
+        const img = new Image()
+        img.onload = () => {
+          const canvas = document.createElement('canvas')
+          let w = img.width, h = img.height
+          if (w > maxSize || h > maxSize) {
+            if (w > h) { h = Math.round(h * maxSize / w); w = maxSize }
+            else { w = Math.round(w * maxSize / h); h = maxSize }
+          }
+          canvas.width = w; canvas.height = h
+          canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+          res(canvas.toDataURL('image/jpeg', 0.85))
+        }
+        img.src = dataUrl
+      } else res(dataUrl)
+    }
+    reader.readAsDataURL(file)
+  })
+
+  /* ── LIBRARY VIEW ── */
+  const LibraryView = () => {
+    const [libTab, setLibTab] = useState<'chars' | 'scenarios'>('chars')
+    const [selChar, setSelChar] = useState<typeof CHARACTERS[number] | null>(null)
+    const [charPhotos, setCharPhotos] = useState<{ url: string; name: string }[]>([])
+    const [scName, setScName] = useState('')
+    const [scPhoto, setScPhoto] = useState<{ url: string; name: string } | null>(null)
+
+    const addCharPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []).slice(0, 5 - charPhotos.length)
+      for (const f of files) { const url = await toDataUrlCompressed(f); setCharPhotos(p => [...p, { url, name: f.name }]) }
+    }
+    const saveCharRefs = async () => {
+      if (!selChar || !charPhotos.length) return
+      const entry: LibraryCharacter = {
+        charId: selChar.id, name: selChar.name, emoji: selChar.emoji,
+        images: charPhotos.map(p => p.url), createdAt: new Date().toLocaleDateString('pt-BR'),
+      }
+      setCharacters(prev => ({ ...prev, [selChar.id]: entry }))
+      await fetch('/api/library', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) })
+      setCharPhotos([]); setSelChar(null)
+    }
+    const deleteCharRefs = async (id: string) => {
+      const next = { ...characters }; delete next[id]; setCharacters(next)
+      await fetch(`/api/library/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    }
+
+    const addScenarioPhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const f = e.target.files?.[0]
+      if (f) { const url = await toDataUrlCompressed(f); setScPhoto({ url, name: f.name }) }
+    }
+    const saveScenario = async () => {
+      if (!scName.trim() || !scPhoto) return
+      const entry: LibraryScenario = { id: `scenario_${Date.now()}`, name: scName, imageUrl: scPhoto.url, createdAt: new Date().toLocaleDateString('pt-BR') }
+      setScenarios(prev => [...prev, entry])
+      await fetch('/api/scenarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) })
+      setScName(''); setScPhoto(null)
+    }
+    const deleteScenarioEntry = async (id: string) => {
+      setScenarios(prev => prev.filter(s => s.id !== id))
+      await fetch(`/api/scenarios/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    }
+
+    return (
+      <div style={{ padding: '32px 32px 64px', maxWidth: 1200, margin: '0 auto' }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: C.text, margin: 0, marginBottom: 24 }}>📚 Biblioteca</h1>
+
+        <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 20 }}>
+          {[['chars', 'Personagens'], ['scenarios', 'Cenários']].map(([id, lbl]) => (
+            <button key={id} onClick={() => setLibTab(id as 'chars' | 'scenarios')} style={{ flex: 1, padding: '10px', borderRadius: 8, background: libTab === id ? C.surface : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
+          ))}
+        </div>
+
+        {libTab === 'chars' && (<>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 20 }}>
+            <Label>Adicionar Referências de Personagem</Label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Personagem</div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+                  {CHARACTERS.map(ch => (
+                    <button key={ch.id} onClick={() => { setSelChar(ch); setCharPhotos([]) }} style={{ background: selChar?.id === ch.id ? `${ch.color}20` : C.surface, border: `1px solid ${selChar?.id === ch.id ? ch.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                      <span style={{ fontSize: 20 }}>{ch.emoji}</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: selChar?.id === ch.id ? ch.color : C.textDim }}>{ch.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Imagens ({charPhotos.length}/5)</div>
+                {charPhotos.length > 0 && (
+                  <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
+                    {charPhotos.map((p, i) => (
+                      <div key={i} style={{ position: 'relative' }}>
+                        <img src={p.url} alt={p.name} style={{ width: 70, height: 70, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                        <button onClick={() => setCharPhotos(prev => prev.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = (e) => addCharPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: 14, textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Upload imagens</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 16 }}>
+              <PrimaryButton onClick={saveCharRefs} disabled={!selChar || !charPhotos.length}>Salvar Referências</PrimaryButton>
+            </div>
+          </div>
+
+          {Object.keys(characters).length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhum personagem salvo.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
+              {Object.values(characters).map(entry => {
+                const chInfo = CHARACTERS.find(c => c.id === entry.charId)
+                return (
+                  <div key={entry.charId} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', gap: 4, padding: 8, overflowX: 'auto' }}>
+                      {entry.images.map((img, i) => <img key={i} src={img} alt="" style={{ width: 90, height: 90, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: `1px solid ${C.border}` }} />)}
+                    </div>
+                    <div style={{ padding: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                        <span style={{ fontSize: 20 }}>{entry.emoji}</span>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: chInfo?.color || C.text }}>{entry.name}</div>
+                          <div style={{ fontSize: 12, color: C.textDim }}>{entry.images.length} imagens · {entry.createdAt}</div>
+                        </div>
+                      </div>
+                      <button onClick={() => deleteCharRefs(entry.charId)} style={{ width: '100%', background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: 8, cursor: 'pointer', color: C.red, fontSize: 13, fontFamily: 'inherit' }}>Remover</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </>)}
+
+        {libTab === 'scenarios' && (<>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 20, marginBottom: 20, display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 16, alignItems: 'end' }}>
+            <div>
+              <Label>Nome do cenário</Label>
+              <Input placeholder="Ex: Clube da Aliança..." value={scName} onChange={e => setScName(e.target.value)} />
+            </div>
+            <div>
+              <Label>Imagem</Label>
+              {scPhoto ? (
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <img src={scPhoto.url} alt="" style={{ width: 120, height: 70, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                  <button onClick={() => setScPhoto(null)} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+                </div>
+              ) : (
+                <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.onchange = (e) => addScenarioPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: 14, textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Upload</div>
+              )}
+            </div>
+            <PrimaryButton onClick={saveScenario} disabled={!scName.trim() || !scPhoto}>+ Salvar</PrimaryButton>
+          </div>
+
+          {scenarios.length === 0 ? (
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhum cenário salvo.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
+              {scenarios.map(s => (
+                <div key={s.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+                  <img src={s.imageUrl} alt={s.name} style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }} />
+                  <div style={{ padding: 14 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.blue, marginBottom: 4 }}>{s.name}</div>
+                    <div style={{ fontSize: 12, color: C.textDim, marginBottom: 10 }}>{s.createdAt}</div>
+                    <button onClick={() => deleteScenarioEntry(s.id)} style={{ width: '100%', background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: 8, cursor: 'pointer', color: C.red, fontSize: 13, fontFamily: 'inherit' }}>Remover</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>)}
+      </div>
+    )
+  }
+
   /* ── SHOT EDITOR ── */
   const ShotEditor = () => {
     const [promptStatus, setPromptStatus] = useState<'idle' | 'generating' | 'success' | 'error'>('idle')
@@ -780,12 +961,7 @@ export function AAZStudio() {
       {view === 'episode' && <EpisodeView />}
       {view === 'scene' && <SceneView />}
       {view === 'shot' && <ShotEditor />}
-      {view === 'library' && (
-        <div style={{ padding: 40, textAlign: 'center', color: C.textDim }}>
-          Biblioteca em refatoração.{' '}
-          <button onClick={goHome} style={{ background: 'none', border: 'none', color: C.purple, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14 }}>Voltar ao início</button>
-        </div>
-      )}
+      {view === 'library' && <LibraryView />}
     </div>
   )
 }
