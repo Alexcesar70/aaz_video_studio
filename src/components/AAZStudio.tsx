@@ -79,6 +79,8 @@ interface HistoryTabProps {
   onMoveScene: (scene: SceneAsset) => void
   onMoveEpisode: (episode: Episode) => void
   onDeleteEpisode: (episode: Episode) => void
+  onPlayEpisodeSequential: (episode: Episode) => void
+  onPlayProjectSequential: (project: Project) => void
 }
 
 function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void; onMoveScene: (s: SceneAsset) => void }) {
@@ -111,18 +113,21 @@ function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene }: { scene
   )
 }
 
-function EpisodeHeader({ episode, count, onMove, onDelete }: { episode: Episode; count: number; onMove: (e: Episode) => void; onDelete: (e: Episode) => void }) {
+function EpisodeHeader({ episode, count, onMove, onDelete, onPlaySequential }: { episode: Episode; count: number; onMove: (e: Episode) => void; onDelete: (e: Episode) => void; onPlaySequential?: (e: Episode) => void }) {
   const name = episode.name?.trim() || '(sem nome)'
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0 }}>🎬 {name} <span style={{ opacity: 0.6 }}>({count})</span></h3>
+      {onPlaySequential && count >= 2 && (
+        <button onClick={() => onPlaySequential(episode)} title="Assistir todas as cenas do episódio em sequência" style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', color: C.purple, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}>▶ Assistir episódio</button>
+      )}
       <button onClick={() => onMove(episode)} title="Mover episódio para outro projeto" style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.gold, fontSize: 11, fontFamily: 'inherit' }}>⇄ Mover</button>
       <button onClick={() => onDelete(episode)} title="Deletar episódio (e todas as cenas dele)" style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>× Deletar</button>
     </div>
   )
 }
 
-function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode }: HistoryTabProps) {
+function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode, onPlayEpisodeSequential, onPlayProjectSequential }: HistoryTabProps) {
   const total = scenes.length
   const orphans = scenes.filter(s => !s.episodeId)
   const episodesWithScenes = episodes.filter(ep => scenes.some(s => s.episodeId === ep.id))
@@ -150,15 +155,25 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
           {/* Projetos */}
           {projectsWithContent.map(proj => {
             const projEps = episodesWithScenes.filter(ep => ep.projectId === proj.id)
+            const projScenesCount = scenes.filter(s => projEps.some(e => e.id === s.episodeId)).length
             return (
               <section key={proj.id}>
-                <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>📁 {proj.name}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+                  <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0 }}>📁 {proj.name}</h2>
+                  {projScenesCount >= 2 && (
+                    <button
+                      onClick={() => onPlayProjectSequential(proj)}
+                      title="Assistir todas as cenas do projeto em sequência"
+                      style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                    >▶ Assistir projeto</button>
+                  )}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, borderLeft: `2px solid ${C.border}` }}>
                   {projEps.map(ep => {
                     const epScenes = scenes.filter(s => s.episodeId === ep.id)
                     return (
                       <div key={ep.id}>
-                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} /></div>
+                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} /></div>
                         <div style={{ marginLeft: 8 }}>{sceneGrid(epScenes)}</div>
                       </div>
                     )
@@ -177,7 +192,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
                   const epScenes = scenes.filter(s => s.episodeId === ep.id)
                   return (
                     <div key={ep.id}>
-                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} />
+                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} />
                       {sceneGrid(epScenes)}
                     </div>
                   )
@@ -554,8 +569,11 @@ export function AAZStudio() {
   } | null>(null)
   const askConfirm = (cfg: NonNullable<typeof confirmModal>) => setConfirmModal(cfg)
 
+  /* Modal: Player sequencial (Assistir episódio/projeto) */
+  const [sequentialPlayer, setSequentialPlayer] = useState<{ scenes: SceneAsset[]; title: string } | null>(null)
+
   useEffect(() => {
-    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal
+    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal || sequentialPlayer
     if (!anyModal) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -564,11 +582,12 @@ export function AAZStudio() {
         setMoveEpisodeModal(null)
         setAddRefModal(null)
         setConfirmModal(null)
+        setSequentialPlayer(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal])
+  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal, sequentialPlayer])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
@@ -961,9 +980,9 @@ export function AAZStudio() {
                     </div>
                     {epScenes.length >= 2 && (
                       <button
-                        disabled
-                        title="Assistir todas as cenas em sequência (em breve)"
-                        style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', cursor: 'not-allowed', color: C.textDim, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                        onClick={() => setSequentialPlayer({ scenes: epScenes, title: currentEpisode.name?.trim() || '(sem nome)' })}
+                        title="Assistir todas as cenas em sequência"
+                        style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
                       >▶ Assistir episódio</button>
                     )}
                   </div>
@@ -1502,6 +1521,30 @@ export function AAZStudio() {
                 confirmLabel: 'Deletar episódio',
                 onConfirm: () => deleteEpisode(ep.id)
               })}
+              onPlayEpisodeSequential={(ep) => {
+                const epScenes = sceneAssets
+                  .filter(s => s.episodeId === ep.id)
+                  .sort((a, b) => a.sceneNumber - b.sceneNumber)
+                if (epScenes.length >= 2) {
+                  setSequentialPlayer({ scenes: epScenes, title: ep.name?.trim() || '(sem nome)' })
+                }
+              }}
+              onPlayProjectSequential={(proj) => {
+                const projEpisodeIds = new Set(episodes.filter(e => e.projectId === proj.id).map(e => e.id))
+                const projScenes = sceneAssets
+                  .filter(s => s.episodeId && projEpisodeIds.has(s.episodeId))
+                  .sort((a, b) => {
+                    // Ordena por episódio (createdAt) e depois por sceneNumber
+                    const epA = episodes.find(e => e.id === a.episodeId)
+                    const epB = episodes.find(e => e.id === b.episodeId)
+                    const cmpEp = (epA?.createdAt || '').localeCompare(epB?.createdAt || '')
+                    if (cmpEp !== 0) return cmpEp
+                    return a.sceneNumber - b.sceneNumber
+                  })
+                if (projScenes.length >= 2) {
+                  setSequentialPlayer({ scenes: projScenes, title: `Projeto: ${proj.name}` })
+                }
+              }}
             />
           )}
         </div>
@@ -1589,6 +1632,15 @@ export function AAZStudio() {
         />
       )}
 
+      {/* Modal: Player sequencial */}
+      {sequentialPlayer && (
+        <SequentialPlayer
+          scenes={sequentialPlayer.scenes}
+          title={sequentialPlayer.title}
+          onClose={() => setSequentialPlayer(null)}
+        />
+      )}
+
       {/* Modal: Confirmação de exclusão (dupla verificação) */}
       {confirmModal && (
         <div
@@ -1641,6 +1693,123 @@ export function AAZStudio() {
    AddRefModal — Modal para adicionar referência ao Omni Reference
    Duas seções: Da Biblioteca | Do Computador
 ═══════════════════════════════════════════════════════════════ */
+
+/* ═══════════════════════════════════════════════════════════════
+   SequentialPlayer — Modal que toca cenas em sequência
+   Usa onEnded do <video> para avançar automaticamente à próxima cena.
+═══════════════════════════════════════════════════════════════ */
+
+function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; title: string; onClose: () => void }) {
+  const [index, setIndex] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  const current = scenes[index]
+  const totalDuration = scenes.reduce((s, sc) => s + sc.duration, 0)
+
+  const goNext = () => setIndex(i => i < scenes.length - 1 ? i + 1 : i)
+  const goPrev = () => setIndex(i => i > 0 ? i - 1 : i)
+  const togglePause = () => {
+    const v = videoRef.current
+    if (!v) return
+    if (v.paused) { v.play().catch(() => {}); setPaused(false) }
+    else { v.pause(); setPaused(true) }
+  }
+
+  // Navegação por teclado
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight') goNext()
+      else if (e.key === 'ArrowLeft') goPrev()
+      else if (e.key === ' ') { e.preventDefault(); togglePause() }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (!current) return null
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 1002, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}
+    >
+      {/* Header */}
+      <div onClick={e => e.stopPropagation()} style={{ position: 'absolute', top: 20, left: 24, right: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ color: C.text, fontSize: 14, fontWeight: 600 }}>
+          ▶ {title}
+          <span style={{ color: C.textDim, marginLeft: 10, fontWeight: 400 }}>
+            Cena {index + 1} de {scenes.length}
+          </span>
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="Fechar"
+          style={{ width: 36, height: 36, borderRadius: '50%', background: C.card, border: `1px solid ${C.border}`, color: C.text, fontSize: 18, cursor: 'pointer', fontFamily: 'inherit' }}
+        >×</button>
+      </div>
+
+      {/* Vídeo principal */}
+      <div onClick={e => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '75vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <video
+          ref={videoRef}
+          key={current.id}
+          src={current.videoUrl}
+          autoPlay
+          playsInline
+          controls
+          onEnded={goNext}
+          style={{ maxWidth: '90vw', maxHeight: '75vh', borderRadius: 10, background: '#000' }}
+        />
+      </div>
+
+      {/* Barra de progresso das cenas */}
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 4, maxWidth: '90vw', width: 600 }}>
+        {scenes.map((s, i) => (
+          <div
+            key={s.id}
+            onClick={() => setIndex(i)}
+            title={`Cena ${i + 1}`}
+            style={{
+              flex: s.duration,
+              height: 4,
+              background: i <= index ? C.purple : C.border,
+              borderRadius: 2,
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+          />
+        ))}
+      </div>
+
+      {/* Controles */}
+      <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={goPrev}
+          disabled={index === 0}
+          title="Cena anterior (←)"
+          style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px', cursor: index === 0 ? 'not-allowed' : 'pointer', color: index === 0 ? C.textDim : C.text, fontSize: 14, fontFamily: 'inherit', opacity: index === 0 ? 0.4 : 1 }}
+        >⏮ Anterior</button>
+        <button
+          onClick={togglePause}
+          title="Pausar/Tocar (Espaço)"
+          style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit' }}
+        >{paused ? '▶ Tocar' : '⏸ Pausar'}</button>
+        <button
+          onClick={goNext}
+          disabled={index === scenes.length - 1}
+          title="Próxima cena (→)"
+          style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 16px', cursor: index === scenes.length - 1 ? 'not-allowed' : 'pointer', color: index === scenes.length - 1 ? C.textDim : C.text, fontSize: 14, fontFamily: 'inherit', opacity: index === scenes.length - 1 ? 0.4 : 1 }}
+        >Próxima ⏭</button>
+      </div>
+
+      <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>
+        Duração total: {totalDuration}s · ESC ou clique fora para sair
+      </div>
+    </div>
+  )
+}
 
 function AddRefModal({
   type,
