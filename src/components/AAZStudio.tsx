@@ -801,6 +801,54 @@ export function AAZStudio() {
     setChain(true)
   }
 
+  /**
+   * Limpa o editor do Estúdio para começar uma nova cena do zero.
+   * Preserva o que NÃO é específico da cena (personagens selecionados,
+   * modo, duração, ratio, projeto, episódio). Limpa prompts, formulário
+   * do assistente, referências do Omni, first/last frames e o resultado.
+   * Se já existe trabalho em andamento, pede confirmação antes.
+   */
+  const resetEditor = (force = false) => {
+    const hasWork =
+      (prompts.pt.trim().length > 0) ||
+      (prompts.en.trim().length > 0) ||
+      sdDesc.trim().length > 0 ||
+      sdSetting.trim().length > 0 ||
+      sdEmotion.trim().length > 0 ||
+      refImgs.length > 0 ||
+      refVids.length > 0 ||
+      refAuds.length > 0 ||
+      !!firstUrl || !!lastUrl
+
+    const doReset = () => {
+      setPrompts({ pt: '', en: '' })
+      setSdDesc(''); setSdSetting(''); setSdEmotion('')
+      setSdStatus('idle'); setSdMsg('')
+      setRefImgs([]); setRefVids([]); setRefAuds([])
+      setFirstUrl(''); setLastUrl(''); setFirstPreview(''); setLastPreview('')
+      setResultUrl(''); setStatus('idle'); setStatusMsg('')
+      setChain(false)
+      setToast(currentEpisode ? `Pronto para criar nova cena em "${currentEpisode.name?.trim() || '(sem nome)'}"` : 'Pronto para criar nova cena')
+      window.setTimeout(() => setToast(''), 3500)
+      // Sobe pro topo do Estúdio
+      if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+
+    if (!force && hasWork) {
+      askConfirm({
+        title: 'Descartar a cena em edição?',
+        description: 'Há dados preenchidos no editor. Ao começar uma nova cena, eles serão descartados (a cena que já foi gerada permanece salva).',
+        confirmLabel: 'Descartar e começar nova',
+        onConfirm: () => doReset()
+      })
+    } else {
+      doReset()
+    }
+  }
+
+  /* Toast simples para feedback pós-ação */
+  const [toast, setToast] = useState('')
+
   const injectTags = () => {
     const tags = selChars.map(c => library[c.id] ? `@image${refImgs.findIndex(r => r.charId === c.id) + 1}` : `@character:${c.id}`).join(' ')
     setPrompts(p => ({ ...p, [lang]: p[lang] ? `${p[lang]} ${tags}` : tags }))
@@ -1000,17 +1048,24 @@ export function AAZStudio() {
                 .sort((a, b) => a.sceneNumber - b.sceneNumber)
               return (
                 <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
                       🎬 {currentEpisode.name?.trim() || '(sem nome)'} · {epScenes.length} cena{epScenes.length !== 1 ? 's' : ''}
                     </div>
-                    {epScenes.length >= 2 && (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      {epScenes.length >= 2 && (
+                        <button
+                          onClick={() => setSequentialPlayer({ scenes: epScenes, title: currentEpisode.name?.trim() || '(sem nome)' })}
+                          title="Assistir todas as cenas em sequência"
+                          style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                        >▶ Assistir episódio</button>
+                      )}
                       <button
-                        onClick={() => setSequentialPlayer({ scenes: epScenes, title: currentEpisode.name?.trim() || '(sem nome)' })}
-                        title="Assistir todas as cenas em sequência"
-                        style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
-                      >▶ Assistir episódio</button>
-                    )}
+                        onClick={() => resetEditor()}
+                        title="Limpar o editor e começar uma cena nova do zero"
+                        style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', boxShadow: `0 2px 8px ${C.purple}30` }}
+                      >+ Nova cena</button>
+                    </div>
                   </div>
                   {epScenes.length === 0 ? (
                     <div style={{ color: C.textDim, fontSize: 12, padding: '8px 0' }}>
@@ -1665,6 +1720,13 @@ export function AAZStudio() {
           title={sequentialPlayer.title}
           onClose={() => setSequentialPlayer(null)}
         />
+      )}
+
+      {/* Toast — feedback de ações */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: C.card, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '12px 22px', color: C.text, fontSize: 13, fontWeight: 600, boxShadow: `0 6px 24px ${C.purple}40`, zIndex: 1100, fontFamily: 'inherit' }}>
+          ✓ {toast}
+        </div>
       )}
 
       {/* Modal: Confirmação de exclusão (dupla verificação) */}
