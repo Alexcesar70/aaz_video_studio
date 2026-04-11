@@ -518,24 +518,49 @@ export function AAZStudio() {
   const [moveSceneModal, setMoveSceneModal] = useState<SceneAsset | null>(null)
   const [moveEpisodeModal, setMoveEpisodeModal] = useState<Episode | null>(null)
 
+  /* Modal: Adicionar referência ao Omni */
+  const [addRefModal, setAddRefModal] = useState<'image' | 'video' | 'audio' | null>(null)
+
   useEffect(() => {
-    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal
+    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal
     if (!anyModal) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setPlayerModalScene(null)
         setMoveSceneModal(null)
         setMoveEpisodeModal(null)
+        setAddRefModal(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playerModalScene, moveSceneModal, moveEpisodeModal])
+  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
     setter(url)
     previewSetter(url)
+  }
+
+  /* ── Adicionar referência ao Omni (chamado pelo AddRefModal) ── */
+  const addImageRefFromUrl = (url: string, name: string, charId?: string) => {
+    if (refImgs.length >= 9) return
+    setRefImgs(p => [...p, { url, label: `@image${p.length + 1}`, name, fromLib: true, charId }])
+  }
+  const addImageRefFromFile = async (file: File) => {
+    if (refImgs.length >= 9) return
+    const url = await toBlobUrl(file)
+    setRefImgs(p => [...p, { url, label: `@image${p.length + 1}`, name: file.name }])
+  }
+  const addVideoRefFromFile = async (file: File) => {
+    if (refVids.length >= 3) return
+    const url = await toBlobUrl(file)
+    setRefVids(p => [...p, { url, label: `@video${p.length + 1}`, name: file.name }])
+  }
+  const addAudioRefFromFile = async (file: File) => {
+    if (refAuds.length >= 3) return
+    const url = await toBlobUrl(file)
+    setRefAuds(p => [...p, { url, label: `@audio${p.length + 1}`, name: file.name }])
   }
 
   /* chain */
@@ -1026,7 +1051,7 @@ export function AAZStudio() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <Label>Imagens ({refImgs.length}/9)</Label>
-                    <button disabled={refImgs.length >= 9} onClick={() => imgRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refImgs.length >= 9 ? 0.4 : 1 }}>+ Adicionar</button>
+                    <button disabled={refImgs.length >= 9} onClick={() => setAddRefModal('image')} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refImgs.length >= 9 ? 0.4 : 1 }}>+ Adicionar</button>
                     <input ref={imgRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={e => { Array.from(e.target.files || []).forEach(async f => { if (refImgs.length < 9) { const url = await toDataUrl(f); setRefImgs(p => [...p, { url, label: `@image${p.length + 1}`, name: f.name }]) } }) }} />
                   </div>
                   {refImgs.length > 0 ? (
@@ -1040,14 +1065,14 @@ export function AAZStudio() {
                       ))}
                     </div>
                   ) : (
-                    <div onClick={() => imgRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '16px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Personagem, cenário ou estilo</div>
+                    <div onClick={() => setAddRefModal('image')} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '16px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Personagem, cenário ou estilo</div>
                   )}
                 </div>
 
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <Label>Vídeos ({refVids.length}/3)</Label>
-                    <button disabled={refVids.length >= 3} onClick={() => vidRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refVids.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
+                    <button disabled={refVids.length >= 3} onClick={() => setAddRefModal('video')} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refVids.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
                     <input ref={vidRef} type="file" accept="video/mp4,video/mov" multiple style={{ display: 'none' }} onChange={e => addRef(e, 'video', refVids, setRefVids, 3)} />
                   </div>
                   {refVids.length > 0 ? (
@@ -1061,14 +1086,14 @@ export function AAZStudio() {
                       ))}
                     </div>
                   ) : (
-                    <div onClick={() => vidRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Movimento de câmera ou estilo</div>
+                    <div onClick={() => setAddRefModal('video')} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Movimento de câmera ou estilo</div>
                   )}
                 </div>
 
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                     <Label>Áudios ({refAuds.length}/3)</Label>
-                    <button disabled={refAuds.length >= 3} onClick={() => audRef.current?.click()} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refAuds.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
+                    <button disabled={refAuds.length >= 3} onClick={() => setAddRefModal('audio')} style={{ background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.blue, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: refAuds.length >= 3 ? 0.4 : 1 }}>+ Adicionar</button>
                     <input ref={audRef} type="file" accept="audio/mp3,audio/wav" multiple style={{ display: 'none' }} onChange={e => addRef(e, 'audio', refAuds, setRefAuds, 3)} />
                   </div>
                   {refAuds.length > 0 ? (
@@ -1082,7 +1107,7 @@ export function AAZStudio() {
                       ))}
                     </div>
                   ) : (
-                    <div onClick={() => audRef.current?.click()} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Voz, música ou ambiente</div>
+                    <div onClick={() => setAddRefModal('audio')} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Voz, música ou ambiente</div>
                   )}
                 </div>
               </div>
@@ -1479,6 +1504,164 @@ export function AAZStudio() {
           }}
         />
       )}
+
+      {/* Modal: Adicionar referência ao Omni */}
+      {addRefModal && (
+        <AddRefModal
+          type={addRefModal}
+          library={library}
+          scenarios={scenarios}
+          onClose={() => setAddRefModal(null)}
+          onPickLibraryImage={(url, name, charId) => {
+            addImageRefFromUrl(url, name, charId)
+            setAddRefModal(null)
+          }}
+          onPickFile={async (file) => {
+            if (addRefModal === 'image') await addImageRefFromFile(file)
+            else if (addRefModal === 'video') await addVideoRefFromFile(file)
+            else if (addRefModal === 'audio') await addAudioRefFromFile(file)
+            setAddRefModal(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   AddRefModal — Modal para adicionar referência ao Omni Reference
+   Duas seções: Da Biblioteca | Do Computador
+═══════════════════════════════════════════════════════════════ */
+
+function AddRefModal({
+  type,
+  library,
+  scenarios,
+  onClose,
+  onPickLibraryImage,
+  onPickFile,
+}: {
+  type: 'image' | 'video' | 'audio'
+  library: Record<string, LibraryEntry>
+  scenarios: ScenarioEntry[]
+  onClose: () => void
+  onPickLibraryImage: (url: string, name: string, charId?: string) => void
+  onPickFile: (file: File) => void | Promise<void>
+}) {
+  const fileRef = useRef<HTMLInputElement>(null)
+  const accept = type === 'image' ? 'image/*' : type === 'video' ? 'video/mp4,video/mov,video/webm' : 'audio/mp3,audio/wav,audio/mpeg'
+  const title = type === 'image' ? 'Adicionar imagem ao Omni Reference' : type === 'video' ? 'Adicionar vídeo ao Omni Reference' : 'Adicionar áudio ao Omni Reference'
+
+  // Lista todas imagens da biblioteca de personagens (flatten)
+  const charImages: { url: string; name: string; charId: string; emoji: string; charName: string; index: number }[] = []
+  for (const entry of Object.values(library)) {
+    entry.images?.forEach((img, i) => {
+      charImages.push({ url: img, name: `${entry.name} #${i + 1}`, charId: entry.charId, emoji: entry.emoji, charName: entry.name, index: i })
+    })
+  }
+
+  const hasLibraryContent = type === 'image' && (charImages.length > 0 || scenarios.length > 0)
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 720, maxHeight: '90vh', display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>{title}</h2>
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            style={{ width: 30, height: 30, borderRadius: '50%', background: C.card, border: `1px solid ${C.border}`, color: C.text, fontSize: 16, cursor: 'pointer', fontFamily: 'inherit' }}
+          >×</button>
+        </div>
+
+        {/* Seção 1: Biblioteca */}
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, paddingRight: 4 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '0.5px' }}>📚 DA BIBLIOTECA</div>
+            {!hasLibraryContent ? (
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 20, textAlign: 'center', color: C.textDim, fontSize: 13 }}>
+                {type === 'image'
+                  ? 'Sua biblioteca está vazia. Adicione personagens ou cenários na aba Biblioteca.'
+                  : type === 'video'
+                    ? 'Ainda não há vídeos de referência na biblioteca.'
+                    : 'Ainda não há áudios de referência na biblioteca.'}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {/* Personagens */}
+                {charImages.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: C.textDim, marginBottom: 6 }}>Personagens</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(100px,1fr))', gap: 8 }}>
+                      {charImages.map((img, i) => (
+                        <button
+                          key={`${img.charId}-${img.index}`}
+                          onClick={() => onPickLibraryImage(img.url, img.name, img.charId)}
+                          style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}
+                        >
+                          <img src={img.url} alt={img.name} style={{ width: '100%', aspectRatio: '1', borderRadius: 8, objectFit: 'cover' }} />
+                          <div style={{ fontSize: 10, color: C.text, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                            {img.emoji} {img.charName}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {/* Cenários */}
+                {scenarios.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 11, color: C.textDim, marginBottom: 6 }}>Cenários</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 8 }}>
+                      {scenarios.map(sc => (
+                        <button
+                          key={sc.id}
+                          onClick={() => onPickLibraryImage(sc.imageUrl, `Cenário · ${sc.name}`)}
+                          style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}
+                        >
+                          <img src={sc.imageUrl} alt={sc.name} style={{ width: '100%', aspectRatio: '16/9', borderRadius: 8, objectFit: 'cover' }} />
+                          <div style={{ fontSize: 11, color: C.text, fontWeight: 600, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', width: '100%' }}>
+                            🏠 {sc.name}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Seção 2: Computador */}
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '0.5px' }}>📁 DO COMPUTADOR</div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              style={{ width: '100%', background: C.card, border: `1px dashed ${C.border}`, borderRadius: 10, padding: 20, cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}
+            >
+              Clique para escolher arquivo do seu computador
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept={accept}
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                if (f) await onPickFile(f)
+              }}
+            />
+          </div>
+        </div>
+
+        <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Pressione ESC ou clique fora para fechar</div>
+      </div>
     </div>
   )
 }
