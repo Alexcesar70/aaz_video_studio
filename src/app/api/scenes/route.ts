@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
 
+type SceneStatus = 'draft' | 'approved' | 'rejected'
 interface SceneAsset {
   id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string
   videoUrl: string; lastFrameUrl: string; characters: string[]
-  duration: number; cost: string; createdAt: string; projectId?: string | null
+  duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus
 }
 
 const ORPHAN = '__orphan__'
