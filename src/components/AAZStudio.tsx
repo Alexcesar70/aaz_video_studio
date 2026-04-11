@@ -76,9 +76,11 @@ interface HistoryTabProps {
   onPlay: (scene: SceneAsset) => void
   onDownload: (url: string, filename: string) => void
   onDelete: (id: string) => void
+  onMoveScene: (scene: SceneAsset) => void
+  onMoveEpisode: (episode: Episode) => void
 }
 
-function SceneCard({ scene, onPlay, onDownload, onDelete }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void }) {
+function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void; onMoveScene: (s: SceneAsset) => void }) {
   const d = new Date(scene.createdAt)
   const dateStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
   return (
@@ -99,15 +101,26 @@ function SceneCard({ scene, onPlay, onDownload, onDelete }: { scene: SceneAsset;
         <div style={{ fontSize: 11, color: C.textDim }}>{dateStr}</div>
         <div style={{ display: 'flex', gap: 6 }}>
           <button onClick={() => onPlay(scene)} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '7px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>▶ Assistir</button>
-          <button onClick={() => onDownload(scene.videoUrl, `aaz-${scene.id}.mp4`)} style={{ background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.blue, fontSize: 12, fontFamily: 'inherit' }}>↓</button>
-          <button onClick={() => onDelete(scene.id)} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.red, fontSize: 12, fontFamily: 'inherit' }}>×</button>
+          <button onClick={() => onMoveScene(scene)} title="Mover para outro episódio/projeto" style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.gold, fontSize: 12, fontFamily: 'inherit' }}>⇄</button>
+          <button onClick={() => onDownload(scene.videoUrl, `aaz-${scene.id}.mp4`)} title="Baixar MP4" style={{ background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.blue, fontSize: 12, fontFamily: 'inherit' }}>↓</button>
+          <button onClick={() => onDelete(scene.id)} title="Remover do histórico" style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.red, fontSize: 12, fontFamily: 'inherit' }}>×</button>
         </div>
       </div>
     </div>
   )
 }
 
-function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete }: HistoryTabProps) {
+function EpisodeHeader({ episode, count, onMove }: { episode: Episode; count: number; onMove: (e: Episode) => void }) {
+  const name = episode.name?.trim() || '(sem nome)'
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0 }}>🎬 {name} <span style={{ opacity: 0.6 }}>({count})</span></h3>
+      <button onClick={() => onMove(episode)} title="Mover episódio para outro projeto" style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.gold, fontSize: 11, fontFamily: 'inherit' }}>⇄ Mover</button>
+    </div>
+  )
+}
+
+function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode }: HistoryTabProps) {
   const total = scenes.length
   const orphans = scenes.filter(s => !s.episodeId)
   const episodesWithScenes = episodes.filter(ep => scenes.some(s => s.episodeId === ep.id))
@@ -115,7 +128,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete }
   const standaloneEpisodes = episodesWithScenes.filter(ep => !ep.projectId)
   const sceneGrid = (arr: SceneAsset[]) => (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 14 }}>
-      {arr.map(s => <SceneCard key={s.id} scene={s} onPlay={onPlay} onDownload={onDownload} onDelete={onDelete} />)}
+      {arr.map(s => <SceneCard key={s.id} scene={s} onPlay={onPlay} onDownload={onDownload} onDelete={onDelete} onMoveScene={onMoveScene} />)}
     </div>
   )
 
@@ -143,7 +156,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete }
                     const epScenes = scenes.filter(s => s.episodeId === ep.id)
                     return (
                       <div key={ep.id}>
-                        <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0, marginBottom: 10, marginLeft: 8 }}>🎬 {ep.name} <span style={{ opacity: 0.6 }}>({epScenes.length})</span></h3>
+                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} /></div>
                         <div style={{ marginLeft: 8 }}>{sceneGrid(epScenes)}</div>
                       </div>
                     )
@@ -162,7 +175,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete }
                   const epScenes = scenes.filter(s => s.episodeId === ep.id)
                   return (
                     <div key={ep.id}>
-                      <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0, marginBottom: 10 }}>{ep.name} <span style={{ opacity: 0.6 }}>({epScenes.length})</span></h3>
+                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} />
                       {sceneGrid(epScenes)}
                     </div>
                   )
@@ -287,15 +300,40 @@ export function AAZStudio() {
   }, [currentEpisode])
 
   const createEpisode = async () => {
-    if (!newEpName.trim()) return
+    const trimmed = newEpName.trim()
+    if (!trimmed) return
     const ep: Episode = {
       id: `ep_${Date.now()}`,
-      name: newEpName,
+      name: trimmed,
       projectId: currentProject?.id ?? null,
       createdAt: new Date().toISOString()
     }
     setEpisodes(p => [...p, ep]); setCurrentEpisode(ep); setNewEpName('')
     try { await fetch('/api/episodes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ep) }) } catch {}
+  }
+
+  /* Move episódio para outro projeto (ou para nenhum) */
+  const moveEpisode = async (episodeId: string, newProjectId: string | null) => {
+    setEpisodes(p => p.map(e => e.id === episodeId ? { ...e, projectId: newProjectId } : e))
+    try {
+      await fetch(`/api/episodes/${encodeURIComponent(episodeId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: newProjectId })
+      })
+    } catch {}
+  }
+
+  /* Move cena para outro episódio (ou para nenhum) — atualiza também projectId */
+  const moveScene = async (sceneId: string, newEpisodeId: string | null, newProjectId: string | null) => {
+    setSceneAssets(prev => prev.map(s => s.id === sceneId ? { ...s, episodeId: newEpisodeId, projectId: newProjectId } : s))
+    try {
+      await fetch(`/api/scenes/${encodeURIComponent(sceneId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ episodeId: newEpisodeId, projectId: newProjectId })
+      })
+    } catch {}
   }
 
   /* episodes filtrados pelo projeto selecionado */
@@ -476,12 +514,23 @@ export function AAZStudio() {
 
   /* Player modal */
   const [playerModalScene, setPlayerModalScene] = useState<SceneAsset | null>(null)
+  /* Modais de mover */
+  const [moveSceneModal, setMoveSceneModal] = useState<SceneAsset | null>(null)
+  const [moveEpisodeModal, setMoveEpisodeModal] = useState<Episode | null>(null)
+
   useEffect(() => {
-    if (!playerModalScene) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPlayerModalScene(null) }
+    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal
+    if (!anyModal) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPlayerModalScene(null)
+        setMoveSceneModal(null)
+        setMoveEpisodeModal(null)
+      }
+    }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playerModalScene])
+  }, [playerModalScene, moveSceneModal, moveEpisodeModal])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
@@ -1364,6 +1413,8 @@ export function AAZStudio() {
             setSceneAssets(prev => prev.filter(s => s.id !== id))
             await fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' })
           }}
+          onMoveScene={(s) => setMoveSceneModal(s)}
+          onMoveEpisode={(e) => setMoveEpisodeModal(e)}
         />
       )}
 
@@ -1401,6 +1452,114 @@ export function AAZStudio() {
           </div>
         </div>
       )}
+
+      {/* Modal: Mover cena */}
+      {moveSceneModal && (
+        <MoveSceneModal
+          scene={moveSceneModal}
+          projects={projects}
+          episodes={episodes}
+          onClose={() => setMoveSceneModal(null)}
+          onConfirm={async (newEpId, newProjId) => {
+            await moveScene(moveSceneModal.id, newEpId, newProjId)
+            setMoveSceneModal(null)
+          }}
+        />
+      )}
+
+      {/* Modal: Mover episódio */}
+      {moveEpisodeModal && (
+        <MoveEpisodeModal
+          episode={moveEpisodeModal}
+          projects={projects}
+          onClose={() => setMoveEpisodeModal(null)}
+          onConfirm={async (newProjId) => {
+            await moveEpisode(moveEpisodeModal.id, newProjId)
+            setMoveEpisodeModal(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Modais de movimentação
+═══════════════════════════════════════════════════════════════ */
+
+function MoveSceneModal({ scene, projects, episodes, onClose, onConfirm }: { scene: SceneAsset; projects: Project[]; episodes: Episode[]; onClose: () => void; onConfirm: (episodeId: string | null, projectId: string | null) => void | Promise<void> }) {
+  const [projId, setProjId] = useState<string>(scene.projectId ?? '')
+  const [epId, setEpId] = useState<string>(scene.episodeId ?? '')
+
+  // Filtra episódios pelo projeto selecionado
+  const availableEps = projId ? episodes.filter(e => e.projectId === projId) : episodes.filter(e => !e.projectId)
+
+  // Se trocar de projeto, reset do episódio
+  useEffect(() => {
+    if (epId && !availableEps.some(e => e.id === epId)) setEpId('')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projId])
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>Mover cena</h2>
+          <div style={{ fontSize: 12, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scene.prompt}</div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Projeto</div>
+          <select value={projId} onChange={e => setProjId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
+            <option value="">— Sem projeto —</option>
+            {projects.map(p => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
+          </select>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Episódio</div>
+          <select value={epId} onChange={e => setEpId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
+            <option value="">— Sem episódio (órfã) —</option>
+            {availableEps.map(ep => <option key={ep.id} value={ep.id}>🎬 {ep.name?.trim() || '(sem nome)'}</option>)}
+          </select>
+          {projId && availableEps.length === 0 && (
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: 6 }}>Nenhum episódio neste projeto. A cena vai para o projeto sem episódio.</div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 18px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={() => onConfirm(epId || null, projId || null)} style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Mover</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MoveEpisodeModal({ episode, projects, onClose, onConfirm }: { episode: Episode; projects: Project[]; onClose: () => void; onConfirm: (projectId: string | null) => void | Promise<void> }) {
+  const [projId, setProjId] = useState<string>(episode.projectId ?? '')
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>Mover episódio</h2>
+          <div style={{ fontSize: 13, color: C.textDim }}>🎬 {episode.name?.trim() || '(sem nome)'}</div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Projeto de destino</div>
+          <select value={projId} onChange={e => setProjId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
+            <option value="">— Sem projeto (avulso) —</option>
+            {projects.map(p => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
+          </select>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 18px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}>Cancelar</button>
+          <button onClick={() => onConfirm(projId || null)} style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Mover</button>
+        </div>
+      </div>
     </div>
   )
 }
