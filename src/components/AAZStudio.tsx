@@ -199,6 +199,69 @@ export function AAZStudio() {
   /* load all data */
   useEffect(() => { loadProjects(); loadScenarios(); loadEpisodes(); loadScenes() }, [loadProjects, loadScenarios, loadEpisodes, loadScenes])
 
+  /* Migração silenciosa: converte base64 antigos para URLs do Blob ── roda uma vez só */
+  const [migrationDone, setMigrationDone] = useState(false)
+  useEffect(() => {
+    if (migrationDone) return
+    const hasBase64Char = Object.values(library).some(e => e.images?.some(img => img.startsWith('data:')))
+    const hasBase64Scenario = scenarios.some(s => s.imageUrl?.startsWith('data:'))
+    if (!hasBase64Char && !hasBase64Scenario) {
+      if (Object.keys(library).length > 0 || scenarios.length > 0) setMigrationDone(true)
+      return
+    }
+    // Pelo menos um ainda é base64 — migra
+    ;(async () => {
+      try {
+        console.log('[migration] Convertendo base64 → Blob URLs...')
+
+        // Migra personagens
+        for (const entry of Object.values(library)) {
+          const needsMigration = entry.images.some(img => img.startsWith('data:'))
+          if (!needsMigration) continue
+          const newImages: string[] = []
+          for (const img of entry.images) {
+            if (img.startsWith('data:')) {
+              try {
+                const blob = await (await fetch(img)).blob()
+                const url = await uploadBlob(blob, `char-${entry.charId}-${Date.now()}.${blob.type.split('/')[1] || 'jpg'}`)
+                newImages.push(url)
+              } catch (e) {
+                console.warn('[migration] Falha em imagem do personagem', entry.charId, e)
+                newImages.push(img) // mantém base64 se falhar
+              }
+            } else {
+              newImages.push(img)
+            }
+          }
+          const updated = { ...entry, images: newImages }
+          setLibrary(prev => ({ ...prev, [entry.charId]: updated }))
+          await fetch('/api/library', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+        }
+
+        // Migra cenários
+        for (const sc of scenarios) {
+          if (!sc.imageUrl?.startsWith('data:')) continue
+          try {
+            const blob = await (await fetch(sc.imageUrl)).blob()
+            const url = await uploadBlob(blob, `scenario-${sc.id}.${blob.type.split('/')[1] || 'jpg'}`)
+            const updated = { ...sc, imageUrl: url }
+            setScenarios(prev => prev.map(s => s.id === sc.id ? updated : s))
+            await fetch('/api/scenarios', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) })
+          } catch (e) {
+            console.warn('[migration] Falha em cenário', sc.id, e)
+          }
+        }
+
+        console.log('[migration] Concluída')
+        setMigrationDone(true)
+      } catch (err) {
+        console.error('[migration]', err)
+        setMigrationDone(true)
+      }
+    })()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [library, scenarios])
+
   /* Se o episódio selecionado não pertence ao projeto atual, desseleciona */
   useEffect(() => {
     if (currentProject && currentEpisode && currentEpisode.projectId !== currentProject.id) {
@@ -299,32 +362,62 @@ export function AAZStudio() {
   /* ── helpers ── */
   const toggleChar = (c: Character) => setSelChars(p => p.find(x => x.id === c.id) ? p.filter(x => x.id !== c.id) : [...p, c])
 
-  const toDataUrl = (file: File, maxSize = 1200): Promise<string> => new Promise(res => {
+  /* ── Upload helpers ──
+   * uploadBlob: manda um File direto para /api/blob-upload e retorna a URL pública
+   * compressImage: comprime imagem no cliente antes do upload (economiza banda)
+   * toBlobUrl: função principal usada em tudo que era toDataUrl antes.
+   *            Comprime se for imagem, depois faz upload, retorna URL.
+   */
+  const uploadBlob = async (file: File | Blob, filename: string): Promise<string> => {
+    const fd = new FormData()
+    const f = file instanceof File ? file : new File([file], filename, { type: file.type || 'application/octet-stream' })
+    fd.append('file', f)
+    const res = await fetch('/api/blob-upload', { method: 'POST', body: fd })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      throw new Error(err?.error || 'Falha ao fazer upload.')
+    }
+    const data = await res.json()
+    return data.url as string
+  }
+
+  const compressImage = (file: File, maxSize = 1200, quality = 0.85): Promise<Blob> => new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onload = e => {
-      const dataUrl = e.target?.result as string
-      // Compress if image
-      if (file.type.startsWith('image/')) {
-        const img = new Image()
-        img.onload = () => {
-          const canvas = document.createElement('canvas')
-          let w = img.width, h = img.height
-          if (w > maxSize || h > maxSize) {
-            if (w > h) { h = Math.round(h * maxSize / w); w = maxSize }
-            else { w = Math.round(w * maxSize / h); h = maxSize }
-          }
-          canvas.width = w; canvas.height = h
-          const ctx = canvas.getContext('2d')!
-          ctx.drawImage(img, 0, 0, w, h)
-          res(canvas.toDataURL('image/jpeg', 0.85))
+      const img = new Image()
+      img.onload = () => {
+        const canvas = document.createElement('canvas')
+        let w = img.width, h = img.height
+        if (w > maxSize || h > maxSize) {
+          if (w > h) { h = Math.round(h * maxSize / w); w = maxSize }
+          else { w = Math.round(w * maxSize / h); h = maxSize }
         }
-        img.src = dataUrl
-      } else {
-        res(dataUrl)
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Compressão falhou')), 'image/jpeg', quality)
       }
+      img.onerror = reject
+      img.src = e.target?.result as string
     }
+    reader.onerror = reject
     reader.readAsDataURL(file)
   })
+
+  const toBlobUrl = async (file: File, maxSize = 1200): Promise<string> => {
+    if (file.type.startsWith('image/')) {
+      const compressed = await compressImage(file, maxSize)
+      const ext = file.name.split('.').pop() || 'jpg'
+      return uploadBlob(compressed, `img-${Date.now()}.${ext}`)
+    }
+    // Vídeos e áudios sobem direto, sem compressão
+    return uploadBlob(file, file.name || `file-${Date.now()}`)
+  }
+
+  /**
+   * toDataUrl mantido apenas para retrocompatibilidade interna.
+   * Novo código deve usar toBlobUrl.
+   */
+  const toDataUrl = toBlobUrl
 
   const addRef = async (e: React.ChangeEvent<HTMLInputElement>, type: string, list: RefItem[], setter: React.Dispatch<React.SetStateAction<RefItem[]>>, max: number) => {
     const files = Array.from(e.target.files || [])
