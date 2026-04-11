@@ -83,6 +83,7 @@ interface HistoryTabProps {
   onPlayEpisodeSequential: (episode: Episode) => void
   onPlayProjectSequential: (project: Project) => void
   onSetSceneStatus: (sceneId: string, status: SceneStatus) => void
+  onRenameEpisode: (episodeId: string, newName: string) => void
 }
 
 function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene, onSetStatus }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void; onMoveScene: (s: SceneAsset) => void; onSetStatus: (sceneId: string, status: SceneStatus) => void }) {
@@ -145,11 +146,36 @@ function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene, onSetStat
   )
 }
 
-function EpisodeHeader({ episode, count, onMove, onDelete, onPlaySequential }: { episode: Episode; count: number; onMove: (e: Episode) => void; onDelete: (e: Episode) => void; onPlaySequential?: (e: Episode) => void }) {
+function EpisodeHeader({ episode, count, onMove, onDelete, onPlaySequential, onRename }: { episode: Episode; count: number; onMove: (e: Episode) => void; onDelete: (e: Episode) => void; onPlaySequential?: (e: Episode) => void; onRename: (episodeId: string, newName: string) => void }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
   const name = episode.name?.trim() || '(sem nome)'
+
+  const commit = () => {
+    if (draft.trim()) onRename(episode.id, draft)
+    setEditing(false)
+  }
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0 }}>🎬 {name} <span style={{ opacity: 0.6 }}>({count})</span></h3>
+      {editing ? (
+        <Input
+          autoFocus
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={e => {
+            if (e.key === 'Enter') commit()
+            else if (e.key === 'Escape') setEditing(false)
+          }}
+          style={{ maxWidth: 260, padding: '6px 10px', fontSize: 13 }}
+        />
+      ) : (
+        <>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0 }}>🎬 {name} <span style={{ opacity: 0.6 }}>({count})</span></h3>
+          <button onClick={() => { setDraft(episode.name?.trim() || ''); setEditing(true) }} title="Renomear episódio" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 12, padding: 2, fontFamily: 'inherit' }}>✎</button>
+        </>
+      )}
       {onPlaySequential && count >= 2 && (
         <button onClick={() => onPlaySequential(episode)} title="Assistir todas as cenas do episódio em sequência" style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', color: C.purple, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}>▶ Assistir episódio</button>
       )}
@@ -159,7 +185,7 @@ function EpisodeHeader({ episode, count, onMove, onDelete, onPlaySequential }: {
   )
 }
 
-function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode, onPlayEpisodeSequential, onPlayProjectSequential, onSetSceneStatus }: HistoryTabProps) {
+function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode, onPlayEpisodeSequential, onPlayProjectSequential, onSetSceneStatus, onRenameEpisode }: HistoryTabProps) {
   const total = scenes.length
   const orphans = scenes.filter(s => !s.episodeId)
   const episodesWithScenes = episodes.filter(ep => scenes.some(s => s.episodeId === ep.id))
@@ -211,7 +237,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
                     const epScenes = scenes.filter(s => s.episodeId === ep.id)
                     return (
                       <div key={ep.id}>
-                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} /></div>
+                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} onRename={onRenameEpisode} /></div>
                         <div style={{ marginLeft: 8 }}>{sceneGrid(epScenes)}</div>
                       </div>
                     )
@@ -230,7 +256,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
                   const epScenes = scenes.filter(s => s.episodeId === ep.id)
                   return (
                     <div key={ep.id}>
-                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} />
+                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} onRename={onRenameEpisode} />
                       {sceneGrid(epScenes)}
                     </div>
                   )
@@ -381,6 +407,20 @@ export function AAZStudio() {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ projectId: newProjectId })
+      })
+    } catch {}
+  }
+
+  /* Renomeia um episódio (inline edit) */
+  const renameEpisode = async (episodeId: string, newName: string) => {
+    const trimmed = newName.trim()
+    if (!trimmed) return
+    setEpisodes(p => p.map(e => e.id === episodeId ? { ...e, name: trimmed } : e))
+    try {
+      await fetch(`/api/episodes/${encodeURIComponent(episodeId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed })
       })
     } catch {}
   }
@@ -677,6 +717,10 @@ export function AAZStudio() {
   /* Metadados da cena em edição */
   const [sceneNumberInput, setSceneNumberInput] = useState('')
   const [sceneTitleInput, setSceneTitleInput] = useState('')
+
+  /* Edição inline do nome do episódio (apenas na faixa contextual do Estúdio) */
+  const [editingEpName, setEditingEpName] = useState(false)
+  const [epNameDraft, setEpNameDraft] = useState('')
 
   /* geração */
   const [generating, setGenerating] = useState(false)
@@ -1107,8 +1151,44 @@ export function AAZStudio() {
               return (
                 <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 12, flexWrap: 'wrap' }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
-                      🎬 {currentEpisode.name?.trim() || '(sem nome)'} · {epScenes.length} cena{epScenes.length !== 1 ? 's' : ''}
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text, display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <span>🎬</span>
+                      {editingEpName ? (
+                        <>
+                          <Input
+                            autoFocus
+                            value={epNameDraft}
+                            onChange={e => setEpNameDraft(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                renameEpisode(currentEpisode.id, epNameDraft)
+                                setCurrentEpisode({ ...currentEpisode, name: epNameDraft.trim() })
+                                setEditingEpName(false)
+                              } else if (e.key === 'Escape') {
+                                setEditingEpName(false)
+                              }
+                            }}
+                            onBlur={() => {
+                              if (epNameDraft.trim()) {
+                                renameEpisode(currentEpisode.id, epNameDraft)
+                                setCurrentEpisode({ ...currentEpisode, name: epNameDraft.trim() })
+                              }
+                              setEditingEpName(false)
+                            }}
+                            style={{ maxWidth: 300, padding: '6px 10px', fontSize: 13 }}
+                          />
+                        </>
+                      ) : (
+                        <>
+                          <span>{currentEpisode.name?.trim() || '(sem nome)'}</span>
+                          <button
+                            onClick={() => { setEpNameDraft(currentEpisode.name?.trim() || ''); setEditingEpName(true) }}
+                            title="Renomear episódio"
+                            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 12, padding: 2, fontFamily: 'inherit' }}
+                          >✎</button>
+                          <span style={{ color: C.textDim, fontWeight: 400 }}>· {epScenes.length} cena{epScenes.length !== 1 ? 's' : ''}</span>
+                        </>
+                      )}
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                       {epScenes.length >= 2 && (
@@ -1721,6 +1801,7 @@ export function AAZStudio() {
                 }
               }}
               onSetSceneStatus={updateSceneStatus}
+              onRenameEpisode={renameEpisode}
             />
           )}
         </div>
