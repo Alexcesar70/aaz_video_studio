@@ -404,6 +404,281 @@ function AtelierLibraryView({ type, assets, loading, onDelete }: {
   )
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   QuickCreateAssetModal — cria um asset sem sair do Estúdio.
+   Reusa /api/image-director + /api/generate-image, mas é auto-contido:
+   tem seu próprio form state, gera, mostra resultados, e quando o
+   usuário escolhe uma variação chama onDone(asset) — que injeta no
+   refImgs da cena atual e fecha o modal.
+═══════════════════════════════════════════════════════════════ */
+
+function QuickCreateAssetModal({
+  type,
+  initialName,
+  onClose,
+  onDone,
+  uploadBlob,
+}: {
+  type: AssetType
+  initialName: string
+  onClose: () => void
+  onDone: (asset: Asset) => void
+  uploadBlob: (file: File) => Promise<string>
+}) {
+  const [name, setName] = useState(initialName)
+  const [id, setId] = useState(slugify(initialName))
+  const [idEdited, setIdEdited] = useState(false)
+  const [desc, setDesc] = useState('')
+  const [engineId, setEngineId] = useState(DEFAULT_IMAGE_ENGINE_ID)
+  const [variations, setVariations] = useState(4)
+  const [refUrl, setRefUrl] = useState('')
+  const [refining, setRefining] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [results, setResults] = useState<string[]>([])
+  const [selected, setSelected] = useState<number | null>(null)
+  const [status, setStatus] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+
+  const engine = getImageEngine(engineId)
+  const totalCost = (engine.pricePerImage * variations).toFixed(2)
+
+  useEffect(() => {
+    if (!idEdited) setId(slugify(name))
+  }, [name, idEdited])
+
+  const typeLabel = type === 'character' ? 'Personagem' : type === 'scenario' ? 'Cenário' : 'Item'
+  const typeEmoji = defaultEmoji(type)
+
+  const refine = async () => {
+    if (!desc.trim()) { setStatus('Escreva a descrição antes.'); return }
+    setRefining(true); setStatus('Refinando...')
+    try {
+      const res = await fetch('/api/image-director', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, description: desc, has_reference: !!refUrl }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const data = await res.json() as { prompt: string; name_suggestion: string }
+      setDesc(data.prompt)
+      if (!name.trim() && data.name_suggestion) setName(data.name_suggestion)
+      setStatus('Prompt refinado ✓')
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Erro ao refinar.')
+    } finally {
+      setRefining(false)
+    }
+  }
+
+  const generate = async () => {
+    if (!desc.trim() || !name.trim()) { setStatus('Preencha nome e descrição.'); return }
+    setGenerating(true); setStatus('Gerando variações...'); setResults([]); setSelected(null)
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engineId,
+          prompt: desc,
+          num_outputs: variations,
+          reference_image_url: refUrl || undefined,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const data = await res.json() as { imageUrls: string[] }
+      setResults(data.imageUrls ?? [])
+      setStatus(`${data.imageUrls?.length ?? 0} variações prontas. Clique numa pra usar.`)
+
+      // Salva todas como drafts (30 dias)
+      for (const url of data.imageUrls ?? []) {
+        fetch('/api/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type, name, description: desc,
+            imageUrls: [url], prompt: desc, engineId,
+            sourceRefUrl: refUrl || undefined,
+            isDraft: true,
+          }),
+        }).catch(() => {})
+      }
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Erro ao gerar.')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const useSelected = async () => {
+    if (selected === null) return
+    const chosenUrl = results[selected]
+    if (!chosenUrl) return
+    const finalId = (id || slugify(name)).toLowerCase()
+    setStatus('Salvando...')
+    try {
+      const res = await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: finalId, type, name, description: desc,
+          imageUrls: [chosenUrl],
+          prompt: desc, engineId,
+          sourceRefUrl: refUrl || undefined,
+        }),
+      })
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}))
+        // Se já existe um asset com esse id, o parent ainda pode injetar a imagem na cena
+        console.warn('[QuickCreate] POST falhou:', e?.error)
+      }
+      const now = new Date().toISOString()
+      onDone({
+        id: finalId, type, name, description: desc,
+        imageUrls: [chosenUrl], prompt: desc, engineId,
+        sourceRefUrl: refUrl || undefined,
+        isOfficial: false, createdAt: now, updatedAt: now,
+      })
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Erro ao salvar.')
+    }
+  }
+
+  const handleUpload = async (file: File) => {
+    try {
+      const url = await uploadBlob(file)
+      setRefUrl(url)
+    } catch {
+      setStatus('Upload falhou.')
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 820, maxHeight: '92vh', overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+      >
+        {/* Header */}
+        <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 26 }}>{typeEmoji}</span>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Criar {typeLabel}</div>
+              <div style={{ fontSize: 11, color: C.textDim }}>Gera e adiciona direto na cena atual</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: C.textDim, fontSize: 20, cursor: 'pointer' }}>×</button>
+        </div>
+
+        {/* Body */}
+        <div style={{ padding: '20px 22px', display: 'grid', gridTemplateColumns: results.length > 0 ? '1fr 1fr' : '1fr', gap: 18 }}>
+
+          {/* Form */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 4 }}>NOME</div>
+              <Input value={name} onChange={e => setName(e.target.value)} placeholder={type === 'character' ? 'Faraó' : type === 'scenario' ? 'Nilo' : 'Cajado'} />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 4 }}>@ID (auto)</div>
+              <Input value={id} onChange={e => { setId(slugify(e.target.value)); setIdEdited(true) }} style={{ fontFamily: 'monospace' }} />
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 4 }}>DESCRIÇÃO</div>
+              <textarea
+                value={desc}
+                onChange={e => setDesc(e.target.value)}
+                placeholder={type === 'character' ? 'Faraó do Egito, adulto, coroa dupla...' : type === 'scenario' ? 'Interior do palácio ao entardecer...' : 'Cajado de madeira...'}
+                style={{ width: '100%', minHeight: 100, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+              />
+              <button onClick={refine} disabled={refining || !desc.trim()} style={{ marginTop: 6, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '6px 12px', cursor: refining ? 'wait' : 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: (refining || !desc.trim()) ? 0.5 : 1 }}>
+                {refining ? '⟳' : '✨'} Refinar com IA
+              </button>
+            </div>
+
+            {refUrl ? (
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <img src={refUrl} alt="ref" style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                <button onClick={() => setRefUrl('')} style={{ position: 'absolute', top: -5, right: -5, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 18, height: 18, cursor: 'pointer', fontSize: 11 }}>×</button>
+              </div>
+            ) : (
+              <>
+                <button onClick={() => fileInput.current?.click()} style={{ background: C.card, border: `1px dashed ${C.border}`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.textDim, fontSize: 12, fontFamily: 'inherit' }}>
+                  📎 Anexar referência opcional
+                </button>
+                <input ref={fileInput} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f) }} />
+              </>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
+              <select value={engineId} onChange={e => setEngineId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' }}>
+                {IMAGE_ENGINES.map(eng => (
+                  <option key={eng.id} value={eng.id}>{eng.name} · ~${eng.pricePerImage}</option>
+                ))}
+              </select>
+              <select value={variations} onChange={e => setVariations(parseInt(e.target.value, 10))} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'monospace', outline: 'none' }}>
+                {[1, 2, 4, 6, 8].map(n => <option key={n} value={n}>{n} var</option>)}
+              </select>
+            </div>
+
+            <div style={{ fontSize: 11, color: C.textDim, textAlign: 'right', fontStyle: 'italic' }}>
+              Preço estimado: ~${totalCost}
+            </div>
+
+            <button
+              onClick={generate}
+              disabled={generating || !name.trim() || !desc.trim()}
+              style={{ background: generating ? C.card : C.purple, border: `1px solid ${generating ? C.border : C.purple}`, borderRadius: 10, padding: '12px', cursor: (generating || !name.trim() || !desc.trim()) ? 'not-allowed' : 'pointer', color: generating ? C.textDim : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit' }}
+            >
+              {generating ? '⟳ Gerando...' : `⚡ Gerar ${variations} ${variations === 1 ? 'variação' : 'variações'}`}
+            </button>
+
+            {status && <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>{status}</div>}
+          </div>
+
+          {/* Results */}
+          {results.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim }}>ESCOLHA UMA VARIAÇÃO</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+                {results.map((url, i) => {
+                  const isSel = selected === i
+                  return (
+                    <div
+                      key={i}
+                      onClick={() => setSelected(i)}
+                      style={{ position: 'relative', cursor: 'pointer', borderRadius: 8, overflow: 'hidden', border: `3px solid ${isSel ? C.green : 'transparent'}`, aspectRatio: '1/1', background: '#000' }}
+                    >
+                      <img src={url} alt={`var ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      <div style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.7)', color: '#fff', borderRadius: 12, padding: '2px 8px', fontSize: 10 }}>#{i + 1}</div>
+                      {isSel && <div style={{ position: 'absolute', top: 4, right: 4, background: C.green, color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12 }}>✓</div>}
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                onClick={useSelected}
+                disabled={selected === null}
+                style={{ background: selected === null ? C.card : C.green, border: `1px solid ${selected === null ? C.border : C.green}`, borderRadius: 10, padding: '12px', cursor: selected === null ? 'not-allowed' : 'pointer', color: selected === null ? C.textDim : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit' }}
+              >
+                Usar esta na cena
+              </button>
+              <div style={{ fontSize: 10, color: C.textDim, textAlign: 'center', fontStyle: 'italic' }}>
+                As outras variações ficam em Rascunhos do Atelier por 30 dias.
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AtelierDraftsView({ type, drafts, onPromote, onDelete }: {
   type: AssetType
   drafts: Asset[]
@@ -502,6 +777,9 @@ export function AAZStudio() {
     finally { setAtLoading(false) }
   }, [])
 
+  // Carrega assets uma vez na montagem (pra @mention + scene strip funcionarem no Estúdio)
+  useEffect(() => { loadAssets() }, [loadAssets])
+  // Recarrega quando muda o tipo dentro do Atelier
   useEffect(() => {
     if (tab === 'atelier') loadAssets(atType)
   }, [tab, atType, loadAssets])
@@ -887,21 +1165,91 @@ export function AAZStudio() {
     return null
   }
 
+  // Item comum renderizado no dropdown de @ mention.
+  // Pode vir de um lead oficial, de um custom asset, ou ser uma opção
+  // "+ criar" que abre o modal Quick-Create.
+  type MentionItem = {
+    id: string
+    name: string
+    emoji: string
+    color: string
+    type: AssetType
+    isOfficial: boolean
+    hasRefs: boolean
+    refUrls: string[]
+    desc: string
+    kind: 'existing' | 'create'
+  }
+
+  // Monta a lista de matches pro @ mention combinando leads + custom assets
+  // + opção "criar novo" quando há query. Prioriza itens com refs.
+  const buildMentionMatches = useCallback((query: string): MentionItem[] => {
+    const q = query.toLowerCase()
+    const results: MentionItem[] = []
+
+    // Leads (CHARACTERS fixos) — buscando em id OU name
+    for (const c of CHARACTERS) {
+      if (q && !c.id.toLowerCase().startsWith(q) && !c.name.toLowerCase().startsWith(q)) continue
+      const libRefs = library[c.id]?.images ?? []
+      // Também verifica se tem um override no Redis com imageUrls extras
+      const override = atAssets.find(a => a.id === c.id && a.type === 'character' && a.isOfficial)
+      const assetRefs = override?.imageUrls ?? []
+      const refUrls = Array.from(new Set([...libRefs, ...assetRefs]))
+      results.push({
+        id: c.id, name: c.name, emoji: c.emoji, color: c.color,
+        type: 'character', isOfficial: true,
+        hasRefs: refUrls.length > 0, refUrls,
+        desc: c.desc,
+        kind: 'existing',
+      })
+    }
+
+    // Custom assets (não-leads, qualquer tipo)
+    for (const a of atAssets) {
+      if (a.isOfficial) continue
+      if (q && !a.id.toLowerCase().startsWith(q) && !a.name.toLowerCase().startsWith(q)) continue
+      const color = a.type === 'character' ? C.purple : a.type === 'scenario' ? C.blue : C.gold
+      results.push({
+        id: a.id, name: a.name,
+        emoji: a.emoji ?? defaultEmoji(a.type),
+        color,
+        type: a.type, isOfficial: false,
+        hasRefs: a.imageUrls.length > 0,
+        refUrls: a.imageUrls,
+        desc: a.description,
+        kind: 'existing',
+      })
+    }
+
+    // Ordena: leads primeiro, depois itens com refs, depois resto
+    results.sort((a, b) => {
+      if (a.isOfficial !== b.isOfficial) return a.isOfficial ? -1 : 1
+      if (a.hasRefs !== b.hasRefs) return a.hasRefs ? -1 : 1
+      return 0
+    })
+
+    const limited = results.slice(0, 7)
+
+    // Opção "criar novo" — só se a query é não-vazia e não bate exatamente com um existente
+    if (q && !results.some(r => r.id === q)) {
+      limited.push({
+        id: q, name: `Criar "${query}"`,
+        emoji: '➕', color: C.green,
+        type: 'character', isOfficial: false,
+        hasRefs: false, refUrls: [],
+        desc: 'Abre o Quick-Create',
+        kind: 'create',
+      })
+    }
+    return limited
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [library, atAssets])
+
   // Lista de personagens disponíveis para mention, filtrada por query
   const mentionMatches = useMemo(() => {
-    if (!mention) return [] as Character[]
-    const q = mention.query.toLowerCase()
-    // Prioriza personagens que têm imagens salvas na biblioteca
-    const all = CHARACTERS
-      .filter(c => c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q))
-      .sort((a, b) => {
-        const aHas = library[a.id]?.images?.length ? 1 : 0
-        const bHas = library[b.id]?.images?.length ? 1 : 0
-        return bHas - aHas
-      })
-    return all.slice(0, 7)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mention, library])
+    if (!mention) return [] as MentionItem[]
+    return buildMentionMatches(mention.query)
+  }, [mention, buildMentionMatches])
 
   const handleSdDescChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
@@ -916,47 +1264,64 @@ export function AAZStudio() {
     }
   }
 
-  const selectMention = (char: Character) => {
-    if (!mention) return
-    const before = sdDesc.slice(0, mention.start)
-    const after = sdDesc.slice(mention.start + 1 + mention.query.length)
-    const replacement = `@${char.id} `
+  // Aplica um MentionItem a um textarea (assistente ou prompt final).
+  // Insere @id no texto, injeta refs quando o asset tem imagens, e se
+  // for "criar novo" abre o Quick-Create modal.
+  const applyMentionItem = (item: MentionItem, ctx: 'sd' | 'prompt') => {
+    const state = ctx === 'sd' ? mention : promptMention
+    if (!state) return
+    const text = ctx === 'sd' ? sdDesc : prompts[lang]
+    const id = item.kind === 'create' ? slugify(item.id) : item.id
+    const before = text.slice(0, state.start)
+    const after = text.slice(state.start + 1 + state.query.length)
+    const replacement = `@${id} `
     const newText = before + replacement + after
-    setSdDesc(newText)
-    setMention(null)
 
-    // Adiciona ao sidebar direito (se não estiver)
-    if (!selChars.find(c => c.id === char.id)) {
-      setSelChars(p => [...p, char])
-    }
+    if (ctx === 'sd') setSdDesc(newText)
+    else setPrompts(p => ({ ...p, [lang]: newText }))
 
-    // Se o personagem tem refs na biblioteca, FORÇA a entrada delas no Omni
-    // (independente do modo atual — muda para omni_reference se necessário).
-    // Isso garante que o @id no prompt final vai ter uma imagem correspondente.
-    const entry = library[char.id]
-    if (entry?.images?.length) {
-      if (mode !== 'omni_reference') setMode('omni_reference')
-      setRefImgs(p => {
-        const next = [...p]
-        for (const img of entry.images) {
-          if (next.length >= 9) break
-          if (next.some(r => r.url === img)) continue
-          next.push({ url: img, label: `@image${next.length + 1}`, name: char.name, fromLib: true, charId: char.id })
-        }
-        return next
-      })
-    }
+    if (ctx === 'sd') setMention(null)
+    else setPromptMention(null)
 
-    // Reposiciona o cursor depois do nome inserido
+    // Reposiciona cursor
     window.setTimeout(() => {
-      const ta = sdDescRef.current
+      const ta = ctx === 'sd' ? sdDescRef.current : promptTextareaRef.current
       if (ta) {
         const pos = before.length + replacement.length
         ta.focus()
         ta.setSelectionRange(pos, pos)
       }
     }, 0)
+
+    // "+ criar" — abre Quick-Create com nome pré-preenchido
+    if (item.kind === 'create') {
+      setQuickCreate({ type: 'character', initialName: item.id.replace(/_/g, ' ') })
+      return
+    }
+
+    // Para tipo character, adiciona ao sidebar de personagens selecionados
+    if (item.type === 'character' && !selChars.find(c => c.id === item.id)) {
+      setSelChars(p => [...p, {
+        id: item.id, name: item.name, emoji: item.emoji, color: item.color, desc: item.desc
+      }])
+    }
+
+    // Injeta refs se houver
+    if (item.refUrls.length > 0) {
+      if (mode !== 'omni_reference') setMode('omni_reference')
+      setRefImgs(p => {
+        const next = [...p]
+        for (const url of item.refUrls) {
+          if (next.length >= 9) break
+          if (next.some(r => r.url === url)) continue
+          next.push({ url, label: `@image${next.length + 1}`, name: item.name, fromLib: true, charId: item.id })
+        }
+        return next
+      })
+    }
   }
+
+  const selectMention = (item: MentionItem) => applyMentionItem(item, 'sd')
 
   const handleSdDescKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!mention || mentionMatches.length === 0) return
@@ -976,18 +1341,9 @@ export function AAZStudio() {
 
   /* ── Autocomplete @ no textarea do PROMPT final (PT/EN) ── */
   const promptMentionMatches = useMemo(() => {
-    if (!promptMention) return [] as Character[]
-    const q = promptMention.query.toLowerCase()
-    const all = CHARACTERS
-      .filter(c => c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q))
-      .sort((a, b) => {
-        const aHas = library[a.id]?.images?.length ? 1 : 0
-        const bHas = library[b.id]?.images?.length ? 1 : 0
-        return bHas - aHas
-      })
-    return all.slice(0, 7)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [promptMention, library])
+    if (!promptMention) return [] as MentionItem[]
+    return buildMentionMatches(promptMention.query)
+  }, [promptMention, buildMentionMatches])
 
   const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value
@@ -1002,46 +1358,7 @@ export function AAZStudio() {
     }
   }
 
-  const selectPromptMention = (char: Character) => {
-    if (!promptMention) return
-    const current = prompts[lang]
-    const before = current.slice(0, promptMention.start)
-    const after = current.slice(promptMention.start + 1 + promptMention.query.length)
-    const replacement = `@${char.id} `
-    const newText = before + replacement + after
-    setPrompts(p => ({ ...p, [lang]: newText }))
-    setPromptMention(null)
-
-    // Adiciona ao sidebar direito (se não estiver)
-    if (!selChars.find(c => c.id === char.id)) {
-      setSelChars(p => [...p, char])
-    }
-
-    // Se tem refs na biblioteca, força modo omni e injeta direto no refImgs
-    const entry = library[char.id]
-    if (entry?.images?.length) {
-      if (mode !== 'omni_reference') setMode('omni_reference')
-      setRefImgs(p => {
-        const next = [...p]
-        for (const img of entry.images) {
-          if (next.length >= 9) break
-          if (next.some(r => r.url === img)) continue
-          next.push({ url: img, label: `@image${next.length + 1}`, name: char.name, fromLib: true, charId: char.id })
-        }
-        return next
-      })
-    }
-
-    // Reposiciona o cursor
-    window.setTimeout(() => {
-      const ta = promptTextareaRef.current
-      if (ta) {
-        const pos = before.length + replacement.length
-        ta.focus()
-        ta.setSelectionRange(pos, pos)
-      }
-    }, 0)
-  }
+  const selectPromptMention = (item: MentionItem) => applyMentionItem(item, 'prompt')
 
   const handlePromptKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (!promptMention || promptMentionMatches.length === 0) return
@@ -1215,6 +1532,8 @@ export function AAZStudio() {
 
   /* Modal: Adicionar referência ao Omni */
   const [addRefModal, setAddRefModal] = useState<'image' | 'video' | 'audio' | null>(null)
+  /* Modal: Quick-Create — gerar asset sem sair do Estúdio */
+  const [quickCreate, setQuickCreate] = useState<{ type: AssetType; initialName: string } | null>(null)
   /* Modal: Confirmação de exclusão */
   const [confirmModal, setConfirmModal] = useState<{
     title: string
@@ -1229,7 +1548,7 @@ export function AAZStudio() {
   const [sequentialPlayer, setSequentialPlayer] = useState<{ scenes: SceneAsset[]; title: string } | null>(null)
 
   useEffect(() => {
-    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal || sequentialPlayer
+    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal || sequentialPlayer || quickCreate
     if (!anyModal) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -1239,11 +1558,12 @@ export function AAZStudio() {
         setAddRefModal(null)
         setConfirmModal(null)
         setSequentialPlayer(null)
+        setQuickCreate(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal, sequentialPlayer])
+  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal, sequentialPlayer, quickCreate])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
@@ -2204,32 +2524,40 @@ export function AAZStudio() {
                     />
                     {/* Dropdown de mention */}
                     {mention && mentionMatches.length > 0 && (
-                      <div style={{ position: 'absolute', ...(mention.dir === 'up' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), left: 0, right: 0, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
+                      <div style={{ position: 'absolute', ...(mention.dir === 'up' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), left: 0, right: 0, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 320, overflowY: 'auto' }}>
                         <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
-                          PERSONAGEM {mention.query && `· "${mention.query}"`}
+                          MENCIONAR {mention.query && `· "${mention.query}"`}
                         </div>
-                        {mentionMatches.map((char, i) => {
-                          const hasRefs = !!library[char.id]?.images?.length
+                        {mentionMatches.map((item, i) => {
                           const isHighlighted = i === mention.highlightIdx
+                          const isCreate = item.kind === 'create'
                           return (
                             <button
-                              key={char.id}
-                              onMouseDown={e => { e.preventDefault(); selectMention(char) }}
+                              key={`${item.kind}-${item.id}`}
+                              onMouseDown={e => { e.preventDefault(); selectMention(item) }}
                               onMouseEnter={() => setMention(m => m ? { ...m, highlightIdx: i } : m)}
-                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: isHighlighted ? `${C.purple}20` : 'transparent', border: 'none', cursor: 'pointer', color: C.text, fontSize: 13, fontFamily: 'inherit', textAlign: 'left' }}
+                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: isHighlighted ? `${item.color}20` : 'transparent', border: 'none', borderTop: isCreate ? `1px solid ${C.border}` : 'none', cursor: 'pointer', color: C.text, fontSize: 13, fontFamily: 'inherit', textAlign: 'left' }}
                             >
-                              <span style={{ fontSize: 20 }}>{char.emoji}</span>
+                              <span style={{ fontSize: 20 }}>{item.emoji}</span>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                                <span style={{ fontWeight: 600, color: isHighlighted ? C.purple : C.text }}>{char.name}</span>
-                                <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace' }}>@{char.id}</span>
+                                <span style={{ fontWeight: 600, color: isHighlighted ? item.color : C.text }}>{item.name}</span>
+                                <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace' }}>
+                                  {isCreate ? 'Abre Quick-Create' : `@${item.id}`}
+                                  {!isCreate && item.isOfficial && <span style={{ marginLeft: 6, color: C.gold }}>⭐ Lead</span>}
+                                  {!isCreate && !item.isOfficial && item.type !== 'character' && (
+                                    <span style={{ marginLeft: 6, color: item.color }}>
+                                      {item.type === 'scenario' ? '🏞 Cenário' : '🧺 Item'}
+                                    </span>
+                                  )}
+                                </span>
                               </div>
-                              {hasRefs ? (
+                              {!isCreate && (item.hasRefs ? (
                                 <span style={{ fontSize: 9, color: C.green, background: `${C.green}15`, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.green}40`, whiteSpace: 'nowrap' }}>
-                                  {library[char.id].images.length} refs
+                                  {item.refUrls.length} refs
                                 </span>
                               ) : (
                                 <span style={{ fontSize: 9, color: C.textDim, whiteSpace: 'nowrap' }}>sem refs</span>
-                              )}
+                              ))}
                             </button>
                           )
                         })}
@@ -2298,32 +2626,40 @@ export function AAZStudio() {
                 />
                 {/* Dropdown de mention (prompt) */}
                 {promptMention && promptMentionMatches.length > 0 && (
-                  <div style={{ position: 'absolute', ...(promptMention.dir === 'up' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), left: 0, right: 0, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
+                  <div style={{ position: 'absolute', ...(promptMention.dir === 'up' ? { bottom: '100%', marginBottom: 4 } : { top: '100%', marginTop: 4 }), left: 0, right: 0, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 320, overflowY: 'auto' }}>
                     <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
-                      PERSONAGEM {promptMention.query && `· "${promptMention.query}"`}
+                      MENCIONAR {promptMention.query && `· "${promptMention.query}"`}
                     </div>
-                    {promptMentionMatches.map((char, i) => {
-                      const hasRefs = !!library[char.id]?.images?.length
+                    {promptMentionMatches.map((item, i) => {
                       const isHighlighted = i === promptMention.highlightIdx
+                      const isCreate = item.kind === 'create'
                       return (
                         <button
-                          key={char.id}
-                          onMouseDown={e => { e.preventDefault(); selectPromptMention(char) }}
+                          key={`${item.kind}-${item.id}`}
+                          onMouseDown={e => { e.preventDefault(); selectPromptMention(item) }}
                           onMouseEnter={() => setPromptMention(m => m ? { ...m, highlightIdx: i } : m)}
-                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: isHighlighted ? `${C.purple}20` : 'transparent', border: 'none', cursor: 'pointer', color: C.text, fontSize: 13, fontFamily: 'inherit', textAlign: 'left' }}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: isHighlighted ? `${item.color}20` : 'transparent', border: 'none', borderTop: isCreate ? `1px solid ${C.border}` : 'none', cursor: 'pointer', color: C.text, fontSize: 13, fontFamily: 'inherit', textAlign: 'left' }}
                         >
-                          <span style={{ fontSize: 20 }}>{char.emoji}</span>
+                          <span style={{ fontSize: 20 }}>{item.emoji}</span>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                            <span style={{ fontWeight: 600, color: isHighlighted ? C.purple : C.text }}>{char.name}</span>
-                            <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace' }}>@{char.id}</span>
+                            <span style={{ fontWeight: 600, color: isHighlighted ? item.color : C.text }}>{item.name}</span>
+                            <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace' }}>
+                              {isCreate ? 'Abre Quick-Create' : `@${item.id}`}
+                              {!isCreate && item.isOfficial && <span style={{ marginLeft: 6, color: C.gold }}>⭐ Lead</span>}
+                              {!isCreate && !item.isOfficial && item.type !== 'character' && (
+                                <span style={{ marginLeft: 6, color: item.color }}>
+                                  {item.type === 'scenario' ? '🏞 Cenário' : '🧺 Item'}
+                                </span>
+                              )}
+                            </span>
                           </div>
-                          {hasRefs ? (
+                          {!isCreate && (item.hasRefs ? (
                             <span style={{ fontSize: 9, color: C.green, background: `${C.green}15`, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.green}40`, whiteSpace: 'nowrap' }}>
-                              {library[char.id].images.length} refs
+                              {item.refUrls.length} refs
                             </span>
                           ) : (
                             <span style={{ fontSize: 9, color: C.textDim, whiteSpace: 'nowrap' }}>sem refs</span>
-                          )}
+                          ))}
                         </button>
                       )
                     })}
@@ -2395,7 +2731,7 @@ export function AAZStudio() {
             {/* Personagens */}
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Label>Personagens</Label>
+                <Label>⭐ Leads</Label>
                 {selChars.length > 0 && <button onClick={injectTags} style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '5px 12px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>Injetar tags</button>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
@@ -2411,6 +2747,71 @@ export function AAZStudio() {
                   )
                 })}
               </div>
+
+              {/* Custom characters criados no Atelier */}
+              {atAssets.filter(a => a.type === 'character' && !a.isOfficial).length > 0 && (
+                <>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.purple, letterSpacing: '0.5px', marginTop: 12, marginBottom: 6 }}>CRIADOS</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
+                    {atAssets.filter(a => a.type === 'character' && !a.isOfficial).slice(0, 8).map(a => {
+                      const sel = selChars.find(c => c.id === a.id)
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => {
+                            // Adiciona ao sidebar + injeta refs
+                            if (!sel) {
+                              setSelChars(p => [...p, { id: a.id, name: a.name, emoji: a.emoji ?? '👤', color: C.purple, desc: a.description }])
+                              if (a.imageUrls.length > 0) {
+                                if (mode !== 'omni_reference') setMode('omni_reference')
+                                setRefImgs(p => {
+                                  const next = [...p]
+                                  for (const url of a.imageUrls) {
+                                    if (next.length >= 9) break
+                                    if (next.some(r => r.url === url)) continue
+                                    next.push({ url, label: `@image${next.length + 1}`, name: a.name, fromLib: true, charId: a.id })
+                                  }
+                                  return next
+                                })
+                              }
+                            } else {
+                              setSelChars(p => p.filter(x => x.id !== a.id))
+                              setRefImgs(p => p.filter(r => r.charId !== a.id).map((r, i) => ({ ...r, label: `@image${i + 1}` })))
+                            }
+                          }}
+                          style={{ background: sel ? `${C.purple}18` : C.card, border: `1px solid ${sel ? C.purple : C.border}`, borderRadius: 10, padding: '10px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
+                        >
+                          <span style={{ fontSize: 22 }}>{a.emoji ?? '👤'}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: sel ? C.purple : C.textDim, textOverflow: 'ellipsis', overflow: 'hidden', maxWidth: '100%', whiteSpace: 'nowrap' }}>{a.name}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Quick-create buttons */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 12, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setQuickCreate({ type: 'character', initialName: '' })}
+                  style={{ flex: 1, background: C.purpleGlow, border: `1px dashed ${C.purple}60`, borderRadius: 8, padding: '8px 6px', cursor: 'pointer', color: C.purple, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
+                >
+                  ＋ Personagem
+                </button>
+                <button
+                  onClick={() => setQuickCreate({ type: 'scenario', initialName: '' })}
+                  style={{ flex: 1, background: `${C.blue}15`, border: `1px dashed ${C.blue}60`, borderRadius: 8, padding: '8px 6px', cursor: 'pointer', color: C.blue, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
+                >
+                  ＋ Cenário
+                </button>
+                <button
+                  onClick={() => setQuickCreate({ type: 'item', initialName: '' })}
+                  style={{ flex: 1, background: `${C.gold}15`, border: `1px dashed ${C.gold}60`, borderRadius: 8, padding: '8px 6px', cursor: 'pointer', color: C.gold, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
+                >
+                  ＋ Item
+                </button>
+              </div>
+
               {selChars.filter(c => library[c.id]).length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
                   {selChars.filter(c => library[c.id]).map(c => (
@@ -3226,6 +3627,41 @@ export function AAZStudio() {
             else if (addRefModal === 'video') await addVideoRefFromFile(file)
             else if (addRefModal === 'audio') await addAudioRefFromFile(file)
             setAddRefModal(null)
+          }}
+        />
+      )}
+
+      {/* Quick-Create — criar asset de imagem sem sair do Estúdio */}
+      {quickCreate && (
+        <QuickCreateAssetModal
+          type={quickCreate.type}
+          initialName={quickCreate.initialName}
+          onClose={() => setQuickCreate(null)}
+          uploadBlob={toBlobUrl}
+          onDone={(asset) => {
+            // Injeta na cena atual
+            if (mode !== 'omni_reference') setMode('omni_reference')
+            setRefImgs(p => {
+              const next = [...p]
+              for (const url of asset.imageUrls) {
+                if (next.length >= 9) break
+                if (next.some(r => r.url === url)) continue
+                next.push({ url, label: `@image${next.length + 1}`, name: asset.name, fromLib: true, charId: asset.id })
+              }
+              return next
+            })
+            // Se character, adiciona ao sidebar
+            if (asset.type === 'character' && !selChars.find(c => c.id === asset.id)) {
+              setSelChars(p => [...p, {
+                id: asset.id, name: asset.name, emoji: asset.emoji ?? '👤',
+                color: C.purple, desc: asset.description
+              }])
+            }
+            // Recarrega assets (pra @mention ver o novo)
+            loadAssets()
+            setQuickCreate(null)
+            setToast(`✓ ${asset.name} adicionado à cena`)
+            window.setTimeout(() => setToast(''), 3000)
           }}
         />
       )}
