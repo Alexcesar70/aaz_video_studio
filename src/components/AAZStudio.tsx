@@ -1885,19 +1885,47 @@ export function AAZStudio() {
 function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; title: string; onClose: () => void }) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
+  // Dois slots A/B para alternância: um mostra o atual, o outro pré-carrega o próximo
+  const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A')
+  const videoRefA = useRef<HTMLVideoElement>(null)
+  const videoRefB = useRef<HTMLVideoElement>(null)
 
   const current = scenes[index]
+  const next = scenes[index + 1]
   const totalDuration = scenes.reduce((s, sc) => s + sc.duration, 0)
 
-  const goNext = () => setIndex(i => i < scenes.length - 1 ? i + 1 : i)
-  const goPrev = () => setIndex(i => i > 0 ? i - 1 : i)
+  // URLs alocadas em slots: quando activeSlot === 'A', A mostra current e B pré-carrega next
+  const srcA = activeSlot === 'A' ? current?.videoUrl : next?.videoUrl
+  const srcB = activeSlot === 'B' ? current?.videoUrl : next?.videoUrl
+
+  const goNext = () => {
+    if (index >= scenes.length - 1) return
+    // Alterna o slot ativo (crossfade via CSS opacity) e avança o índice
+    setActiveSlot(s => s === 'A' ? 'B' : 'A')
+    setIndex(i => i + 1)
+  }
+  const goPrev = () => {
+    if (index === 0) return
+    setActiveSlot(s => s === 'A' ? 'B' : 'A')
+    setIndex(i => i - 1)
+  }
+
   const togglePause = () => {
-    const v = videoRef.current
+    const v = activeSlot === 'A' ? videoRefA.current : videoRefB.current
     if (!v) return
     if (v.paused) { v.play().catch(() => {}); setPaused(false) }
     else { v.pause(); setPaused(true) }
   }
+
+  // Auto-play do vídeo ativo quando index/slot mudam
+  useEffect(() => {
+    const v = activeSlot === 'A' ? videoRefA.current : videoRefB.current
+    if (v) {
+      v.currentTime = 0
+      v.play().catch(() => {})
+      setPaused(false)
+    }
+  }, [index, activeSlot])
 
   // Navegação por teclado
   useEffect(() => {
@@ -1909,7 +1937,7 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [index, activeSlot])
 
   if (!current) return null
 
@@ -1933,17 +1961,47 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
         >×</button>
       </div>
 
-      {/* Vídeo principal */}
-      <div onClick={e => e.stopPropagation()} style={{ maxWidth: '90vw', maxHeight: '75vh', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* Vídeo principal com dois slots A/B para crossfade e preload */}
+      <div onClick={e => e.stopPropagation()} style={{ position: 'relative', width: '90vw', height: '75vh', maxWidth: 1600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <video
-          ref={videoRef}
-          key={current.id}
-          src={current.videoUrl}
-          autoPlay
+          ref={videoRefA}
+          src={srcA || undefined}
+          autoPlay={activeSlot === 'A'}
+          muted={activeSlot !== 'A'}
           playsInline
-          controls
-          onEnded={goNext}
-          style={{ maxWidth: '90vw', maxHeight: '75vh', borderRadius: 10, background: '#000' }}
+          controls={activeSlot === 'A'}
+          preload="auto"
+          onEnded={activeSlot === 'A' ? goNext : undefined}
+          style={{
+            position: 'absolute',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            borderRadius: 10,
+            background: '#000',
+            opacity: activeSlot === 'A' ? 1 : 0,
+            pointerEvents: activeSlot === 'A' ? 'auto' : 'none',
+            transition: 'opacity 200ms ease-in-out',
+          }}
+        />
+        <video
+          ref={videoRefB}
+          src={srcB || undefined}
+          autoPlay={activeSlot === 'B'}
+          muted={activeSlot !== 'B'}
+          playsInline
+          controls={activeSlot === 'B'}
+          preload="auto"
+          onEnded={activeSlot === 'B' ? goNext : undefined}
+          style={{
+            position: 'absolute',
+            maxWidth: '100%',
+            maxHeight: '100%',
+            borderRadius: 10,
+            background: '#000',
+            opacity: activeSlot === 'B' ? 1 : 0,
+            pointerEvents: activeSlot === 'B' ? 'auto' : 'none',
+            transition: 'opacity 200ms ease-in-out',
+          }}
         />
       </div>
 
@@ -1952,7 +2010,7 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
         {scenes.map((s, i) => (
           <div
             key={s.id}
-            onClick={() => setIndex(i)}
+            onClick={() => { setActiveSlot(slot => slot === 'A' ? 'B' : 'A'); setIndex(i) }}
             title={`Cena ${i + 1}`}
             style={{
               flex: s.duration,
