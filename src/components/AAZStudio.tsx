@@ -3,6 +3,9 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { VIDEO_ENGINES, DEFAULT_ENGINE_ID, getEngine } from '@/lib/videoEngines'
+import { IMAGE_ENGINES, DEFAULT_IMAGE_ENGINE_ID, getImageEngine } from '@/lib/imageEngines'
+import type { Asset, AssetType } from '@/lib/assets'
+import { LEAD_CHARACTERS, slugify, isLeadId, defaultEmoji } from '@/lib/assets'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -279,11 +282,234 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
   )
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   AtelierLibraryView — grid de assets (leads + criados)
+   Declarado fora do AAZStudio pra não ser recriado a cada render.
+═══════════════════════════════════════════════════════════════ */
+
+function AtelierAssetCard({ asset, onDelete }: { asset: Asset; onDelete: (a: Asset) => void }) {
+  const accent = asset.isOfficial ? C.gold : C.purple
+  const emoji = asset.emoji || defaultEmoji(asset.type)
+  return (
+    <div style={{
+      background: C.card,
+      border: `1px solid ${asset.isOfficial ? `${C.gold}60` : C.border}`,
+      borderRadius: 12,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      position: 'relative',
+    }}>
+      {/* Badge lead */}
+      {asset.isOfficial && (
+        <div style={{ position: 'absolute', top: 8, left: 8, zIndex: 2, background: 'rgba(0,0,0,0.75)', color: C.gold, borderRadius: 20, padding: '3px 10px', fontSize: 10, fontWeight: 700, letterSpacing: '0.5px', border: `1px solid ${C.gold}60` }}>
+          ⭐ LEAD
+        </div>
+      )}
+      {/* Imagem */}
+      <div style={{ aspectRatio: '1/1', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 60 }}>
+        {asset.imageUrls.length > 0 ? (
+          <img src={asset.imageUrls[0]} alt={asset.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          <span>{emoji}</span>
+        )}
+      </div>
+      {/* Info */}
+      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span>{emoji}</span>
+          <span>{asset.name}</span>
+        </div>
+        <div style={{ fontSize: 11, fontFamily: 'monospace', color: accent }}>@{asset.id}</div>
+        {asset.description && (
+          <div style={{ fontSize: 11, color: C.textDim, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{asset.description}</div>
+        )}
+        {asset.tags && asset.tags.length > 0 && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+            {asset.tags.slice(0, 3).map(t => (
+              <span key={t} style={{ fontSize: 9, background: C.border, color: C.textDim, padding: '2px 7px', borderRadius: 10 }}>{t}</span>
+            ))}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+          <button
+            onClick={() => onDelete(asset)}
+            disabled={asset.isOfficial}
+            title={asset.isOfficial ? 'Personagem oficial — não pode ser removido' : 'Deletar'}
+            style={{
+              flex: 1,
+              background: asset.isOfficial ? 'transparent' : `${C.red}15`,
+              border: `1px solid ${asset.isOfficial ? C.border : `${C.red}40`}`,
+              borderRadius: 8,
+              padding: '6px',
+              cursor: asset.isOfficial ? 'not-allowed' : 'pointer',
+              color: asset.isOfficial ? C.textDim : C.red,
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: 'inherit',
+              opacity: asset.isOfficial ? 0.4 : 1,
+            }}
+          >
+            {asset.isOfficial ? '🔒 Oficial' : '× Deletar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AtelierLibraryView({ type, assets, loading, onDelete }: {
+  type: AssetType
+  assets: Asset[]
+  loading: boolean
+  onDelete: (a: Asset) => void
+}) {
+  const filtered = assets.filter(a => a.type === type)
+  const leads = filtered.filter(a => a.isOfficial)
+  const customs = filtered.filter(a => !a.isOfficial)
+
+  if (loading) {
+    return <div style={{ padding: 40, textAlign: 'center', color: C.textDim }}>Carregando...</div>
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {leads.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.gold }}>⭐ Leads — Elenco Oficial</div>
+            <Pill color={C.gold}>{leads.length}</Pill>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
+            {leads.map(a => <AtelierAssetCard key={a.id} asset={a} onDelete={onDelete} />)}
+          </div>
+        </div>
+      )}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.purple }}>Criados por você</div>
+          <Pill color={C.purple}>{customs.length}</Pill>
+        </div>
+        {customs.length === 0 ? (
+          <div style={{ padding: 32, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+            Nenhum {type === 'character' ? 'personagem' : type === 'scenario' ? 'cenário' : 'item'} criado ainda. Use a aba "Criar" pra gerar o primeiro.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
+            {customs.map(a => <AtelierAssetCard key={a.id} asset={a} onDelete={onDelete} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function AtelierDraftsView({ type, drafts, onPromote, onDelete }: {
+  type: AssetType
+  drafts: Asset[]
+  onPromote: (d: Asset) => void
+  onDelete: (d: Asset) => void
+}) {
+  if (drafts.length === 0) {
+    return (
+      <div style={{ padding: 48, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+        <div style={{ fontSize: 32, marginBottom: 8 }}>🗂</div>
+        <div>Nenhum rascunho de {type === 'character' ? 'personagem' : type === 'scenario' ? 'cenário' : 'item'}.</div>
+        <div style={{ fontSize: 11, marginTop: 6 }}>Variações geradas mas não promovidas pra Biblioteca ficam aqui por 30 dias.</div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 12 }}>
+      {drafts.map(d => {
+        const created = new Date(d.createdAt)
+        const daysLeft = Math.max(0, Math.ceil((created.getTime() + 30 * 24 * 60 * 60 * 1000 - Date.now()) / (24 * 60 * 60 * 1000)))
+        return (
+          <div key={d.id} style={{ background: C.card, border: `1px solid ${C.gold}40`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ aspectRatio: '1/1', background: '#000' }}>
+              {d.imageUrls[0] && <img src={d.imageUrls[0]} alt={d.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+            </div>
+            <div style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{d.name}</div>
+              <div style={{ fontSize: 10, color: C.gold }}>Expira em {daysLeft}d</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button
+                  onClick={() => onPromote(d)}
+                  style={{ flex: 1, background: `${C.green}20`, border: `1px solid ${C.green}60`, borderRadius: 6, padding: '5px', cursor: 'pointer', color: C.green, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
+                >
+                  ↑ Promover
+                </button>
+                <button
+                  onClick={() => onDelete(d)}
+                  style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 6, padding: '5px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export function AAZStudio() {
   const router = useRouter()
 
   /* tabs */
   const [tab, setTab] = useState('studio')
+
+  /* ═══════════ ATELIER — geração de assets de imagem ═══════════ */
+  const [atAssets, setAtAssets] = useState<Asset[]>([])
+  const [atDrafts, setAtDrafts] = useState<Asset[]>([])
+  const [atLoading, setAtLoading] = useState(false)
+  const [atType, setAtType] = useState<AssetType>('character')
+  const [atSubTab, setAtSubTab] = useState<'create' | 'library' | 'drafts'>('create')
+  /* form */
+  const [atName, setAtName] = useState('')
+  const [atId, setAtId] = useState('')
+  const [atIdEdited, setAtIdEdited] = useState(false)
+  const [atDesc, setAtDesc] = useState('')
+  const [atEngineId, setAtEngineId] = useState<string>(DEFAULT_IMAGE_ENGINE_ID)
+  const [atVariations, setAtVariations] = useState(4)
+  const [atRefUrl, setAtRefUrl] = useState('')
+  const [atRefining, setAtRefining] = useState(false)
+  const [atGenerating, setAtGenerating] = useState(false)
+  const [atStatus, setAtStatus] = useState('')
+  const [atResults, setAtResults] = useState<string[]>([])
+  const [atSelected, setAtSelected] = useState<Set<number>>(new Set())
+  const [atTags, setAtTags] = useState<string[]>([])
+  const atRefInput = useRef<HTMLInputElement>(null)
+
+  const atEngine = useMemo(() => getImageEngine(atEngineId), [atEngineId])
+  const atTotalCost = (atEngine.pricePerImage * atVariations).toFixed(2)
+
+  const loadAssets = useCallback(async (type?: AssetType) => {
+    setAtLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (type) params.set('type', type)
+      params.set('drafts', '1')
+      const res = await fetch(`/api/assets?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json() as { assets: Asset[]; drafts: Asset[] }
+        setAtAssets(data.assets ?? [])
+        setAtDrafts(data.drafts ?? [])
+      }
+    } catch { /* silent */ }
+    finally { setAtLoading(false) }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'atelier') loadAssets(atType)
+  }, [tab, atType, loadAssets])
+
+  // Auto-slug quando o nome muda (a menos que o usuário tenha editado o id manualmente)
+  useEffect(() => {
+    if (!atIdEdited) setAtId(slugify(atName))
+  }, [atName, atIdEdited])
 
   /* biblioteca — Vercel KV */
   const [library, setLibrary] = useState<Record<string, LibraryEntry>>({})
@@ -1464,6 +1690,159 @@ export function AAZStudio() {
 
   const statusColor = status === 'success' ? C.green : status === 'error' ? C.red : C.gold
 
+  /* ═══════════ ATELIER — ações ═══════════ */
+
+  const atResetForm = () => {
+    setAtName('')
+    setAtId('')
+    setAtIdEdited(false)
+    setAtDesc('')
+    setAtRefUrl('')
+    setAtResults([])
+    setAtSelected(new Set())
+    setAtTags([])
+    setAtStatus('')
+  }
+
+  const atRefinePrompt = async () => {
+    if (!atDesc.trim()) { setAtStatus('Escreva a descrição antes.'); return }
+    setAtRefining(true); setAtStatus('Claude refinando o prompt...')
+    try {
+      const res = await fetch('/api/image-director', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: atType, description: atDesc, has_reference: !!atRefUrl }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const data = await res.json() as { prompt: string; name_suggestion: string; tags: string[] }
+      setAtDesc(data.prompt)
+      if (!atName.trim() && data.name_suggestion) {
+        setAtName(data.name_suggestion)
+      }
+      if (data.tags?.length) setAtTags(data.tags)
+      setAtStatus('Prompt refinado ✓')
+    } catch (err) {
+      setAtStatus(err instanceof Error ? err.message : 'Erro ao refinar.')
+    } finally {
+      setAtRefining(false)
+    }
+  }
+
+  const atUploadRef = async (file: File) => {
+    try {
+      const url = await toBlobUrl(file)
+      setAtRefUrl(url)
+      setAtStatus('Referência anexada ✓')
+    } catch (err) {
+      setAtStatus(err instanceof Error ? err.message : 'Falha no upload.')
+    }
+  }
+
+  const atGenerate = async () => {
+    if (!atDesc.trim()) { setAtStatus('Escreva a descrição antes.'); return }
+    if (!atName.trim()) { setAtStatus('Dê um nome pro asset.'); return }
+    setAtGenerating(true); setAtStatus('Gerando variações...'); setAtResults([]); setAtSelected(new Set())
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engineId: atEngineId,
+          prompt: atDesc,
+          num_outputs: atVariations,
+          reference_image_url: atRefUrl || undefined,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const data = await res.json() as { imageUrls: string[]; errors?: string[] }
+      setAtResults(data.imageUrls ?? [])
+      setAtStatus(`${data.imageUrls?.length ?? 0}/${atVariations} variações geradas. Selecione quais salvar.`)
+
+      // Salva todas como drafts imediatamente (caminho seguro — o usuário
+      // promove depois as que quiser). Drafts expiram em 30 dias.
+      for (const url of data.imageUrls ?? []) {
+        fetch('/api/assets', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: atType,
+            name: atName,
+            description: atDesc,
+            imageUrls: [url],
+            prompt: atDesc,
+            engineId: atEngineId,
+            sourceRefUrl: atRefUrl || undefined,
+            isDraft: true,
+            tags: atTags,
+          }),
+        }).catch(() => {})
+      }
+    } catch (err) {
+      setAtStatus(err instanceof Error ? err.message : 'Erro ao gerar.')
+    } finally {
+      setAtGenerating(false)
+    }
+  }
+
+  const atSaveSelected = async () => {
+    if (atSelected.size === 0) { setAtStatus('Selecione ao menos uma variação.'); return }
+    const urls = Array.from(atSelected).map(i => atResults[i]).filter(Boolean)
+    const id = (atId || slugify(atName)).toLowerCase()
+    setAtStatus('Salvando na Biblioteca...')
+    try {
+      const res = await fetch('/api/assets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          type: atType,
+          name: atName,
+          description: atDesc,
+          imageUrls: urls,
+          prompt: atDesc,
+          engineId: atEngineId,
+          sourceRefUrl: atRefUrl || undefined,
+          tags: atTags,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      setAtStatus(`✓ Salvo como @${id}`)
+      atResetForm()
+      await loadAssets(atType)
+      setAtSubTab('library')
+    } catch (err) {
+      setAtStatus(err instanceof Error ? err.message : 'Erro ao salvar.')
+    }
+  }
+
+  const atDiscardResults = () => {
+    setAtResults([])
+    setAtSelected(new Set())
+    setAtStatus('')
+  }
+
+  const atDeleteAsset = async (asset: Asset) => {
+    if (asset.isOfficial) return
+    const params = new URLSearchParams({ type: asset.type })
+    if (asset.isDraft) params.set('draft', '1')
+    try {
+      await fetch(`/api/assets/${encodeURIComponent(asset.id)}?${params.toString()}`, { method: 'DELETE' })
+      await loadAssets(atType)
+    } catch {}
+  }
+
+  const atPromoteDraft = async (draft: Asset) => {
+    const params = new URLSearchParams({ type: draft.type, draft: '1' })
+    try {
+      await fetch(`/api/assets/${encodeURIComponent(draft.id)}?${params.toString()}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isDraft: false, id: slugify(draft.name) }),
+      })
+      await loadAssets(atType)
+    } catch {}
+  }
+
   /* ─────────────────────────── RENDER ─────────────────────────── */
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
@@ -1488,7 +1867,7 @@ export function AAZStudio() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
-        {[['studio', 'Estúdio'], ['library', 'Assets']].map(([id, lbl]) => (
+        {[['studio', 'Estúdio'], ['atelier', '🎨 Atelier'], ['library', 'Assets']].map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
@@ -2208,6 +2587,355 @@ export function AAZStudio() {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ══════════ ATELIER — Geração de assets de imagem ══════════ */}
+      {tab === 'atelier' && (
+        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+          {/* Header da aba */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>🎨 Atelier</div>
+              <div style={{ fontSize: 13, color: C.textDim, marginTop: 2 }}>Crie personagens, cenários e itens pra suas cenas</div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Pill color={C.purple}>{atAssets.filter(a => !a.isOfficial).length} criados</Pill>
+              <Pill color={C.gold}>{atDrafts.length} rascunhos</Pill>
+            </div>
+          </div>
+
+          {/* Seletor de tipo */}
+          <div style={{ display: 'flex', gap: 8 }}>
+            {([
+              ['character', '👤 Personagem'],
+              ['scenario', '🏞 Cenário'],
+              ['item', '🧺 Item'],
+            ] as [AssetType, string][]).map(([t, lbl]) => (
+              <button
+                key={t}
+                onClick={() => { setAtType(t); atResetForm() }}
+                style={{
+                  flex: 1,
+                  background: atType === t ? C.purpleGlow : C.card,
+                  border: `1px solid ${atType === t ? C.purple : C.border}`,
+                  borderRadius: 10,
+                  padding: '12px',
+                  cursor: 'pointer',
+                  color: atType === t ? C.purple : C.textDim,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  fontFamily: 'inherit',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          {/* Sub-tabs */}
+          <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}` }}>
+            {([
+              ['create', '✨ Criar'],
+              ['library', `⭐ Biblioteca (${atAssets.length})`],
+              ['drafts', `🗂 Rascunhos (${atDrafts.length})`],
+            ] as [typeof atSubTab, string][]).map(([id, lbl]) => (
+              <button
+                key={id}
+                onClick={() => setAtSubTab(id)}
+                style={{
+                  flex: 1,
+                  padding: '10px',
+                  borderRadius: 8,
+                  background: atSubTab === id ? C.surface : 'transparent',
+                  border: atSubTab === id ? `1px solid ${C.border}` : '1px solid transparent',
+                  cursor: 'pointer',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: atSubTab === id ? C.text : C.textDim,
+                  fontFamily: 'inherit',
+                }}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
+
+          {/* ═══ CRIAR ═══ */}
+          {atSubTab === 'create' && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+
+              {/* Esquerda — formulário */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+                <div>
+                  <Label>Nome</Label>
+                  <Input
+                    value={atName}
+                    onChange={e => setAtName(e.target.value)}
+                    placeholder={atType === 'character' ? 'Faraó' : atType === 'scenario' ? 'Nilo ao entardecer' : 'Cajado de madeira'}
+                  />
+                </div>
+
+                <div>
+                  <Label>@id <span style={{ fontSize: 10, color: C.textDim, fontWeight: 400 }}>(auto-gerado, editável)</span></Label>
+                  <Input
+                    value={atId}
+                    onChange={e => { setAtId(slugify(e.target.value)); setAtIdEdited(true) }}
+                    style={{ fontFamily: 'monospace' }}
+                    placeholder="farao"
+                  />
+                </div>
+
+                <div>
+                  <Label>Descrição</Label>
+                  <textarea
+                    value={atDesc}
+                    onChange={e => setAtDesc(e.target.value)}
+                    placeholder={
+                      atType === 'character'
+                        ? 'Faraó do Egito antigo, adulto, coroa dupla (vermelha e branca), olhar severo, manto real dourado...'
+                        : atType === 'scenario'
+                        ? 'Interior do palácio egípcio ao fim da tarde, colunas de pedra, luz dourada entrando pelas janelas altas...'
+                        : 'Cajado de madeira, gasto e polido pelo uso, com correia de couro perto do cabo...'
+                    }
+                    style={{
+                      width: '100%',
+                      minHeight: 140,
+                      background: C.card,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 8,
+                      padding: '10px 14px',
+                      color: C.text,
+                      fontSize: 14,
+                      fontFamily: 'inherit',
+                      outline: 'none',
+                      resize: 'vertical',
+                      boxSizing: 'border-box',
+                    }}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      onClick={atRefinePrompt}
+                      disabled={atRefining || !atDesc.trim()}
+                      style={{
+                        background: C.purpleGlow,
+                        border: `1px solid ${C.purple}50`,
+                        borderRadius: 8,
+                        padding: '8px 14px',
+                        cursor: atRefining ? 'wait' : 'pointer',
+                        color: C.purple,
+                        fontSize: 13,
+                        fontWeight: 600,
+                        fontFamily: 'inherit',
+                        opacity: (atRefining || !atDesc.trim()) ? 0.5 : 1,
+                      }}
+                    >
+                      {atRefining ? '⟳ Refinando...' : '✨ Refinar com IA'}
+                    </button>
+                    <div style={{ flex: 1, textAlign: 'right', fontSize: 11, color: C.textDim, alignSelf: 'center' }}>
+                      {atDesc.length} caracteres
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Referência opcional</Label>
+                  {atRefUrl ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img src={atRefUrl} alt="ref" style={{ width: 120, height: 120, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
+                      <button onClick={() => setAtRefUrl('')} style={{ position: 'absolute', top: -6, right: -6, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 20, height: 20, cursor: 'pointer', fontSize: 12 }}>×</button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => atRefInput.current?.click()}
+                        style={{ background: C.card, border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px 20px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}
+                      >
+                        📎 Anexar imagem (pose, estilo, ponto de partida)
+                      </button>
+                      <input
+                        ref={atRefInput}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) atUploadRef(f) }}
+                      />
+                    </>
+                  )}
+                </div>
+
+                <div>
+                  <Label>Motor de imagem</Label>
+                  <select
+                    value={atEngineId}
+                    onChange={e => setAtEngineId(e.target.value)}
+                    style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, fontFamily: 'inherit', width: '100%', outline: 'none' }}
+                  >
+                    {IMAGE_ENGINES.map(eng => (
+                      <option key={eng.id} value={eng.id}>
+                        {eng.name} · ~${eng.pricePerImage}/img
+                      </option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{atEngine.description}</div>
+                </div>
+
+                <div>
+                  <Label>Variações</Label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {[1, 2, 4, 6, 8].map(n => (
+                      <button
+                        key={n}
+                        onClick={() => setAtVariations(n)}
+                        style={{
+                          flex: 1,
+                          background: atVariations === n ? `${C.purple}20` : C.card,
+                          border: `1px solid ${atVariations === n ? C.purple : C.border}`,
+                          borderRadius: 8,
+                          padding: '10px',
+                          cursor: 'pointer',
+                          color: atVariations === n ? C.text : C.textDim,
+                          fontSize: 13,
+                          fontWeight: 600,
+                          fontFamily: 'monospace',
+                        }}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ fontSize: 13, color: C.textDim }}>{atVariations} × ~${atEngine.pricePerImage}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>~${atTotalCost}</div>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginTop: 4 }}>Preço estimado · {atEngine.name}</div>
+                </div>
+
+                <button
+                  onClick={atGenerate}
+                  disabled={atGenerating || !atDesc.trim() || !atName.trim()}
+                  style={{
+                    background: atGenerating ? C.card : C.purple,
+                    border: `1px solid ${atGenerating ? C.border : C.purple}`,
+                    borderRadius: 12,
+                    padding: '14px',
+                    cursor: (atGenerating || !atDesc.trim() || !atName.trim()) ? 'not-allowed' : 'pointer',
+                    color: atGenerating ? C.textDim : '#fff',
+                    fontSize: 15,
+                    fontWeight: 700,
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {atGenerating ? '⟳ Gerando...' : `⚡ Gerar ${atVariations} variações`}
+                </button>
+
+                {atStatus && (
+                  <div style={{ fontSize: 12, color: C.textDim, textAlign: 'center' }}>{atStatus}</div>
+                )}
+              </div>
+
+              {/* Direita — resultados */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Label>Resultados {atResults.length > 0 && `(${atResults.length})`}</Label>
+                  {atResults.length > 0 && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        onClick={atSaveSelected}
+                        disabled={atSelected.size === 0}
+                        style={{ background: C.green, border: `1px solid ${C.green}`, borderRadius: 8, padding: '6px 12px', cursor: atSelected.size === 0 ? 'not-allowed' : 'pointer', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', opacity: atSelected.size === 0 ? 0.5 : 1 }}
+                      >
+                        Salvar {atSelected.size} na Biblioteca
+                      </button>
+                      <button
+                        onClick={atDiscardResults}
+                        style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', cursor: 'pointer', color: C.textDim, fontSize: 12, fontFamily: 'inherit' }}
+                      >
+                        Descartar
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {atResults.length === 0 ? (
+                  <div style={{ flex: 1, minHeight: 360, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', border: `1px dashed ${C.border}`, borderRadius: 10, color: C.textDim, fontSize: 13, textAlign: 'center', padding: 20 }}>
+                    <div style={{ fontSize: 40, marginBottom: 12 }}>{defaultEmoji(atType)}</div>
+                    <div>Preencha a descrição e clique "Gerar"</div>
+                    <div style={{ fontSize: 11, marginTop: 6, maxWidth: 260 }}>As {atVariations} variações aparecem aqui. Você escolhe quais ficam na Biblioteca — o resto vai pra Rascunhos por 30 dias.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                    {atResults.map((url, i) => {
+                      const isSel = atSelected.has(i)
+                      return (
+                        <div
+                          key={i}
+                          onClick={() => {
+                            setAtSelected(prev => {
+                              const next = new Set(prev)
+                              if (next.has(i)) next.delete(i); else next.add(i)
+                              return next
+                            })
+                          }}
+                          style={{
+                            position: 'relative',
+                            cursor: 'pointer',
+                            borderRadius: 10,
+                            overflow: 'hidden',
+                            border: `3px solid ${isSel ? C.green : 'transparent'}`,
+                            transition: 'border-color 0.15s',
+                            aspectRatio: '1/1',
+                            background: '#000',
+                          }}
+                        >
+                          <img src={url} alt={`var ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <div style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', color: '#fff', borderRadius: 20, padding: '3px 10px', fontSize: 11, fontWeight: 600 }}>
+                            #{i + 1}
+                          </div>
+                          {isSel && (
+                            <div style={{ position: 'absolute', top: 6, right: 6, background: C.green, color: '#fff', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700 }}>
+                              ✓
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {atResults.length > 0 && atSelected.size === 0 && (
+                  <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center', fontStyle: 'italic' }}>
+                    Clique nas variações pra selecionar. Não selecionadas ficam em Rascunhos por 30 dias.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ═══ BIBLIOTECA ═══ */}
+          {atSubTab === 'library' && (
+            <AtelierLibraryView
+              type={atType}
+              assets={atAssets}
+              loading={atLoading}
+              onDelete={atDeleteAsset}
+            />
+          )}
+
+          {/* ═══ RASCUNHOS ═══ */}
+          {atSubTab === 'drafts' && (
+            <AtelierDraftsView
+              type={atType}
+              drafts={atDrafts.filter(d => d.type === atType)}
+              onPromote={atPromoteDraft}
+              onDelete={atDeleteAsset}
+            />
+          )}
         </div>
       )}
 
