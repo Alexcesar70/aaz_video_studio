@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 
 /* ═══════════════════════════════════════════════════════════════
@@ -448,6 +448,57 @@ export function AAZStudio() {
       })
     } catch {}
   }
+
+  /**
+   * Reordena uma cena dentro do mesmo episódio.
+   * Move a cena com sceneId para a posição targetIndex (0-based) na
+   * lista ordenada por sceneNumber. Reatribui os números de cena
+   * de 1 a N sequencialmente e persiste todas as mudanças.
+   */
+  const reorderScene = async (sceneId: string, targetIndex: number) => {
+    const scene = sceneAssets.find(s => s.id === sceneId)
+    if (!scene) return
+    // Pega todas as cenas do mesmo episódio ordenadas
+    const siblings = sceneAssets
+      .filter(s => s.episodeId === scene.episodeId)
+      .sort((a, b) => a.sceneNumber - b.sceneNumber)
+    const fromIndex = siblings.findIndex(s => s.id === sceneId)
+    if (fromIndex === -1) return
+    // Ajusta targetIndex se estiver fora dos limites
+    let to = Math.max(0, Math.min(targetIndex, siblings.length - 1))
+    if (fromIndex === to) return
+    // Move a cena
+    const reordered = [...siblings]
+    const [moved] = reordered.splice(fromIndex, 1)
+    // Se estava sendo removida antes do target, diminui to em 1 pra compensar
+    if (fromIndex < to) to = to - 1
+    reordered.splice(to, 0, moved)
+    // Reatribui sceneNumber
+    const updates: { id: string; sceneNumber: number }[] = []
+    reordered.forEach((s, i) => {
+      const newNumber = i + 1
+      if (s.sceneNumber !== newNumber) {
+        updates.push({ id: s.id, sceneNumber: newNumber })
+      }
+    })
+    // Atualiza state otimista
+    setSceneAssets(prev => prev.map(s => {
+      const upd = updates.find(u => u.id === s.id)
+      return upd ? { ...s, sceneNumber: upd.sceneNumber } : s
+    }))
+    // Persiste no backend (paralelo)
+    await Promise.all(updates.map(u =>
+      fetch(`/api/scenes/${encodeURIComponent(u.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sceneNumber: u.sceneNumber })
+      }).catch(() => {})
+    ))
+  }
+
+  /* State de drag-and-drop da faixa contextual */
+  const [draggingSceneId, setDraggingSceneId] = useState<string | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
 
   /* episodes filtrados pelo projeto selecionado */
   const filteredEpisodes = currentProject
@@ -1537,20 +1588,77 @@ export function AAZStudio() {
                       Nenhuma cena neste episódio ainda. Gere a primeira abaixo.
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6 }}>
-                      {epScenes.map(scene => (
-                        <div key={scene.id} style={{ flexShrink: 0, width: 160, background: C.card, border: `1px solid ${scene.status === 'approved' ? `${C.green}60` : C.border}`, borderRadius: 10, overflow: 'hidden', opacity: scene.status === 'rejected' ? 0.55 : 1 }}>
+                    <div
+                      style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6 }}
+                      onDragOver={e => {
+                        if (!draggingSceneId) return
+                        e.preventDefault()
+                      }}
+                      onDrop={e => {
+                        if (!draggingSceneId || dragOverIdx == null) return
+                        e.preventDefault()
+                        reorderScene(draggingSceneId, dragOverIdx)
+                        setDraggingSceneId(null)
+                        setDragOverIdx(null)
+                      }}
+                    >
+                      {epScenes.map((scene, idx) => (
+                        <React.Fragment key={scene.id}>
+                          {/* Indicador de drop entre cards */}
+                          {draggingSceneId && draggingSceneId !== scene.id && (
+                            <div
+                              onDragOver={e => { e.preventDefault(); setDragOverIdx(idx) }}
+                              style={{
+                                width: dragOverIdx === idx ? 10 : 4,
+                                alignSelf: 'stretch',
+                                background: dragOverIdx === idx ? C.purple : 'transparent',
+                                borderRadius: 3,
+                                transition: 'width 0.12s, background 0.12s',
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
                           <div
-                            style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', cursor: 'pointer' }}
-                            onClick={() => setPlayerModalScene(scene)}
+                            draggable
+                            onDragStart={e => {
+                              setDraggingSceneId(scene.id)
+                              e.dataTransfer.effectAllowed = 'move'
+                              // Uma imagem fantasma (opcional)
+                              if (e.dataTransfer.setDragImage) {
+                                const el = e.currentTarget as HTMLElement
+                                e.dataTransfer.setDragImage(el, el.offsetWidth / 2, el.offsetHeight / 2)
+                              }
+                            }}
+                            onDragEnd={() => { setDraggingSceneId(null); setDragOverIdx(null) }}
+                            onDragOver={e => {
+                              if (!draggingSceneId || draggingSceneId === scene.id) return
+                              e.preventDefault()
+                              // Se arrasta por cima do card, considera dropar depois dele
+                              setDragOverIdx(idx + 1)
+                            }}
+                            style={{
+                              flexShrink: 0,
+                              width: 160,
+                              background: C.card,
+                              border: `1px solid ${scene.status === 'approved' ? `${C.green}60` : C.border}`,
+                              borderRadius: 10,
+                              overflow: 'hidden',
+                              opacity: draggingSceneId === scene.id ? 0.35 : (scene.status === 'rejected' ? 0.55 : 1),
+                              cursor: draggingSceneId ? 'grabbing' : 'grab',
+                              transition: 'opacity 0.15s',
+                            }}
+                          >
+                          <div
+                            style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', cursor: draggingSceneId ? 'grabbing' : 'pointer' }}
+                            onClick={() => !draggingSceneId && setPlayerModalScene(scene)}
                           >
                             <video
                               src={scene.videoUrl}
                               muted
                               playsInline
                               preload="metadata"
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                              onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+                              onMouseEnter={e => !draggingSceneId && (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
                               onMouseLeave={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0 }}
                             />
                             <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
@@ -1561,6 +1669,11 @@ export function AAZStudio() {
                               title={scene.status === 'approved' ? 'Aprovada' : scene.status === 'rejected' ? 'Rejeitada' : 'Rascunho'}
                               style={{ position: 'absolute', top: 6, left: 6, width: 8, height: 8, borderRadius: '50%', background: scene.status === 'approved' ? C.green : scene.status === 'rejected' ? C.red : C.gold, boxShadow: '0 0 4px rgba(0,0,0,0.5)' }}
                             />
+                            {/* Drag handle */}
+                            <div
+                              title="Arrastar para reordenar"
+                              style={{ position: 'absolute', top: 6, right: 6, color: '#fff', fontSize: 12, background: 'rgba(0,0,0,0.5)', borderRadius: 4, padding: '1px 5px', lineHeight: 1 }}
+                            >⠿</div>
                           </div>
                           <div style={{ padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                             <div style={{ fontSize: 11, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -1576,8 +1689,23 @@ export function AAZStudio() {
                               >🔗</button>
                             </div>
                           </div>
-                        </div>
+                          </div>
+                        </React.Fragment>
                       ))}
+                      {/* Indicador de drop no final */}
+                      {draggingSceneId && (
+                        <div
+                          onDragOver={e => { e.preventDefault(); setDragOverIdx(epScenes.length) }}
+                          style={{
+                            width: dragOverIdx === epScenes.length ? 10 : 4,
+                            alignSelf: 'stretch',
+                            background: dragOverIdx === epScenes.length ? C.purple : 'transparent',
+                            borderRadius: 3,
+                            transition: 'width 0.12s, background 0.12s',
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -2370,10 +2498,12 @@ export function AAZStudio() {
 function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; title: string; onClose: () => void }) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
-  // Dois slots A/B para alternância: um mostra o atual, o outro pré-carrega o próximo
+  // Dois slots A/B para alternância: um mostra o atual, o outro pré-carrega e pré-inicia o próximo
   const [activeSlot, setActiveSlot] = useState<'A' | 'B'>('A')
   const videoRefA = useRef<HTMLVideoElement>(null)
   const videoRefB = useRef<HTMLVideoElement>(null)
+  // Controla se o slot inativo já foi "primed" (iniciou o play silencioso)
+  const primedRef = useRef<'A' | 'B' | null>(null)
 
   const current = scenes[index]
   const next = scenes[index + 1]
@@ -2383,34 +2513,75 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
   const srcA = activeSlot === 'A' ? current?.videoUrl : next?.videoUrl
   const srcB = activeSlot === 'B' ? current?.videoUrl : next?.videoUrl
 
-  const goNext = () => {
+  const getActiveVideo = () => activeSlot === 'A' ? videoRefA.current : videoRefB.current
+  const getInactiveVideo = () => activeSlot === 'A' ? videoRefB.current : videoRefA.current
+  const getInactiveSlot = (): 'A' | 'B' => activeSlot === 'A' ? 'B' : 'A'
+
+  const goNext = useCallback(() => {
     if (index >= scenes.length - 1) return
     // Alterna o slot ativo (crossfade via CSS opacity) e avança o índice
     setActiveSlot(s => s === 'A' ? 'B' : 'A')
     setIndex(i => i + 1)
-  }
-  const goPrev = () => {
+    primedRef.current = null
+  }, [index, scenes.length])
+
+  const goPrev = useCallback(() => {
     if (index === 0) return
     setActiveSlot(s => s === 'A' ? 'B' : 'A')
     setIndex(i => i - 1)
-  }
+    primedRef.current = null
+  }, [index])
 
-  const togglePause = () => {
-    const v = activeSlot === 'A' ? videoRefA.current : videoRefB.current
+  const togglePause = useCallback(() => {
+    const v = getActiveVideo()
     if (!v) return
     if (v.paused) { v.play().catch(() => {}); setPaused(false) }
     else { v.pause(); setPaused(true) }
-  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSlot])
 
-  // Auto-play do vídeo ativo quando index/slot mudam
+  /**
+   * Auto-play do vídeo ativo quando index/slot mudam.
+   * Reset para 0 e play imediato. O fade acontece junto.
+   */
   useEffect(() => {
-    const v = activeSlot === 'A' ? videoRefA.current : videoRefB.current
+    const v = getActiveVideo()
     if (v) {
       v.currentTime = 0
+      v.muted = false
       v.play().catch(() => {})
       setPaused(false)
     }
+    // O vídeo inativo também deve estar pronto (carregado) com currentTime 0
+    const inactive = getInactiveVideo()
+    if (inactive) {
+      inactive.currentTime = 0
+      inactive.muted = true
+      inactive.pause()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index, activeSlot])
+
+  /**
+   * PRE-START: quando o vídeo ativo está nos últimos 0.3s, já inicia
+   * silenciosamente a reprodução do próximo slot (invisível). Assim,
+   * quando o crossfade acontece, o vídeo novo JÁ está tocando nos
+   * primeiros frames — elimina o "frame congelado" que quebra a continuidade.
+   */
+  const handleTimeUpdate = () => {
+    const v = getActiveVideo()
+    if (!v || !v.duration) return
+    const remaining = v.duration - v.currentTime
+    if (remaining < 0.35 && !primedRef.current && index < scenes.length - 1) {
+      const inactive = getInactiveVideo()
+      if (inactive) {
+        inactive.currentTime = 0
+        inactive.muted = true
+        inactive.play().catch(() => {})
+        primedRef.current = getInactiveSlot()
+      }
+    }
+  }
 
   // Navegação por teclado
   useEffect(() => {
@@ -2421,8 +2592,7 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [index, activeSlot])
+  }, [goNext, goPrev, togglePause])
 
   if (!current) return null
 
@@ -2451,12 +2621,11 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
         <video
           ref={videoRefA}
           src={srcA || undefined}
-          autoPlay={activeSlot === 'A'}
-          muted={activeSlot !== 'A'}
           playsInline
           controls={activeSlot === 'A'}
           preload="auto"
           onEnded={activeSlot === 'A' ? goNext : undefined}
+          onTimeUpdate={activeSlot === 'A' ? handleTimeUpdate : undefined}
           style={{
             position: 'absolute',
             maxWidth: '100%',
@@ -2465,18 +2634,17 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
             background: '#000',
             opacity: activeSlot === 'A' ? 1 : 0,
             pointerEvents: activeSlot === 'A' ? 'auto' : 'none',
-            transition: 'opacity 200ms ease-in-out',
+            transition: 'opacity 400ms ease-in-out',
           }}
         />
         <video
           ref={videoRefB}
           src={srcB || undefined}
-          autoPlay={activeSlot === 'B'}
-          muted={activeSlot !== 'B'}
           playsInline
           controls={activeSlot === 'B'}
           preload="auto"
           onEnded={activeSlot === 'B' ? goNext : undefined}
+          onTimeUpdate={activeSlot === 'B' ? handleTimeUpdate : undefined}
           style={{
             position: 'absolute',
             maxWidth: '100%',
@@ -2485,7 +2653,7 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
             background: '#000',
             opacity: activeSlot === 'B' ? 1 : 0,
             pointerEvents: activeSlot === 'B' ? 'auto' : 'none',
-            transition: 'opacity 200ms ease-in-out',
+            transition: 'opacity 400ms ease-in-out',
           }}
         />
       </div>
@@ -2495,7 +2663,7 @@ function SequentialPlayer({ scenes, title, onClose }: { scenes: SceneAsset[]; ti
         {scenes.map((s, i) => (
           <div
             key={s.id}
-            onClick={() => { setActiveSlot(slot => slot === 'A' ? 'B' : 'A'); setIndex(i) }}
+            onClick={() => { setActiveSlot(slot => slot === 'A' ? 'B' : 'A'); setIndex(i); primedRef.current = null }}
             title={`Cena ${i + 1}`}
             style={{
               flex: s.duration,
