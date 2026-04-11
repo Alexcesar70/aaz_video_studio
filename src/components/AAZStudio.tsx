@@ -358,70 +358,6 @@ function AtelierAssetCard({ asset, onDelete }: { asset: Asset; onDelete: (a: Ass
   )
 }
 
-function AtelierLibraryView({ type, assets, loading, onDelete }: {
-  type: AssetType
-  assets: Asset[]
-  loading: boolean
-  onDelete: (a: Asset) => void
-}) {
-  const [search, setSearch] = useState('')
-  const q = search.trim().toLowerCase()
-
-  const filtered = assets.filter(a => a.type === type).filter(a => {
-    if (!q) return true
-    return (
-      a.name.toLowerCase().includes(q) ||
-      a.id.toLowerCase().includes(q) ||
-      (a.description ?? '').toLowerCase().includes(q) ||
-      (a.tags ?? []).some(t => t.toLowerCase().includes(q))
-    )
-  })
-  const leads = filtered.filter(a => a.isOfficial)
-  const customs = filtered.filter(a => !a.isOfficial)
-
-  if (loading) {
-    return <div style={{ padding: 40, textAlign: 'center', color: C.textDim }}>Carregando...</div>
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <input
-        type="text"
-        placeholder="Buscar por nome, id, descrição ou tag..."
-        value={search}
-        onChange={e => setSearch(e.target.value)}
-        style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', width: '100%', maxWidth: 420, boxSizing: 'border-box' }}
-      />
-      {leads.length > 0 && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.gold }}>⭐ Leads — Elenco Oficial</div>
-            <Pill color={C.gold}>{leads.length}</Pill>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
-            {leads.map(a => <AtelierAssetCard key={a.id} asset={a} onDelete={onDelete} />)}
-          </div>
-        </div>
-      )}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.purple }}>Criados por você</div>
-          <Pill color={C.purple}>{customs.length}</Pill>
-        </div>
-        {customs.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
-            {q ? `Nada corresponde a "${q}".` : `Nenhum ${type === 'character' ? 'personagem' : type === 'scenario' ? 'cenário' : 'item'} criado ainda. Use a aba "Criar" pra gerar o primeiro.`}
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
-            {customs.map(a => <AtelierAssetCard key={a.id} asset={a} onDelete={onDelete} />)}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 /* ═══════════════════════════════════════════════════════════════
    SceneAssetsStrip — faixa visual sempre presente no Estúdio
    mostrando os assets que estão linkados à cena em edição.
@@ -903,7 +839,8 @@ export function AAZStudio() {
   const [atDrafts, setAtDrafts] = useState<Asset[]>([])
   const [atLoading, setAtLoading] = useState(false)
   const [atType, setAtType] = useState<AssetType>('character')
-  const [atSubTab, setAtSubTab] = useState<'create' | 'library' | 'drafts'>('create')
+  /* Atelier: agora só tem o workflow de Criar — Biblioteca e Rascunhos
+     moraram pra aba Assets (organização melhor). Removido atSubTab. */
   /* form */
   const [atName, setAtName] = useState('')
   const [atId, setAtId] = useState('')
@@ -918,6 +855,7 @@ export function AAZStudio() {
   const [atResults, setAtResults] = useState<string[]>([])
   const [atSelected, setAtSelected] = useState<Set<number>>(new Set())
   const [atTags, setAtTags] = useState<string[]>([])
+  const [atLastSaved, setAtLastSaved] = useState<{ id: string; name: string; type: AssetType; imageUrl: string } | null>(null)
   const atRefInput = useRef<HTMLInputElement>(null)
 
   const atEngine = useMemo(() => getImageEngine(atEngineId), [atEngineId])
@@ -1278,7 +1216,7 @@ export function AAZStudio() {
     }
   }, [currentProject, currentEpisode])
 
-  const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'scenes'>('chars')
+  const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'props' | 'scenes' | 'drafts'>('chars')
 
   /* scene director — compartilhado entre modo inline (Estúdio) e aba separada (legada) */
   const [sdDesc, setSdDesc] = useState('')
@@ -2270,6 +2208,9 @@ export function AAZStudio() {
     if (atSelected.size === 0) { setAtStatus('Selecione ao menos uma variação.'); return }
     const urls = Array.from(atSelected).map(i => atResults[i]).filter(Boolean)
     const id = (atId || slugify(atName)).toLowerCase()
+    const savedName = atName
+    const savedType = atType
+    const firstUrl = urls[0]
     setAtStatus('Salvando na Biblioteca...')
     try {
       const res = await fetch('/api/assets', {
@@ -2288,10 +2229,15 @@ export function AAZStudio() {
         }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
-      setAtStatus(`✓ Salvo como @${id}`)
+      // Mostra banner de sucesso acima do form. NÃO muda de sub-aba —
+      // usuário fica no Criar e decide se quer ir pra Biblioteca ou
+      // criar outro asset.
+      setAtLastSaved({ id, name: savedName, type: savedType, imageUrl: firstUrl })
+      setAtStatus('')
       atResetForm()
       await loadAssets(atType)
-      setAtSubTab('library')
+      // Toast auto-dismiss em 10s
+      window.setTimeout(() => setAtLastSaved(null), 10000)
     } catch (err) {
       setAtStatus(err instanceof Error ? err.message : 'Erro ao salvar.')
     }
@@ -3169,77 +3115,99 @@ export function AAZStudio() {
       {tab === 'atelier' && (
         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-          {/* Header da aba */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>🎨 Atelier</div>
-              <div style={{ fontSize: 13, color: C.textDim, marginTop: 2 }}>Crie personagens, cenários e itens pra suas cenas</div>
+          {/* Header da aba — apresentação do workshop */}
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 28 }}>✨</span>
+              <span>Criar novo asset</span>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <Pill color={C.purple}>{atAssets.filter(a => !a.isOfficial).length} criados</Pill>
-              <Pill color={C.gold}>{atDrafts.length} rascunhos</Pill>
+            <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
+              Gere personagens, cenários e itens únicos para suas cenas. Os assets criados ficam disponíveis em <button onClick={() => setTab('library')} style={{ background: 'transparent', border: 'none', color: C.purple, textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}>Assets</button>.
             </div>
           </div>
 
-          {/* Seletor de tipo */}
-          <div style={{ display: 'flex', gap: 8 }}>
-            {([
-              ['character', '👤 Personagem'],
-              ['scenario', '🏞 Cenário'],
-              ['item', '🧺 Item'],
-            ] as [AssetType, string][]).map(([t, lbl]) => (
-              <button
-                key={t}
-                onClick={() => { setAtType(t); atResetForm() }}
-                style={{
-                  flex: 1,
-                  background: atType === t ? C.purpleGlow : C.card,
-                  border: `1px solid ${atType === t ? C.purple : C.border}`,
-                  borderRadius: 10,
-                  padding: '12px',
-                  cursor: 'pointer',
-                  color: atType === t ? C.purple : C.textDim,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  fontFamily: 'inherit',
-                  transition: 'all 0.15s',
-                }}
-              >
-                {lbl}
-              </button>
-            ))}
+          {/* Seletor de tipo — ação primária, bem destacado */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.8px', marginBottom: 10 }}>
+              O QUE VOCÊ QUER CRIAR?
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {([
+                ['character', '👤', 'Personagem', 'Pessoas, animais, criaturas'],
+                ['scenario', '🏞', 'Cenário', 'Lugares, ambientes, fundos'],
+                ['item', '🧺', 'Item / Prop', 'Objetos, utensílios, adereços'],
+              ] as [AssetType, string, string, string][]).map(([t, icon, lbl, sub]) => (
+                <button
+                  key={t}
+                  onClick={() => { setAtType(t); atResetForm() }}
+                  style={{
+                    background: atType === t ? C.purpleGlow : C.card,
+                    border: `2px solid ${atType === t ? C.purple : C.border}`,
+                    borderRadius: 14,
+                    padding: '18px 14px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.2s',
+                    boxShadow: atType === t ? `0 4px 20px ${C.purple}25` : 'none',
+                  }}
+                >
+                  <span style={{ fontSize: 36 }}>{icon}</span>
+                  <span style={{ fontSize: 15, fontWeight: 700, color: atType === t ? C.purple : C.text }}>{lbl}</span>
+                  <span style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>{sub}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Sub-tabs */}
-          <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}` }}>
-            {([
-              ['create', '✨ Criar'],
-              ['library', `⭐ Biblioteca (${atAssets.length})`],
-              ['drafts', `🗂 Rascunhos (${atDrafts.length})`],
-            ] as [typeof atSubTab, string][]).map(([id, lbl]) => (
-              <button
-                key={id}
-                onClick={() => setAtSubTab(id)}
-                style={{
-                  flex: 1,
-                  padding: '10px',
-                  borderRadius: 8,
-                  background: atSubTab === id ? C.surface : 'transparent',
-                  border: atSubTab === id ? `1px solid ${C.border}` : '1px solid transparent',
-                  cursor: 'pointer',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  color: atSubTab === id ? C.text : C.textDim,
-                  fontFamily: 'inherit',
-                }}
-              >
-                {lbl}
-              </button>
-            ))}
-          </div>
-
-          {/* ═══ CRIAR ═══ */}
-          {atSubTab === 'create' && (
+          {/* CRIAR sempre renderiza direto */}
+          <>
+            {/* Banner de sucesso — aparece depois de salvar um asset */}
+            {atLastSaved && (
+              <div style={{
+                background: `${C.green}15`,
+                border: `1px solid ${C.green}60`,
+                borderRadius: 12,
+                padding: '14px 18px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+                marginBottom: 4,
+              }}>
+                <img
+                  src={atLastSaved.imageUrl}
+                  alt={atLastSaved.name}
+                  style={{ width: 56, height: 56, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.green}60` }}
+                />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginBottom: 2 }}>
+                    ✓ Salvo na Biblioteca!
+                  </div>
+                  <div style={{ fontSize: 13, color: C.text }}>
+                    <strong>{atLastSaved.name}</strong>
+                    <span style={{ marginLeft: 8, fontFamily: 'monospace', color: C.textDim, fontSize: 12 }}>@{atLastSaved.id}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+                    Já disponível via <span style={{ fontFamily: 'monospace' }}>@{atLastSaved.id}</span> nas cenas do Estúdio
+                  </div>
+                </div>
+                <button
+                  onClick={() => { setTab('library'); setLibTab(atLastSaved.type === 'scenario' ? 'scenarios' : atLastSaved.type === 'item' ? 'props' : 'chars') }}
+                  style={{ background: C.green, border: `1px solid ${C.green}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                >
+                  Ver na Biblioteca →
+                </button>
+                <button
+                  onClick={() => setAtLastSaved(null)}
+                  title="Dispensar"
+                  style={{ background: 'transparent', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 18, padding: 4, fontFamily: 'inherit' }}
+                >
+                  ×
+                </button>
+              </div>
+            )}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
 
               {/* Esquerda — formulário */}
@@ -3485,32 +3453,12 @@ export function AAZStudio() {
 
                 {atResults.length > 0 && atSelected.size === 0 && (
                   <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center', fontStyle: 'italic' }}>
-                    Clique nas variações pra selecionar. Não selecionadas ficam em Rascunhos por 30 dias.
+                    Clique nas variações pra selecionar. Não selecionadas ficam em Rascunhos (Assets) por 30 dias.
                   </div>
                 )}
               </div>
             </div>
-          )}
-
-          {/* ═══ BIBLIOTECA ═══ */}
-          {atSubTab === 'library' && (
-            <AtelierLibraryView
-              type={atType}
-              assets={atAssets}
-              loading={atLoading}
-              onDelete={atDeleteAsset}
-            />
-          )}
-
-          {/* ═══ RASCUNHOS ═══ */}
-          {atSubTab === 'drafts' && (
-            <AtelierDraftsView
-              type={atType}
-              drafts={atDrafts.filter(d => d.type === atType)}
-              onPromote={atPromoteDraft}
-              onDelete={atDeleteAsset}
-            />
-          )}
+            </>
         </div>
       )}
 
@@ -3520,8 +3468,14 @@ export function AAZStudio() {
 
           {/* Sub-tabs */}
           <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}` }}>
-            {[['chars', 'Personagens'], ['scenarios', 'Cenários'], ['scenes', 'Cenas']].map(([id, lbl]) => (
-              <button key={id} onClick={() => setLibTab(id as 'chars' | 'scenarios' | 'scenes')} style={{ flex: 1, padding: '10px', borderRadius: 8, background: libTab === id ? C.surface : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 14, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
+            {([
+              ['chars', `Personagens (${CHARACTERS.length + atAssets.filter(a => a.type === 'character' && !a.isOfficial).length})`],
+              ['scenarios', `Cenários (${atAssets.filter(a => a.type === 'scenario' && !a.isOfficial).length + scenarios.length})`],
+              ['props', `Props (${atAssets.filter(a => a.type === 'item' && !a.isOfficial).length})`],
+              ['scenes', `Cenas (${sceneAssets.length})`],
+              ['drafts', `🗂 Rascunhos (${atDrafts.length})`],
+            ] as [typeof libTab, string][]).map(([id, lbl]) => (
+              <button key={id} onClick={() => setLibTab(id)} style={{ flex: 1, padding: '10px', borderRadius: 8, background: libTab === id ? C.surface : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
             ))}
           </div>
 
@@ -3608,6 +3562,33 @@ export function AAZStudio() {
                 </div>
               )
             }
+
+            {/* ── Criados por você (personagens custom do Atelier) ── */}
+            {atAssets.filter(a => a.type === 'character' && !a.isOfficial).length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.purple }}>Criados por você</div>
+                  <Pill color={C.purple}>{atAssets.filter(a => a.type === 'character' && !a.isOfficial).length}</Pill>
+                  <button
+                    onClick={() => setTab('atelier')}
+                    style={{ marginLeft: 'auto', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                  >
+                    ✨ Criar novo no Atelier
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
+                  {atAssets.filter(a => a.type === 'character' && !a.isOfficial).map(a => (
+                    <AtelierAssetCard key={a.id} asset={a} onDelete={atDeleteAsset} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {atAssets.filter(a => a.type === 'character' && !a.isOfficial).length === 0 && (
+              <div style={{ padding: 20, textAlign: 'center', color: C.textDim, fontSize: 12, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+                Nenhum personagem criado por você ainda. <button onClick={() => setTab('atelier')} style={{ background: 'transparent', border: 'none', color: C.purple, textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, padding: 0 }}>Ir ao Atelier</button> pra criar o primeiro.
+              </div>
+            )}
           </>)}
 
           {/* ═══ CENÁRIOS ═══ */}
@@ -3659,7 +3640,100 @@ export function AAZStudio() {
                 </div>
               )
             }
+
+            {/* Cenários criados no Atelier (asset type=scenario) */}
+            {atAssets.filter(a => a.type === 'scenario').length > 0 && (
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, marginBottom: 12 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.purple }}>Criados por você</div>
+                  <Pill color={C.purple}>{atAssets.filter(a => a.type === 'scenario').length}</Pill>
+                  <button
+                    onClick={() => setTab('atelier')}
+                    style={{ marginLeft: 'auto', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                  >
+                    ✨ Criar novo no Atelier
+                  </button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
+                  {atAssets.filter(a => a.type === 'scenario').map(a => (
+                    <AtelierAssetCard key={a.id} asset={a} onDelete={atDeleteAsset} />
+                  ))}
+                </div>
+              </div>
+            )}
           </>)}
+
+          {/* ═══ PROPS / ITENS — só assets do Atelier, type=item ═══ */}
+          {libTab === 'props' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.gold }}>🧺 Props</div>
+                <Pill color={C.gold}>{atAssets.filter(a => a.type === 'item').length}</Pill>
+                <button
+                  onClick={() => setTab('atelier')}
+                  style={{ marginLeft: 'auto', background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                >
+                  ✨ Criar novo no Atelier
+                </button>
+              </div>
+              <div style={{ fontSize: 12, color: C.textDim }}>
+                Objetos, utensílios e adereços. Cada prop pode ser @mencionado nas cenas do Estúdio.
+              </div>
+              {atAssets.filter(a => a.type === 'item').length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🧺</div>
+                  Nenhum prop criado ainda. <button onClick={() => setTab('atelier')} style={{ background: 'transparent', border: 'none', color: C.purple, textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, padding: 0 }}>Ir ao Atelier</button> pra criar o primeiro.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 14 }}>
+                  {atAssets.filter(a => a.type === 'item').map(a => (
+                    <AtelierAssetCard key={a.id} asset={a} onDelete={atDeleteAsset} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══ RASCUNHOS — variações não promovidas ═══ */}
+          {libTab === 'drafts' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.gold }}>🗂 Rascunhos</div>
+                <Pill color={C.gold}>{atDrafts.length}</Pill>
+                <div style={{ marginLeft: 'auto', fontSize: 11, color: C.textDim, fontStyle: 'italic' }}>
+                  Expiram automaticamente após 30 dias
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: C.textDim }}>
+                Variações geradas no Atelier que você não escolheu ficam aqui. Você pode promover uma ("↑" a move pra Biblioteca) ou deletar.
+              </div>
+              {atDrafts.length === 0 ? (
+                <div style={{ padding: 48, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🗂</div>
+                  Nenhum rascunho no momento.
+                </div>
+              ) : (
+                <>
+                  {(['character', 'scenario', 'item'] as AssetType[]).map(t => {
+                    const group = atDrafts.filter(d => d.type === t)
+                    if (group.length === 0) return null
+                    const label = t === 'character' ? '👤 Personagens' : t === 'scenario' ? '🏞 Cenários' : '🧺 Props'
+                    return (
+                      <div key={t}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 10, letterSpacing: '0.3px' }}>{label} ({group.length})</div>
+                        <AtelierDraftsView
+                          type={t}
+                          drafts={group}
+                          onPromote={atPromoteDraft}
+                          onDelete={atDeleteAsset}
+                        />
+                      </div>
+                    )
+                  })}
+                </>
+              )}
+            </div>
+          )}
 
           {/* ═══ CENAS — Ideia 2 + 5 ═══ */}
           {libTab === 'scenes' && (
