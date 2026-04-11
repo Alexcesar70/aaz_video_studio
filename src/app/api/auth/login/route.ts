@@ -6,6 +6,7 @@ import {
   bootstrapAdminIfEmpty,
   touchLastActive,
 } from '@/lib/users'
+import { emitEvent } from '@/lib/activity'
 
 const SESSION_COOKIE = 'aaz_session'
 
@@ -64,6 +65,16 @@ export async function POST(request: NextRequest) {
 
     // Touch lastActive (não bloqueia login se falhar)
     touchLastActive(user.id).catch(() => {})
+
+    // Emit login event
+    emitEvent({
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userRole: user.role,
+      type: 'login',
+      meta: {},
+    }).catch(() => {})
 
     const token = await new SignJWT({
       userId: user.id,

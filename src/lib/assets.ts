@@ -37,6 +37,8 @@ export interface Asset {
   emoji?: string
   /** Tags pra busca/filtro */
   tags?: string[]
+  /** ID do usuário que criou (multi-user). 'legacy' pra dados antigos. */
+  createdBy?: string
   createdAt: string
   updatedAt: string
 }

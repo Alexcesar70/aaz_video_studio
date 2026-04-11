@@ -48,10 +48,10 @@ interface Character { id: string; name: string; emoji: string; color: string; de
 interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
 interface LibraryEntry { charId: string; name: string; emoji: string; images: string[]; createdAt: string }
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
-interface Project { id: string; name: string; createdAt: string }
-interface Episode { id: string; name: string; projectId?: string | null; createdAt: string }
+interface Project { id: string; name: string; createdAt: string; createdBy?: string; memberIds?: string[] }
+interface Episode { id: string; name: string; projectId?: string | null; createdAt: string; createdBy?: string; finalVideoUrl?: string; finalVideoSizeMB?: number; finalVideoUploadedAt?: string; finalVideoUploadedBy?: string; finalStatus?: 'none' | 'pending_review' | 'approved' | 'needs_changes'; reviewNote?: string; reviewedAt?: string; reviewedBy?: string; creatorNote?: string }
 type SceneStatus = 'draft' | 'approved' | 'rejected'
-interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus; mood?: MoodId; setting?: string; emotion?: string }
+interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus; mood?: MoodId; setting?: string; emotion?: string; createdBy?: string }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
 /* ── Atoms ── */

@@ -10,6 +10,8 @@ import {
   isLeadId,
   slugify,
 } from '@/lib/assets'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 /**
  * GET /api/assets
@@ -147,6 +149,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const authUser = getAuthUser(request)
     const now = new Date().toISOString()
     const asset: Asset = {
       id,
@@ -161,6 +164,7 @@ export async function POST(request: NextRequest) {
       isDraft: isDraft || undefined,
       emoji: body.emoji,
       tags: body.tags,
+      createdBy: authUser?.id,
       createdAt: now,
       updatedAt: now,
     }
@@ -177,6 +181,23 @@ export async function POST(request: NextRequest) {
       await redis.set(key, JSON.stringify({ ...asset, id: storageId }), { EX: DRAFT_TTL_SECONDS })
     } else {
       await redis.set(key, JSON.stringify(asset))
+    }
+
+    // Activity event — só pra não-drafts (draft é ruído)
+    if (authUser && !isDraft) {
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'asset_saved',
+        meta: {
+          assetId: storageId,
+          assetType: body.type,
+          label: body.name,
+          engineId: body.engineId,
+        },
+      }).catch(() => {})
     }
 
     return NextResponse.json({ ok: true, asset: { ...asset, id: storageId } })

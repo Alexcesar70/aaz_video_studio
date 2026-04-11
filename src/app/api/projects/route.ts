@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 const PREFIX = 'aaz:project:'
 
-interface Project { id: string; name: string; createdAt: string }
+interface Project {
+  id: string
+  name: string
+  createdAt: string
+  createdBy?: string
+  /** Criadores autorizados neste projeto (admin vê sempre) */
+  memberIds?: string[]
+}
 
 export async function GET() {
   try {
@@ -29,8 +38,27 @@ export async function POST(request: NextRequest) {
     if (!entry.id || !entry.name?.trim()) {
       return NextResponse.json({ error: 'id e name são obrigatórios.' }, { status: 400 })
     }
+    const authUser = getAuthUser(request)
+    if (authUser && !entry.createdBy) {
+      entry.createdBy = authUser.id
+    }
     const redis = await getRedis()
     await redis.set(`${PREFIX}${entry.id}`, JSON.stringify(entry))
+
+    if (authUser) {
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'project_created',
+        meta: {
+          projectId: entry.id,
+          label: entry.name,
+        },
+      }).catch(() => {})
+    }
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[/api/projects POST]', err)

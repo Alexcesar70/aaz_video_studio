@@ -1,9 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 const PREFIX = 'aaz:ep:'
 
-interface Episode { id: string; name: string; projectId?: string | null; createdAt: string }
+interface Episode {
+  id: string
+  name: string
+  projectId?: string | null
+  createdAt: string
+  createdBy?: string
+  /** Entrega final do episódio (upload do MP4 montado no CapCut/Premiere) */
+  finalVideoUrl?: string
+  finalVideoSizeMB?: number
+  finalVideoUploadedAt?: string
+  finalVideoUploadedBy?: string
+  finalStatus?: 'none' | 'pending_review' | 'approved' | 'needs_changes'
+  reviewNote?: string
+  reviewedAt?: string
+  reviewedBy?: string
+  creatorNote?: string
+}
 
 export async function GET() {
   try {
@@ -29,8 +47,28 @@ export async function POST(request: NextRequest) {
     if (!entry.id || !entry.name?.trim()) {
       return NextResponse.json({ error: 'id e name são obrigatórios.' }, { status: 400 })
     }
+    const authUser = getAuthUser(request)
+    if (authUser && !entry.createdBy) {
+      entry.createdBy = authUser.id
+    }
     const redis = await getRedis()
     await redis.set(`${PREFIX}${entry.id}`, JSON.stringify(entry))
+
+    if (authUser) {
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'episode_created',
+        meta: {
+          episodeId: entry.id,
+          projectId: entry.projectId ?? undefined,
+          label: entry.name,
+        },
+      }).catch(() => {})
+    }
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[/api/episodes POST]', err)

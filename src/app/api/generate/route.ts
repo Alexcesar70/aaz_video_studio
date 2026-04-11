@@ -7,6 +7,8 @@ import {
   buildEnginePayload,
   type CommonVideoBody,
 } from '@/lib/videoEngines'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 /**
  * POST /api/generate
@@ -128,6 +130,24 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(`[/api/generate] Vídeo salvo no Blob: ${blob.url}`)
+
+    // Activity event — fire and forget, não bloqueia
+    const authUser = getAuthUser(request)
+    if (authUser) {
+      const estimatedCost = (body.duration ?? 0) * engine.pricePerSecond
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'scene_generated',
+        meta: {
+          cost: estimatedCost,
+          engineId: engine.id,
+          duration: body.duration,
+        },
+      }).catch(() => {})
+    }
 
     return NextResponse.json({
       videoUrl: blob.url,

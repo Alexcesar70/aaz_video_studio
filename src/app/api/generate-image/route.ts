@@ -7,6 +7,8 @@ import {
   buildImagePayload,
   type CommonImageBody,
 } from '@/lib/imageEngines'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 /**
  * POST /api/generate-image
@@ -188,6 +190,24 @@ export async function POST(request: NextRequest) {
       `[/api/generate-image] engine=${engine.id} ok=${imageUrls.length}/${n} ` +
       `errors=${errors.length}`
     )
+
+    // Activity event — custo estimado baseado em imagens OK
+    const authUser = getAuthUser(request)
+    if (authUser) {
+      const estimatedCost = imageUrls.length * engine.pricePerImage
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'image_generated',
+        meta: {
+          cost: estimatedCost,
+          engineId: engine.id,
+          variations: imageUrls.length,
+        },
+      }).catch(() => {})
+    }
 
     return NextResponse.json({
       engineId: engine.id,

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getImageDirectorSystemPrompt } from '@/lib/imageDirectorSystem'
 import type { AssetType } from '@/lib/assets'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 /**
  * POST /api/image-director
@@ -130,6 +132,23 @@ export async function POST(request: NextRequest) {
         { error: 'Resposta sem prompt.', raw: text },
         { status: 502 }
       )
+    }
+
+    // Activity event — Claude sonnet, output bem menor que scene director
+    // (~1 prompt × 200 tokens). Custo estimado: ~$0.005 por chamada
+    const authUser = getAuthUser(request)
+    if (authUser) {
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'image_director_called',
+        meta: {
+          cost: 0.005,
+          assetType: body.type,
+        },
+      }).catch(() => {})
     }
 
     return NextResponse.json({

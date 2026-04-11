@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listUsers, createUser, type UserRole } from '@/lib/users'
 import { requireAdmin, AuthError } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 /**
  * GET /api/users
@@ -62,6 +63,18 @@ export async function POST(request: NextRequest) {
       assignedProjectIds: body.assignedProjectIds,
       createdBy: admin.id,
     })
+
+    emitEvent({
+      userId: admin.id,
+      userName: admin.name,
+      userEmail: admin.email,
+      userRole: admin.role,
+      type: 'user_created',
+      meta: {
+        targetUserId: result.user.id,
+        label: `${result.user.name} (${result.user.role})`,
+      },
+    }).catch(() => {})
 
     return NextResponse.json({
       ok: true,

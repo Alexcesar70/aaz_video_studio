@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
+import { getAuthUser } from '@/lib/auth'
 
 type SceneStatus = 'draft' | 'approved' | 'rejected'
 interface SceneAsset {
@@ -12,6 +13,8 @@ interface SceneAsset {
   setting?: string
   /** Emoção dos personagens (sdEmotion), herdada em cenas encadeadas. Opcional. */
   emotion?: string
+  /** ID do usuário que criou (multi-user). 'legacy' pra dados antigos. */
+  createdBy?: string
 }
 
 const ORPHAN = '__orphan__'
@@ -52,6 +55,11 @@ export async function POST(request: NextRequest) {
     const entry: SceneAsset = await request.json()
     if (!entry.id) {
       return NextResponse.json({ error: 'id é obrigatório.' }, { status: 400 })
+    }
+    // Estampa createdBy a partir da sessão (se presente)
+    const authUser = getAuthUser(request)
+    if (authUser && !entry.createdBy) {
+      entry.createdBy = authUser.id
     }
     const redis = await getRedis()
     const epKey = entry.episodeId || ORPHAN

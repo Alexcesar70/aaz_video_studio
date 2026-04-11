@@ -9,6 +9,8 @@ import {
   isLeadId,
   slugify,
 } from '@/lib/assets'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 /**
  * PATCH /api/assets/[id]?type=character  (type query obrigatório)
@@ -120,6 +122,25 @@ export async function PATCH(
       await redis.set(targetKey, JSON.stringify(updated))
     }
 
+    // Emit event só quando promove draft → asset
+    if (promoting) {
+      const authUser = getAuthUser(request)
+      if (authUser) {
+        emitEvent({
+          userId: authUser.id,
+          userName: authUser.name,
+          userEmail: authUser.email,
+          userRole: authUser.role,
+          type: 'asset_promoted',
+          meta: {
+            assetId: newId,
+            assetType: type,
+            label: updated.name,
+          },
+        }).catch(() => {})
+      }
+    }
+
     return NextResponse.json({ ok: true, asset: updated })
   } catch (err) {
     console.error('[/api/assets PATCH]', err)
@@ -161,7 +182,32 @@ export async function DELETE(
 
     const prefix = isDraftSource ? DRAFT_PREFIX : ASSET_PREFIX
     const key = `${prefix}${type}:${params.id}`
+
+    // Carrega antes pra emitir evento com label
+    let deletedName: string | undefined
+    try {
+      const val = await redis.get(key)
+      if (val) deletedName = (JSON.parse(val) as Asset).name
+    } catch {}
+
     await redis.del(key)
+
+    const authUser = getAuthUser(request)
+    if (authUser && !isDraftSource) {
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'asset_deleted',
+        meta: {
+          assetId: params.id,
+          assetType: type,
+          label: deletedName,
+        },
+      }).catch(() => {})
+    }
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[/api/assets DELETE]', err)

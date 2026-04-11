@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSceneDirectorSystem, type ChainFromContext } from '@/lib/sceneDirectorSystem'
 import { getMood } from '@/lib/moods'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 /**
  * POST /api/scene-director
@@ -148,6 +150,24 @@ export async function POST(request: NextRequest) {
         { error: 'Claude retornou array com tamanho incorreto.', raw: text },
         { status: 502 }
       )
+    }
+
+    // Activity event — custo estimado do Claude sonnet
+    // Input ~ systemPrompt + userMessage tokens, output ~ 2 prompts × 500 tokens
+    // Preço Claude sonnet: ~$3/M input, ~$15/M output → ~$0.015 por chamada
+    const authUser = getAuthUser(request)
+    if (authUser) {
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'scene_director_called',
+        meta: {
+          cost: 0.015,
+          mood: body.mood,
+        },
+      }).catch(() => {})
     }
 
     return NextResponse.json({ prompts })

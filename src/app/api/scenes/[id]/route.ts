@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
+import { getAuthUser } from '@/lib/auth'
+import { emitEvent } from '@/lib/activity'
 
 type SceneStatus = 'draft' | 'approved' | 'rejected'
 interface SceneAsset {
@@ -10,6 +12,7 @@ interface SceneAsset {
   mood?: string
   setting?: string
   emotion?: string
+  createdBy?: string
 }
 
 const ORPHAN = '__orphan__'
@@ -33,6 +36,29 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       await redis.del(oldKey)
     }
     await redis.set(`aaz:scene:${newEpKey}:${updated.id}`, JSON.stringify(updated))
+
+    // Emit event se o status mudou
+    if (updates.status && updates.status !== current.status) {
+      const authUser = getAuthUser(request)
+      if (authUser) {
+        emitEvent({
+          userId: authUser.id,
+          userName: authUser.name,
+          userEmail: authUser.email,
+          userRole: authUser.role,
+          type: 'scene_status_changed',
+          meta: {
+            sceneId: current.id,
+            oldStatus: current.status,
+            newStatus: updates.status,
+            label: current.title,
+            projectId: current.projectId ?? undefined,
+            episodeId: current.episodeId ?? undefined,
+          },
+        }).catch(() => {})
+      }
+    }
+
     return NextResponse.json(updated)
   } catch (err) {
     console.error('[/api/scenes PATCH]', err)
@@ -40,11 +66,35 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const redis = await getRedis()
+    // Carrega antes pra emitir evento com label + meta
     const keys = await redis.keys(`aaz:scene:*:${params.id}`)
-    if (keys.length) for (const k of keys) await redis.del(k)
+    let deletedScene: SceneAsset | null = null
+    if (keys.length) {
+      const val = await redis.get(keys[0])
+      if (val) deletedScene = JSON.parse(val) as SceneAsset
+      for (const k of keys) await redis.del(k)
+    }
+
+    const authUser = getAuthUser(request)
+    if (authUser && deletedScene) {
+      emitEvent({
+        userId: authUser.id,
+        userName: authUser.name,
+        userEmail: authUser.email,
+        userRole: authUser.role,
+        type: 'scene_deleted',
+        meta: {
+          sceneId: deletedScene.id,
+          label: deletedScene.title,
+          projectId: deletedScene.projectId ?? undefined,
+          episodeId: deletedScene.episodeId ?? undefined,
+        },
+      }).catch(() => {})
+    }
+
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('[/api/scenes DELETE]', err)
