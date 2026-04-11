@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
-
-interface SceneAsset {
-  id: string; episodeId: string; sceneNumber: number; prompt: string
-  videoUrl: string; lastFrameUrl: string; characters: string[]
-  duration: number; cost: string; createdAt: string
-}
+import type { Scene } from '@/lib/types'
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,12 +9,12 @@ export async function GET(request: NextRequest) {
     const pattern = episodeId ? `aaz:scene:${episodeId}:*` : 'aaz:scene:*'
     const keys = await redis.keys(pattern)
     if (keys.length === 0) return NextResponse.json([])
-    const scenes: SceneAsset[] = []
+    const scenes: Scene[] = []
     for (const key of keys) {
       const val = await redis.get(key)
       if (val) scenes.push(JSON.parse(val))
     }
-    scenes.sort((a, b) => a.sceneNumber - b.sceneNumber)
+    scenes.sort((a, b) => a.order - b.order)
     return NextResponse.json(scenes)
   } catch (err) {
     console.error('[/api/scenes GET]', err)
@@ -29,9 +24,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const entry: SceneAsset = await request.json()
-    if (!entry.id || !entry.episodeId) {
-      return NextResponse.json({ error: 'id e episodeId são obrigatórios.' }, { status: 400 })
+    const entry: Scene = await request.json()
+    if (!entry.id || !entry.episodeId || !entry.name?.trim()) {
+      return NextResponse.json({ error: 'id, episodeId e name são obrigatórios.' }, { status: 400 })
     }
     const redis = await getRedis()
     await redis.set(`aaz:scene:${entry.episodeId}:${entry.id}`, JSON.stringify(entry))
