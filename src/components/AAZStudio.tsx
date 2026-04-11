@@ -445,44 +445,39 @@ function SceneAssetsStrip({
         {hasAnyAsset ? 'CENA' : 'MOOD DA CENA'}
       </span>
 
-      {/* Mood chip — sempre visível, wrap em select transparente pra trocar */}
-      <div style={{ position: 'relative', display: 'inline-flex' }}>
-        <div
-          title="Mood visual da cena — clique pra trocar"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            background: `${C.purple}15`,
-            border: `1px solid ${C.purple}50`,
-            borderRadius: 20,
-            padding: '4px 10px',
-            fontSize: 12,
-            color: C.purple,
-            fontWeight: 600,
-            pointerEvents: 'none',
-          }}
-        >
-          <span style={{ fontSize: 14 }}>{currentMood.icon}</span>
-          <span>{currentMood.shortLabel}</span>
-          <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
-        </div>
-        <select
-          value={mood}
-          onChange={e => onMoodChange(e.target.value as MoodId)}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            opacity: 0,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
-          {MOODS.map(m => (
-            <option key={m.id} value={m.id}>{m.label} — {m.narrative}</option>
-          ))}
-        </select>
-      </div>
+      {/* Mood chip — select visível estilizado como pílula.
+          Abrir o native dropdown, trocar, dispara onMoodChange.
+          Seta SVG à direita via background-image. */}
+      <select
+        value={mood}
+        onChange={e => onMoodChange(e.target.value as MoodId)}
+        title={`Mood atual: ${currentMood.shortLabel} — ${currentMood.narrative}. Clique pra trocar.`}
+        style={{
+          appearance: 'none',
+          WebkitAppearance: 'none',
+          MozAppearance: 'none',
+          background: `${C.purple}18`,
+          border: `1px solid ${C.purple}60`,
+          borderRadius: 20,
+          padding: '5px 28px 5px 12px',
+          fontSize: 12,
+          fontWeight: 700,
+          color: C.purple,
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+          outline: 'none',
+          backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 9px center',
+          lineHeight: 1.5,
+        }}
+      >
+        {MOODS.map(m => (
+          <option key={m.id} value={m.id}>
+            {m.icon} {m.shortLabel} — {m.narrative}
+          </option>
+        ))}
+      </select>
 
       {Array.from(grouped.entries()).map(([key, g]) => (
         <div
