@@ -450,7 +450,7 @@ export function AAZStudio() {
 
   /* asset panel in studio */
   const [showAssets, setShowAssets] = useState(false)
-  const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'scenes'>('chars')
+  const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'scenes'>('scenarios')
 
   /* scene director */
   const [sdDesc, setSdDesc] = useState('')
@@ -497,6 +497,30 @@ export function AAZStudio() {
   const [ratio, setRatio] = useState('16:9')
   const [duration, setDuration] = useState(5)
   const [lang, setLang] = useState<'pt' | 'en'>('pt')
+
+  /**
+   * Quando troca para modo Omni Reference, injeta automaticamente as
+   * imagens dos personagens já selecionados no sidebar direito.
+   * Ignora personagens sem entrada na biblioteca.
+   */
+  useEffect(() => {
+    if (mode !== 'omni_reference') return
+    if (selChars.length === 0) return
+    setRefImgs(p => {
+      const next = [...p]
+      for (const c of selChars) {
+        const entry = library[c.id]
+        if (!entry?.images?.length) continue
+        for (const img of entry.images) {
+          if (next.length >= 9) break
+          if (next.some(r => r.url === img)) continue
+          next.push({ url: img, label: `@image${next.length + 1}`, name: entry.name, fromLib: true, charId: c.id })
+        }
+      }
+      return next
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
   const [prompts, setPrompts] = useState<Record<'pt' | 'en', string>>({ pt: '', en: '' })
 
   /* refs omni */
@@ -585,7 +609,39 @@ export function AAZStudio() {
   const totalCost = history.reduce((s, h) => s + parseFloat(h.cost), 0).toFixed(2)
 
   /* ── helpers ── */
-  const toggleChar = (c: Character) => setSelChars(p => p.find(x => x.id === c.id) ? p.filter(x => x.id !== c.id) : [...p, c])
+  /**
+   * Seleciona/desseleciona um personagem no sidebar direito.
+   * Quando o modo é Omni Reference e o personagem tem imagens de referência
+   * salvas na Biblioteca, elas são auto-injetadas (ao adicionar) ou
+   * removidas (ao tirar). Os labels @imageN são renumerados após remoção.
+   */
+  const toggleChar = (c: Character) => {
+    const isSelected = !!selChars.find(x => x.id === c.id)
+    if (isSelected) {
+      // Remove do sidebar
+      setSelChars(p => p.filter(x => x.id !== c.id))
+      // Remove imagens do Omni que vieram desse personagem e renumera
+      setRefImgs(p => p.filter(r => r.charId !== c.id).map((r, i) => ({ ...r, label: `@image${i + 1}` })))
+    } else {
+      // Adiciona no sidebar
+      setSelChars(p => [...p, c])
+      // Se em Omni Reference e o personagem tem refs na biblioteca, auto-injeta
+      if (mode === 'omni_reference') {
+        const entry = library[c.id]
+        if (entry?.images?.length) {
+          setRefImgs(p => {
+            const next = [...p]
+            for (const img of entry.images) {
+              if (next.length >= 9) break
+              if (next.some(r => r.url === img)) continue // evita duplicata
+              next.push({ url: img, label: `@image${next.length + 1}`, name: entry.name, fromLib: true, charId: c.id })
+            }
+            return next
+          })
+        }
+      }
+    }
+  }
 
   /* ── Upload helpers ──
    * uploadBlob: manda um File direto para /api/blob-upload e retorna a URL pública
@@ -885,26 +941,14 @@ export function AAZStudio() {
               </div>
             )}
 
-            {/* Ideia 4: Painel de Assets colapsável */}
+            {/* Painel de Assets colapsável */}
             {showAssets && (
               <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px', maxHeight: 280, overflowY: 'auto' }}>
                 <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-                  {[['chars', 'Personagens'], ['scenarios', 'Cenários'], ['scenes', 'Cenas']].map(([id, lbl]) => (
+                  {[['scenarios', 'Cenários'], ['scenes', 'Cenas']].map(([id, lbl]) => (
                     <button key={id} onClick={() => setLibTab(id as 'chars' | 'scenarios' | 'scenes')} style={{ flex: 1, padding: '6px', borderRadius: 8, background: libTab === id ? C.card : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
                   ))}
                 </div>
-
-                {/* Personagens */}
-                {libTab === 'chars' && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {Object.values(library).length === 0 ? <div style={{ color: C.textDim, fontSize: 13 }}>Nenhum personagem salvo.</div> : Object.values(library).map(entry => (
-                      <button key={entry.charId} onClick={() => addFromLibrary(entry.charId)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 80 }}>
-                        {entry.images?.[0] && <img src={entry.images[0]} alt={entry.name} style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover' }} />}
-                        <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{entry.emoji} {entry.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
 
                 {/* Cenários */}
                 {libTab === 'scenarios' && (
