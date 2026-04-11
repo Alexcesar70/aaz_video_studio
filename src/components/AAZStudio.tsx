@@ -78,6 +78,7 @@ interface HistoryTabProps {
   onDelete: (id: string) => void
   onMoveScene: (scene: SceneAsset) => void
   onMoveEpisode: (episode: Episode) => void
+  onDeleteEpisode: (episode: Episode) => void
 }
 
 function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void; onMoveScene: (s: SceneAsset) => void }) {
@@ -110,17 +111,18 @@ function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene }: { scene
   )
 }
 
-function EpisodeHeader({ episode, count, onMove }: { episode: Episode; count: number; onMove: (e: Episode) => void }) {
+function EpisodeHeader({ episode, count, onMove, onDelete }: { episode: Episode; count: number; onMove: (e: Episode) => void; onDelete: (e: Episode) => void }) {
   const name = episode.name?.trim() || '(sem nome)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
       <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0 }}>🎬 {name} <span style={{ opacity: 0.6 }}>({count})</span></h3>
       <button onClick={() => onMove(episode)} title="Mover episódio para outro projeto" style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.gold, fontSize: 11, fontFamily: 'inherit' }}>⇄ Mover</button>
+      <button onClick={() => onDelete(episode)} title="Deletar episódio (e todas as cenas dele)" style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>× Deletar</button>
     </div>
   )
 }
 
-function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode }: HistoryTabProps) {
+function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode }: HistoryTabProps) {
   const total = scenes.length
   const orphans = scenes.filter(s => !s.episodeId)
   const episodesWithScenes = episodes.filter(ep => scenes.some(s => s.episodeId === ep.id))
@@ -156,7 +158,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
                     const epScenes = scenes.filter(s => s.episodeId === ep.id)
                     return (
                       <div key={ep.id}>
-                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} /></div>
+                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} /></div>
                         <div style={{ marginLeft: 8 }}>{sceneGrid(epScenes)}</div>
                       </div>
                     )
@@ -175,7 +177,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
                   const epScenes = scenes.filter(s => s.episodeId === ep.id)
                   return (
                     <div key={ep.id}>
-                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} />
+                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} />
                       {sceneGrid(epScenes)}
                     </div>
                   )
@@ -542,9 +544,18 @@ export function AAZStudio() {
 
   /* Modal: Adicionar referência ao Omni */
   const [addRefModal, setAddRefModal] = useState<'image' | 'video' | 'audio' | null>(null)
+  /* Modal: Confirmação de exclusão */
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string
+    description?: string
+    thumbnailUrl?: string
+    confirmLabel?: string
+    onConfirm: () => void | Promise<void>
+  } | null>(null)
+  const askConfirm = (cfg: NonNullable<typeof confirmModal>) => setConfirmModal(cfg)
 
   useEffect(() => {
-    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal
+    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal
     if (!anyModal) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -552,11 +563,12 @@ export function AAZStudio() {
         setMoveSceneModal(null)
         setMoveEpisodeModal(null)
         setAddRefModal(null)
+        setConfirmModal(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal])
+  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
@@ -1387,7 +1399,18 @@ export function AAZStudio() {
                           </div>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <button onClick={() => { setTab('studio'); addFromLibrary(entry.charId) }} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Usar no Estúdio</button>
-                            <button onClick={() => { const next = { ...library }; delete next[entry.charId]; setLibrary(next); deleteFromKV(entry.charId) }} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.red, fontSize: 14, fontFamily: 'inherit' }}>×</button>
+                            <button
+                              onClick={() => askConfirm({
+                                title: `Remover ${entry.name}?`,
+                                description: `Todas as ${entry.images.length} imagens de referência deste personagem serão removidas da biblioteca.`,
+                                thumbnailUrl: undefined,
+                                confirmLabel: 'Remover',
+                                onConfirm: async () => {
+                                  const next = { ...library }; delete next[entry.charId]; setLibrary(next); deleteFromKV(entry.charId)
+                                }
+                              })}
+                              style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.red, fontSize: 14, fontFamily: 'inherit' }}
+                            >×</button>
                           </div>
                         </div>
                       </div>
@@ -1431,7 +1454,15 @@ export function AAZStudio() {
                         <div style={{ fontSize: 12, color: C.textDim, marginBottom: 10 }}>{s.createdAt}</div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button onClick={() => { setTab('studio'); injectScenario(s) }} style={{ flex: 1, background: C.blueGlow, border: `1px solid ${C.blue}50`, borderRadius: 8, padding: '8px', cursor: 'pointer', color: C.blue, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Usar no Estúdio</button>
-                          <button onClick={() => deleteScenario(s.id)} style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.red, fontSize: 14, fontFamily: 'inherit' }}>×</button>
+                          <button
+                            onClick={() => askConfirm({
+                              title: `Remover cenário "${s.name}"?`,
+                              description: 'Este cenário será removido da biblioteca. Cenas que já o referenciavam não serão afetadas.',
+                              confirmLabel: 'Remover',
+                              onConfirm: () => deleteScenario(s.id)
+                            })}
+                            style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '8px 12px', cursor: 'pointer', color: C.red, fontSize: 14, fontFamily: 'inherit' }}
+                          >×</button>
                         </div>
                       </div>
                     </div>
@@ -1449,13 +1480,28 @@ export function AAZStudio() {
               episodes={episodes}
               onPlay={(s) => setPlayerModalScene(s)}
               onDownload={downloadVideo}
-              onDelete={async (id) => {
-                if (!confirm('Remover esta cena? (o vídeo original permanece no Blob)')) return
-                setSceneAssets(prev => prev.filter(s => s.id !== id))
-                await fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+              onDelete={(id) => {
+                const scene = sceneAssets.find(s => s.id === id)
+                if (!scene) return
+                askConfirm({
+                  title: 'Deletar esta cena?',
+                  description: scene.prompt.slice(0, 120),
+                  thumbnailUrl: scene.videoUrl,
+                  confirmLabel: 'Deletar cena',
+                  onConfirm: async () => {
+                    setSceneAssets(prev => prev.filter(s => s.id !== id))
+                    await fetch(`/api/scenes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+                  }
+                })
               }}
               onMoveScene={(s) => setMoveSceneModal(s)}
               onMoveEpisode={(e) => setMoveEpisodeModal(e)}
+              onDeleteEpisode={(ep) => askConfirm({
+                title: `Deletar "${ep.name?.trim() || '(sem nome)'}"?`,
+                description: 'O episódio e TODAS as cenas dentro dele serão removidos permanentemente.',
+                confirmLabel: 'Deletar episódio',
+                onConfirm: () => deleteEpisode(ep.id)
+              })}
             />
           )}
         </div>
@@ -1541,6 +1587,51 @@ export function AAZStudio() {
             setAddRefModal(null)
           }}
         />
+      )}
+
+      {/* Modal: Confirmação de exclusão (dupla verificação) */}
+      {confirmModal && (
+        <div
+          onClick={() => setConfirmModal(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ background: C.surface, border: `1px solid ${C.red}40`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 16 }}
+          >
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>{confirmModal.title}</h2>
+            {confirmModal.thumbnailUrl && (
+              <video
+                src={confirmModal.thumbnailUrl}
+                muted
+                playsInline
+                preload="metadata"
+                style={{ width: '100%', borderRadius: 10, border: `1px solid ${C.border}` }}
+              />
+            )}
+            {confirmModal.description && (
+              <div style={{ fontSize: 13, color: C.textDim, lineHeight: 1.5 }}>{confirmModal.description}</div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: `${C.red}10`, border: `1px solid ${C.red}30`, borderRadius: 8, padding: '10px 12px', fontSize: 12, color: C.red }}>
+              ⚠️ Esta ação não pode ser desfeita
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 18px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}
+              >Cancelar</button>
+              <button
+                onClick={async () => {
+                  const fn = confirmModal.onConfirm
+                  setConfirmModal(null)
+                  await fn()
+                }}
+                style={{ background: C.red, border: `1px solid ${C.red}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
+              >{confirmModal.confirmLabel || 'Deletar'}</button>
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim, textAlign: 'center' }}>Pressione ESC ou clique fora para cancelar</div>
+          </div>
+        </div>
       )}
     </div>
   )
