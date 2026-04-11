@@ -158,14 +158,20 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
             const projScenesCount = scenes.filter(s => projEps.some(e => e.id === s.episodeId)).length
             return (
               <section key={proj.id}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-                  <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0 }}>📁 {proj.name}</h2>
+                {/* Card do projeto com nome + botão de destaque */}
+                <div style={{ background: `linear-gradient(135deg, ${C.purple}14, ${C.purple}06)`, border: `1px solid ${C.purple}40`, borderRadius: 12, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                  <div>
+                    <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>📁 {proj.name}</h2>
+                    <div style={{ fontSize: 12, color: C.textDim, marginTop: 4 }}>
+                      {projEps.length} episódio{projEps.length !== 1 ? 's' : ''} · {projScenesCount} cena{projScenesCount !== 1 ? 's' : ''}
+                    </div>
+                  </div>
                   {projScenesCount >= 2 && (
                     <button
                       onClick={() => onPlayProjectSequential(proj)}
                       title="Assistir todas as cenas do projeto em sequência"
-                      style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 6, padding: '4px 10px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
-                    >▶ Assistir projeto</button>
+                      style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', boxShadow: `0 4px 14px ${C.purple}40`, whiteSpace: 'nowrap' }}
+                    >▶ Assistir projeto inteiro</button>
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, borderLeft: `2px solid ${C.border}` }}>
