@@ -1,17 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
+import {
+  VIDEO_ENGINES,
+  DEFAULT_ENGINE_ID,
+  getEngine,
+  buildEnginePayload,
+  type CommonVideoBody,
+} from '@/lib/videoEngines'
 
 /**
  * POST /api/generate
- * Proxy server-side para Segmind Seedance 2.0
+ * Proxy server-side multi-engine para Segmind.
+ * O body deve incluir `engineId` (ex: 'seedance-2.0'). O adapter
+ * transforma o body comum no payload específico da engine escolhida.
+ *
  * Recebe o vídeo gerado, faz upload ao Vercel Blob e retorna a URL pública.
  *
- * Resposta: { videoUrl: string }
+ * Resposta: { videoUrl: string, engineId: string }
  */
 
 export const maxDuration = 300
 
 const FETCH_TIMEOUT_MS = 290_000
+
+type GenerateBody = CommonVideoBody & { engineId?: string }
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +35,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let body
+    let body: GenerateBody
     try {
       body = await request.json()
     } catch {
@@ -38,32 +50,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'duration e aspect_ratio são obrigatórios.' }, { status: 400 })
     }
 
-    // ── Monta o payload para o Segmind ──────────────────────────
-    const segmindPayload: Record<string, unknown> = {
-      prompt:          body.prompt,
-      duration:        body.duration,
-      aspect_ratio:    body.aspect_ratio,
-      resolution:      body.resolution ?? '720p',
-      generate_audio:  body.generate_audio ?? false,
-    }
+    // Resolve engine — default se não vier id válido
+    const engineId = body.engineId ?? DEFAULT_ENGINE_ID
+    const engine = VIDEO_ENGINES.find(e => e.id === engineId) ?? getEngine(DEFAULT_ENGINE_ID)
 
-    // Omni Reference — injeta imagens/vídeos/áudios
-    if (body.mode === 'omni_reference') {
-      if (body.reference_images?.length)  segmindPayload.reference_images  = body.reference_images
-      if (body.reference_videos?.length)  segmindPayload.reference_videos  = body.reference_videos
-      if (body.reference_audios?.length)  segmindPayload.reference_audios  = body.reference_audios
-    }
+    // Override opcional por env var — só aplica ao Seedance 2.0 default
+    // (permite trocar o endpoint do Seedance sem mexer no código)
+    const endpoint =
+      engine.id === DEFAULT_ENGINE_ID && process.env.SEGMIND_VIDEO_ENDPOINT
+        ? process.env.SEGMIND_VIDEO_ENDPOINT
+        : engine.endpoint
 
-    // First/Last frames
-    if (body.first_frame_url) segmindPayload.first_frame_url = body.first_frame_url
-    if (body.last_frame_url)  segmindPayload.last_frame_url  = body.last_frame_url
+    // ── Monta o payload via adapter ────────────────────────────
+    const enginePayload = buildEnginePayload(engine, body)
 
-    // ── Chamada ao Segmind ──
-    const endpoint = process.env.SEGMIND_VIDEO_ENDPOINT ?? 'https://api.segmind.com/v1/seedance-2.0'
-
-    const payloadStr = JSON.stringify(segmindPayload)
+    const payloadStr = JSON.stringify(enginePayload)
     const payloadSizeMB = (payloadStr.length / 1024 / 1024).toFixed(2)
-    console.log(`[/api/generate] Payload: ${payloadSizeMB}MB, mode: ${body.mode}, refs: ${body.reference_images?.length ?? 0}`)
+    console.log(
+      `[/api/generate] engine=${engine.id} payload=${payloadSizeMB}MB ` +
+      `mode=${body.mode} refs=${body.reference_images?.length ?? 0}`
+    )
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
@@ -81,7 +87,7 @@ export async function POST(request: NextRequest) {
       })
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
-        return NextResponse.json({ error: 'Segmind não respondeu no tempo limite (110s).' }, { status: 504 })
+        return NextResponse.json({ error: `${engine.name} não respondeu no tempo limite.` }, { status: 504 })
       }
       throw err
     } finally {
@@ -90,21 +96,21 @@ export async function POST(request: NextRequest) {
 
     if (!segmindRes.ok) {
       const errorText = await segmindRes.text().catch(() => '')
-      let message = `Segmind retornou ${segmindRes.status}`
+      let message = `${engine.name} retornou ${segmindRes.status}`
       try {
         const errorData = JSON.parse(errorText)
         message = errorData?.detail ?? errorData?.error ?? errorData?.message ?? message
       } catch {
         if (errorText) message = errorText.slice(0, 200)
       }
-      console.error('[/api/generate] Segmind error:', segmindRes.status, message)
+      console.error('[/api/generate] Segmind error:', engine.id, segmindRes.status, message)
       return NextResponse.json({ error: message }, { status: segmindRes.status })
     }
 
     // Recebe o vídeo do Segmind
     const videoBuffer = await segmindRes.arrayBuffer()
     const videoSizeMB = (videoBuffer.byteLength / 1024 / 1024).toFixed(2)
-    console.log(`[/api/generate] Video recebido: ${videoSizeMB}MB`)
+    console.log(`[/api/generate] Video recebido: ${videoSizeMB}MB (engine=${engine.id})`)
 
     // Upload permanente ao Vercel Blob
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
@@ -127,6 +133,7 @@ export async function POST(request: NextRequest) {
       videoUrl: blob.url,
       pathname: blob.pathname,
       sizeMB: videoSizeMB,
+      engineId: engine.id,
     })
 
   } catch (err) {

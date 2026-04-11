@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { VIDEO_ENGINES, DEFAULT_ENGINE_ID, getEngine } from '@/lib/videoEngines'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -35,7 +36,6 @@ const MODES = [
 
 const RATIOS = ['16:9', '9:16', '1:1', '4:3', '3:4', '21:9']
 const DURATIONS = [4, 5, 8, 10, 12, 15]
-const COST_PER_SEC = parseFloat(process.env.NEXT_PUBLIC_COST_PER_SEC || '0.19')
 
 /* ── Storage — biblioteca de sheets compartilhada via Vercel KV ── */
 
@@ -1052,6 +1052,10 @@ export function AAZStudio() {
   const [generateAudio, setGenerateAudio] = useState(true)
   const [promptMode, setPromptMode] = useState<'assistant' | 'free'>('assistant')
 
+  /* Engine de vídeo selecionada */
+  const [engineId, setEngineId] = useState<string>(DEFAULT_ENGINE_ID)
+  const engine = useMemo(() => getEngine(engineId), [engineId])
+
   /* Metadados da cena em edição */
   const [sceneNumberInput, setSceneNumberInput] = useState('')
   const [sceneTitleInput, setSceneTitleInput] = useState('')
@@ -1073,8 +1077,42 @@ export function AAZStudio() {
   const vidRef = useRef<HTMLInputElement>(null)
   const audRef = useRef<HTMLInputElement>(null)
 
-  const cost = (duration * COST_PER_SEC).toFixed(2)
+  /* Custo calculado com base na engine selecionada (preço estimado) */
+  const cost = (duration * engine.pricePerSecond).toFixed(2)
   const totalCost = history.reduce((s, h) => s + parseFloat(h.cost), 0).toFixed(2)
+
+  /* Warnings quando a engine escolhida não suporta uma feature ativa */
+  const engineWarnings = useMemo(() => {
+    const warns: string[] = []
+    if (mode === 'omni_reference') {
+      if (!engine.features.omniReference && refImgs.length > 1) {
+        warns.push(`${engine.name} não suporta múltiplas referências. Só a primeira imagem será usada.`)
+      }
+      if (engine.features.omniReference && refImgs.length > engine.features.maxRefImages) {
+        warns.push(`${engine.name} aceita no máximo ${engine.features.maxRefImages} imagens. As extras serão ignoradas.`)
+      }
+      if (!engine.features.referenceVideos && refVids.length > 0) {
+        warns.push(`${engine.name} não suporta vídeos de referência. Serão ignorados.`)
+      }
+      if (!engine.features.referenceAudios && refAuds.length > 0) {
+        warns.push(`${engine.name} não suporta áudios de referência. Serão ignorados.`)
+      }
+    }
+    if (mode === 'first_last_frames' && !engine.features.firstLastFrames) {
+      warns.push(`${engine.name} não suporta first/last frame.`)
+    }
+    if (generateAudio && !engine.features.audio) {
+      warns.push(`${engine.name} não gera áudio no mesmo pipeline.`)
+    }
+    if (engine.durations.length && !engine.durations.includes(duration)) {
+      warns.push(`${engine.name} aceita apenas durações: ${engine.durations.join('s, ')}s.`)
+    }
+    if (engine.aspectRatios.length && !engine.aspectRatios.includes(ratio)) {
+      warns.push(`${engine.name} aceita apenas ratios: ${engine.aspectRatios.join(', ')}.`)
+    }
+    return warns
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [engine, mode, refImgs.length, refVids.length, refAuds.length, generateAudio, duration, ratio])
 
   /* ── helpers ── */
   /**
@@ -1352,10 +1390,11 @@ export function AAZStudio() {
     })
 
     const body: Record<string, unknown> = {
+      engineId,
       prompt: finalPrompt,
       duration,
       aspect_ratio: ratio,
-      resolution: '720p',
+      resolution: engine.defaultResolution,
       generate_audio: generateAudio,
       mode,
     }
@@ -1433,10 +1472,10 @@ export function AAZStudio() {
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>AAZ Studio</div>
-          <Pill color={C.textDim}>Seedance 2.0</Pill>
+          <Pill color={C.textDim}>{engine.name}</Pill>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Pill color={C.green}>${COST_PER_SEC}/s</Pill>
+          <Pill color={C.green}>~${engine.pricePerSecond}/s</Pill>
           <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
           <button
             onClick={handleLogout}
@@ -1931,10 +1970,44 @@ export function AAZStudio() {
               )}
             </div>
 
-            {/* Generate button — grande e visível */}
-            <button onClick={generate} disabled={generating} style={{ background: generating ? C.card : C.purple, border: `1px solid ${generating ? C.border : C.purple}`, borderRadius: 12, padding: '16px', cursor: generating ? 'not-allowed' : 'pointer', color: generating ? C.textDim : '#fff', fontSize: 16, fontWeight: 700, width: '100%', fontFamily: 'inherit', transition: 'all 0.2s' }}>
-              {generating ? '⟳ Gerando...' : 'Gerar Cena'}
-            </button>
+            {/* Engine warnings (quando a engine escolhida não suporta algo ativo) */}
+            {engineWarnings.length > 0 && (
+              <div style={{ background: `${C.gold}12`, border: `1px solid ${C.gold}40`, borderRadius: 10, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {engineWarnings.map((w, i) => (
+                  <div key={i} style={{ fontSize: 12, color: C.gold, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                    <span style={{ lineHeight: 1 }}>⚠</span>
+                    <span style={{ lineHeight: 1.4 }}>{w}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Engine selector + Generate button (lado a lado) */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'stretch' }}>
+              <div style={{ flex: '0 0 42%', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ fontSize: 10, color: C.textDim, fontWeight: 600, letterSpacing: '0.5px', textTransform: 'uppercase' }}>Motor de vídeo</div>
+                <select
+                  value={engineId}
+                  onChange={e => setEngineId(e.target.value)}
+                  disabled={generating}
+                  style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 10px', color: C.text, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', outline: 'none', cursor: generating ? 'not-allowed' : 'pointer', flex: 1 }}
+                >
+                  {VIDEO_ENGINES.map(eng => (
+                    <option key={eng.id} value={eng.id}>
+                      {eng.name} · ~${eng.pricePerSecond}/s
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button onClick={generate} disabled={generating} style={{ flex: 1, background: generating ? C.card : C.purple, border: `1px solid ${generating ? C.border : C.purple}`, borderRadius: 12, padding: '12px 16px', cursor: generating ? 'not-allowed' : 'pointer', color: generating ? C.textDim : '#fff', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-end' }}>
+                {generating ? '⟳ Gerando...' : 'Gerar Cena'}
+              </button>
+            </div>
+
+            {/* Descrição da engine selecionada */}
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: -8, paddingLeft: 2 }}>
+              {engine.description}
+            </div>
           </div>
 
           {/* ── Direita: Settings ── */}
@@ -2117,10 +2190,15 @@ export function AAZStudio() {
               </label>
             </div>
 
-            {/* Custo */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
-              <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · ${COST_PER_SEC}/s</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${cost}</div>
+            {/* Custo (preço estimado baseado na engine selecionada) */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · ~${engine.pricePerSecond}/s</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>~${cost}</div>
+              </div>
+              <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', letterSpacing: '0.3px' }}>
+                Preço estimado · {engine.name} · o valor real cobrado pelo Segmind pode variar
+              </div>
             </div>
 
             {lastResult && (
