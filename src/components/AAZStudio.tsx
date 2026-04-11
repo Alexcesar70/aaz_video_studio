@@ -875,11 +875,632 @@ function AtelierDraftsView({ type, drafts, onPromote, onDelete }: {
   )
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   AdminPanel — aba 👑 Admin visível só pra role=admin.
+   3 sub-abas: Dashboard, Usuários, Gastos.
+   Declarado fora do AAZStudio pra não re-criar a cada render.
+═══════════════════════════════════════════════════════════════ */
+
+interface AdminUser {
+  id: string
+  email: string
+  name: string
+  role: 'admin' | 'creator'
+  status: 'active' | 'revoked'
+  monthlyBudgetUsd?: number
+  assignedProjectIds?: string[]
+  createdAt: string
+  lastActiveAt?: string
+  createdBy: string
+}
+
+interface ActivityEventView {
+  id: string
+  userId: string
+  userName?: string
+  userEmail?: string
+  userRole?: string
+  timestamp: string
+  type: string
+  meta: {
+    cost?: number
+    engineId?: string
+    duration?: number
+    variations?: number
+    label?: string
+    assetType?: string
+    newStatus?: string
+    oldStatus?: string
+    projectId?: string
+    episodeId?: string
+    sceneId?: string
+    assetId?: string
+    targetUserId?: string
+  }
+}
+
+interface MonthlyTotals {
+  totalCost: number
+  eventCounts: Record<string, number>
+  byUser: Record<string, { cost: number; counts: Record<string, number> }>
+}
+
+function AdminPanel() {
+  const [subTab, setSubTab] = useState<'dashboard' | 'users' | 'spend'>('dashboard')
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [events, setEvents] = useState<ActivityEventView[]>([])
+  const [monthly, setMonthly] = useState<MonthlyTotals | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [newUserCreds, setNewUserCreds] = useState<{ email: string; name: string; password: string } | null>(null)
+
+  const loadAll = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [usersRes, eventsRes, monthlyRes] = await Promise.all([
+        fetch('/api/users'),
+        fetch('/api/activity?mode=events&limit=100'),
+        fetch('/api/activity?mode=monthly'),
+      ])
+      if (usersRes.ok) {
+        const data = await usersRes.json()
+        setUsers(data.users ?? [])
+      }
+      if (eventsRes.ok) {
+        const data = await eventsRes.json()
+        setEvents(data.events ?? [])
+      }
+      if (monthlyRes.ok) {
+        const data = await monthlyRes.json()
+        setMonthly(data)
+      }
+    } catch (err) {
+      console.error('[admin] load failed', err)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { loadAll() }, [loadAll])
+
+  // Deriva agregados pro dashboard
+  const now = new Date()
+  const monthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  // Atividade últimos 7 dias = usuários com lastActiveAt recente
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const activeUsers7d = users.filter(u => u.lastActiveAt && u.lastActiveAt >= sevenDaysAgo)
+
+  // Cenas dessa semana (eventos scene_generated últimos 7 dias)
+  const scenesThisWeek = events.filter(e => e.type === 'scene_generated' && e.timestamp >= sevenDaysAgo).length
+  const assetsThisWeek = events.filter(e => e.type === 'asset_saved' && e.timestamp >= sevenDaysAgo).length
+
+  // Top criadores por gasto (monthly.byUser)
+  const topCreators = monthly ? Object.entries(monthly.byUser)
+    .map(([userId, data]) => {
+      const u = users.find(us => us.id === userId)
+      return {
+        id: userId,
+        name: u?.name ?? userId,
+        email: u?.email ?? '',
+        cost: data.cost,
+        scenes: data.counts.scene_generated ?? 0,
+        assets: data.counts.asset_saved ?? 0,
+      }
+    })
+    .sort((a, b) => b.cost - a.cost)
+    .slice(0, 5) : []
+
+  // Uso por engine — conta scene_generated por engineId
+  const engineUsage = new Map<string, number>()
+  for (const e of events) {
+    if ((e.type === 'scene_generated' || e.type === 'image_generated') && e.meta.engineId) {
+      engineUsage.set(e.meta.engineId, (engineUsage.get(e.meta.engineId) ?? 0) + 1)
+    }
+  }
+  const engineUsageList = Array.from(engineUsage.entries()).sort((a, b) => b[1] - a[1])
+  const totalEngineUse = engineUsageList.reduce((sum, [, n]) => sum + n, 0) || 1
+
+  return (
+    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.text, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 28 }}>👑</span>
+            <span>Admin Panel</span>
+          </div>
+          <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
+            Mission control da produção · {monthLabel}
+          </div>
+        </div>
+        <button
+          onClick={loadAll}
+          disabled={loading}
+          style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', color: C.textDim, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+        >
+          {loading ? '⟳ Carregando...' : '↻ Atualizar'}
+        </button>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}` }}>
+        {([
+          ['dashboard', '📊 Dashboard'],
+          ['users', `👥 Usuários (${users.length})`],
+          ['spend', '💰 Gastos'],
+        ] as [typeof subTab, string][]).map(([id, lbl]) => (
+          <button
+            key={id}
+            onClick={() => setSubTab(id)}
+            style={{
+              flex: 1,
+              padding: '10px',
+              borderRadius: 8,
+              background: subTab === id ? C.surface : 'transparent',
+              border: subTab === id ? `1px solid ${C.border}` : '1px solid transparent',
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 600,
+              color: subTab === id ? C.text : C.textDim,
+              fontFamily: 'inherit',
+            }}
+          >
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {/* ═══ DASHBOARD ═══ */}
+      {subTab === 'dashboard' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {/* KPIs */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <KpiCard label="Gasto este mês" value={monthly ? `~$${monthly.totalCost.toFixed(2)}` : '—'} sub="estimado" color={C.green} />
+            <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
+            <KpiCard label="Cenas (semana)" value={`${scenesThisWeek}`} sub="vídeos gerados" color={C.blue} />
+            <KpiCard label="Assets (semana)" value={`${assetsThisWeek}`} sub="novos na biblioteca" color={C.gold} />
+          </div>
+
+          {/* Top criadores + Engines */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+            {/* Top criadores */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>
+                Top criadores · {monthLabel}
+              </div>
+              {topCreators.length === 0 ? (
+                <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>
+                  Sem gastos registrados ainda este mês.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {topCreators.map((c, i) => (
+                    <div key={c.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 22, height: 22, borderRadius: '50%', background: i === 0 ? C.gold : C.border, color: i === 0 ? '#000' : C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
+                        {i + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+                        <div style={{ fontSize: 10, color: C.textDim }}>{c.scenes} cenas · {c.assets} assets</div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>
+                        ~${c.cost.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Motores mais usados */}
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>
+                Motores mais usados
+              </div>
+              {engineUsageList.length === 0 ? (
+                <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>
+                  Nenhuma geração ainda.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {engineUsageList.slice(0, 6).map(([id, count]) => {
+                    const pct = (count / totalEngineUse) * 100
+                    return (
+                      <div key={id}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                          <span style={{ color: C.text, fontWeight: 600 }}>{id}</span>
+                          <span style={{ color: C.textDim }}>{count} · {pct.toFixed(0)}%</span>
+                        </div>
+                        <div style={{ height: 6, background: C.card, borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: C.purple, borderRadius: 3, transition: 'width 0.3s' }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Feed de atividade */}
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 14 }}>
+              Atividade recente · últimos {events.length} eventos
+            </div>
+            {events.length === 0 ? (
+              <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>
+                Nenhuma atividade registrada ainda.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 400, overflowY: 'auto' }}>
+                {events.slice(0, 50).map(e => (
+                  <ActivityRow key={e.id} event={e} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ USUÁRIOS ═══ */}
+      {subTab === 'users' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+              Usuários ({users.length})
+            </div>
+            <button
+              onClick={() => setInviteOpen(true)}
+              style={{ background: C.gold, border: `1px solid ${C.gold}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#000', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
+            >
+              ＋ Convidar criador
+            </button>
+          </div>
+
+          {users.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+              Nenhum usuário ainda.
+            </div>
+          ) : (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr 0.5fr', gap: 12, padding: '10px 16px', background: C.card, fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>
+                <div>NOME</div>
+                <div>EMAIL</div>
+                <div>ROLE</div>
+                <div>GASTO MÊS</div>
+                <div>ÚLTIMA ATIVIDADE</div>
+                <div></div>
+              </div>
+              {users.map(u => {
+                const userCost = monthly?.byUser[u.id]?.cost ?? 0
+                const budgetPct = u.monthlyBudgetUsd ? (userCost / u.monthlyBudgetUsd) * 100 : null
+                const lastActive = u.lastActiveAt ? new Date(u.lastActiveAt) : null
+                const lastActiveStr = lastActive ? relativeTime(lastActive) : 'nunca'
+                return (
+                  <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1fr 1fr 1fr 0.5fr', gap: 12, padding: '12px 16px', borderTop: `1px solid ${C.border}`, fontSize: 13, alignItems: 'center', opacity: u.status === 'revoked' ? 0.5 : 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: '50%', background: u.role === 'admin' ? C.gold : C.purple, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                        {u.name.charAt(0).toUpperCase()}
+                      </div>
+                      <span style={{ color: C.text, fontWeight: 600 }}>{u.name}</span>
+                    </div>
+                    <div style={{ color: C.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
+                    <div>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: u.role === 'admin' ? C.gold : C.purple, background: u.role === 'admin' ? `${C.gold}20` : `${C.purple}20`, padding: '3px 8px', borderRadius: 6, border: `1px solid ${u.role === 'admin' ? C.gold : C.purple}50`, letterSpacing: '0.3px' }}>
+                        {u.role === 'admin' ? '👑 ADMIN' : '🎨 CREATOR'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 12, color: C.text, fontFamily: 'monospace' }}>
+                      ~${userCost.toFixed(2)}
+                      {budgetPct !== null && (
+                        <div style={{ fontSize: 9, color: budgetPct > 80 ? C.red : C.textDim }}>
+                          {budgetPct.toFixed(0)}% de ${u.monthlyBudgetUsd}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: C.textDim }}>{lastActiveStr}</div>
+                    <div style={{ fontSize: 10, color: C.textDim, textAlign: 'right' }}>
+                      {u.status === 'revoked' && <span style={{ color: C.red }}>revogado</span>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══ GASTOS ═══ */}
+      {subTab === 'spend' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+            Gastos detalhados · {monthLabel}
+          </div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+            <div style={{ fontSize: 11, color: C.textDim, marginBottom: 12, fontStyle: 'italic' }}>
+              Valores são estimativas baseadas nos preços unitários de cada motor. O valor real cobrado pelo Segmind/Anthropic pode variar.
+            </div>
+            {monthly && Object.keys(monthly.byUser).length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '8px 0', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+                  <div>USUÁRIO</div>
+                  <div>CENAS</div>
+                  <div>IMAGENS</div>
+                  <div>SCENE DIR</div>
+                  <div>IMG DIR</div>
+                  <div style={{ textAlign: 'right' }}>TOTAL</div>
+                </div>
+                {Object.entries(monthly.byUser).map(([userId, data]) => {
+                  const u = users.find(us => us.id === userId)
+                  return (
+                    <div key={userId} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '8px 0', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
+                      <div style={{ color: C.text, fontWeight: 600 }}>{u?.name ?? userId}</div>
+                      <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.scene_generated ?? 0}</div>
+                      <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.image_generated ?? 0}</div>
+                      <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.scene_director_called ?? 0}</div>
+                      <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.image_director_called ?? 0}</div>
+                      <div style={{ color: C.green, fontWeight: 700, fontFamily: 'monospace', textAlign: 'right' }}>~${data.cost.toFixed(2)}</div>
+                    </div>
+                  )
+                })}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '12px 0 0', fontSize: 13, fontWeight: 700, borderTop: `2px solid ${C.border}`, marginTop: 6 }}>
+                  <div style={{ color: C.text }}>TOTAL</div>
+                  <div></div><div></div><div></div><div></div>
+                  <div style={{ color: C.green, fontFamily: 'monospace', textAlign: 'right' }}>~${monthly.totalCost.toFixed(2)}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>
+                Sem gastos registrados ainda este mês.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Convidar criador */}
+      {inviteOpen && (
+        <InviteUserModal
+          onClose={() => setInviteOpen(false)}
+          onCreated={(creds) => {
+            setNewUserCreds(creds)
+            setInviteOpen(false)
+            loadAll()
+          }}
+        />
+      )}
+
+      {/* Modal: Credenciais recém-criadas (display-once) */}
+      {newUserCreds && (
+        <NewUserCredsModal
+          creds={newUserCreds}
+          onClose={() => setNewUserCreds(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* Card KPI — usado no dashboard do admin */
+function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+  return (
+    <div style={{ background: C.surface, border: `1px solid ${color}40`, borderRadius: 12, padding: 18 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 6 }}>{label.toUpperCase()}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: color, fontFamily: 'monospace' }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{sub}</div>}
+    </div>
+  )
+}
+
+/* Linha de atividade no feed do dashboard */
+function ActivityRow({ event }: { event: ActivityEventView }) {
+  const icon = activityIcon(event.type)
+  const desc = activityDescription(event)
+  const when = relativeTime(new Date(event.timestamp))
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: C.card, fontSize: 12 }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <span style={{ fontWeight: 600 }}>{event.userName ?? event.userId}</span>
+          <span style={{ color: C.textDim }}> · {desc}</span>
+        </div>
+      </div>
+      {event.meta.cost !== undefined && (
+        <span style={{ fontSize: 10, color: C.green, fontFamily: 'monospace' }}>~${event.meta.cost.toFixed(3)}</span>
+      )}
+      <span style={{ fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' }}>{when}</span>
+    </div>
+  )
+}
+
+function activityIcon(type: string): string {
+  switch (type) {
+    case 'login': return '🔐'
+    case 'scene_generated': return '🎬'
+    case 'scene_status_changed': return '✓'
+    case 'scene_deleted': return '🗑'
+    case 'image_generated': return '🖼'
+    case 'asset_saved': return '⭐'
+    case 'asset_deleted': return '🗑'
+    case 'asset_promoted': return '⬆'
+    case 'scene_director_called': return '✨'
+    case 'image_director_called': return '✨'
+    case 'project_created': return '📁'
+    case 'episode_created': return '📺'
+    case 'user_created': return '👤'
+    default: return '•'
+  }
+}
+
+function activityDescription(event: ActivityEventView): string {
+  const t = event.type
+  const m = event.meta
+  if (t === 'login') return 'fez login'
+  if (t === 'scene_generated') return `gerou cena ${m.duration ? m.duration + 's' : ''} (${m.engineId ?? '?'})`
+  if (t === 'scene_status_changed') return `mudou status: ${m.oldStatus ?? '?'} → ${m.newStatus}`
+  if (t === 'scene_deleted') return `deletou cena ${m.label ? '"' + m.label + '"' : ''}`
+  if (t === 'image_generated') return `gerou ${m.variations ?? 1} imagem${(m.variations ?? 1) > 1 ? 's' : ''} (${m.engineId ?? '?'})`
+  if (t === 'asset_saved') return `salvou ${m.assetType ?? 'asset'} "${m.label ?? '?'}"`
+  if (t === 'asset_deleted') return `deletou ${m.assetType ?? 'asset'} ${m.label ? '"' + m.label + '"' : ''}`
+  if (t === 'asset_promoted') return `promoveu rascunho "${m.label ?? '?'}"`
+  if (t === 'scene_director_called') return `usou o Scene Director`
+  if (t === 'image_director_called') return `usou o Image Director (${m.assetType ?? '?'})`
+  if (t === 'project_created') return `criou projeto "${m.label ?? '?'}"`
+  if (t === 'episode_created') return `criou episódio "${m.label ?? '?'}"`
+  if (t === 'user_created') return `criou usuário ${m.label ?? m.targetUserId ?? '?'}`
+  return t
+}
+
+function relativeTime(date: Date): string {
+  const diff = Date.now() - date.getTime()
+  const secs = Math.floor(diff / 1000)
+  if (secs < 60) return `${secs}s atrás`
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins}min atrás`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours}h atrás`
+  const days = Math.floor(hours / 24)
+  if (days < 7) return `${days}d atrás`
+  return date.toLocaleDateString('pt-BR')
+}
+
+/* Modal: Convidar criador */
+function InviteUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (creds: { email: string; name: string; password: string }) => void }) {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [role, setRole] = useState<'admin' | 'creator'>('creator')
+  const [budget, setBudget] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async () => {
+    if (!name.trim() || !email.trim()) { setError('Nome e email são obrigatórios.'); return }
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          role,
+          monthlyBudgetUsd: budget ? parseFloat(budget) : undefined,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const data = await res.json()
+      onCreated({ email: data.user.email, name: data.user.name, password: data.plainPassword })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao criar.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 460, padding: 24 }}>
+        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>Convidar criador</div>
+        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 20 }}>Uma senha será gerada automaticamente. Envie por WhatsApp/Slack.</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>NOME COMPLETO</div>
+            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Maria Silva" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>EMAIL</div>
+            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="maria@example.com" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>ROLE</div>
+            <select value={role} onChange={e => setRole(e.target.value as 'admin' | 'creator')} style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, fontFamily: 'inherit', outline: 'none' }}>
+              <option value="creator">🎨 Creator — cria cenas/assets</option>
+              <option value="admin">👑 Admin — vê tudo, gerencia tudo</option>
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>BUDGET MENSAL (OPCIONAL, USD)</div>
+            <Input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="50" step="10" />
+          </div>
+          {error && <div style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '9px 12px', fontSize: 12, color: C.red }}>{error}</div>}
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Cancelar</button>
+            <button onClick={submit} disabled={loading} style={{ flex: 1, background: loading ? C.card : C.gold, border: `1px solid ${C.gold}`, borderRadius: 10, padding: '12px', cursor: loading ? 'wait' : 'pointer', color: loading ? C.textDim : '#000', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+              {loading ? '⟳ Criando...' : 'Gerar senha e criar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* Modal: exibe credenciais one-time após criar user */
+function NewUserCredsModal({ creds, onClose }: { creds: { email: string; name: string; password: string }; onClose: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const fullText = `Email: ${creds.email}\nSenha: ${creds.password}`
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(fullText)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {}
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 101, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div style={{ background: C.bg, border: `2px solid ${C.green}60`, borderRadius: 14, width: '100%', maxWidth: 500, padding: 28 }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: C.green, marginBottom: 4 }}>✓ {creds.name} foi criado</div>
+        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 20 }}>Copie as credenciais e envie pro novo criador — a senha não vai aparecer de novo.</div>
+
+        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, fontFamily: 'monospace', fontSize: 14, marginBottom: 14 }}>
+          <div style={{ marginBottom: 8 }}>
+            <span style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.5px' }}>EMAIL</span>
+            <div style={{ color: C.text }}>{creds.email}</div>
+          </div>
+          <div>
+            <span style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.5px' }}>SENHA</span>
+            <div style={{ color: C.gold, fontSize: 16, letterSpacing: 1 }}>{creds.password}</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={copy} style={{ flex: 1, background: copied ? C.green : C.purple, border: `1px solid ${copied ? C.green : C.purple}`, borderRadius: 10, padding: '12px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+            {copied ? '✓ Copiado!' : '📋 Copiar credenciais'}
+          </button>
+          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 24px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
+            Fechar
+          </button>
+        </div>
+
+        <div style={{ fontSize: 10, color: C.gold, marginTop: 14, fontStyle: 'italic', textAlign: 'center' }}>
+          ⚠ Esta senha só aparece agora. Se fechar sem copiar, use "Reset senha" depois.
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function AAZStudio() {
   const router = useRouter()
 
   /* tabs */
   const [tab, setTab] = useState('studio')
+
+  /* Sessão atual (quem tá logado) — admin vê aba extra */
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: 'admin' | 'creator' } | null>(null)
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(data => { if (data.user) setCurrentUser(data.user) })
+      .catch(() => {})
+  }, [])
+  const isAdminUser = currentUser?.role === 'admin'
 
   /* ═══════════ ATELIER — geração de assets de imagem ═══════════ */
   const [atAssets, setAtAssets] = useState<Asset[]>([])
@@ -2457,6 +3078,15 @@ export function AAZStudio() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Pill color={C.green}>~${engine.pricePerSecond}/s</Pill>
           <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
+          {currentUser && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px 4px 6px' }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: isAdminUser ? C.gold : C.purple, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
+                {currentUser.name.charAt(0).toUpperCase()}
+              </div>
+              <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{currentUser.name}</span>
+              {isAdminUser && <span style={{ fontSize: 9, color: C.gold, background: `${C.gold}20`, padding: '1px 6px', borderRadius: 8, border: `1px solid ${C.gold}50`, fontWeight: 700, letterSpacing: '0.3px' }}>ADMIN</span>}
+            </div>
+          )}
           <button
             onClick={handleLogout}
             style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}
@@ -2468,8 +3098,13 @@ export function AAZStudio() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
-        {[['studio', 'Estúdio'], ['atelier', '🎨 Atelier'], ['library', 'Assets']].map(([id, lbl]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
+        {([
+          ['studio', 'Estúdio'],
+          ['atelier', '🎨 Atelier'],
+          ['library', 'Assets'],
+          ...(isAdminUser ? [['admin', '👑 Admin']] : []),
+        ] as [string, string][]).map(([id, lbl]) => (
+          <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${id === 'admin' ? C.gold : C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
 
@@ -3731,6 +4366,11 @@ export function AAZStudio() {
       )}
 
       {/* ══════════ ASSETS — Personagens, Cenários, Cenas ══════════ */}
+      {/* ══════════ ADMIN PANEL — só role=admin ══════════ */}
+      {tab === 'admin' && isAdminUser && (
+        <AdminPanel />
+      )}
+
       {tab === 'library' && (
         <div style={{ padding: '26px', display: 'flex', flexDirection: 'column', gap: 20 }}>
 
