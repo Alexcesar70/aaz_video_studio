@@ -633,10 +633,29 @@ export function AAZStudio() {
     const newText = before + replacement + after
     setSdDesc(newText)
     setMention(null)
-    // Adiciona ao sidebar direito (se não estiver) — traz imagens para Omni
+
+    // Adiciona ao sidebar direito (se não estiver)
     if (!selChars.find(c => c.id === char.id)) {
-      toggleChar(char)
+      setSelChars(p => [...p, char])
     }
+
+    // Se o personagem tem refs na biblioteca, FORÇA a entrada delas no Omni
+    // (independente do modo atual — muda para omni_reference se necessário).
+    // Isso garante que o @id no prompt final vai ter uma imagem correspondente.
+    const entry = library[char.id]
+    if (entry?.images?.length) {
+      if (mode !== 'omni_reference') setMode('omni_reference')
+      setRefImgs(p => {
+        const next = [...p]
+        for (const img of entry.images) {
+          if (next.length >= 9) break
+          if (next.some(r => r.url === img)) continue
+          next.push({ url: img, label: `@image${next.length + 1}`, name: char.name, fromLib: true, charId: char.id })
+        }
+        return next
+      })
+    }
+
     // Reposiciona o cursor depois do nome inserido
     window.setTimeout(() => {
       const ta = sdDescRef.current
@@ -1069,9 +1088,46 @@ export function AAZStudio() {
     if (!prompts[lang].trim()) { setStatus('error'); setStatusMsg('Escreva o prompt.'); return }
     setGenerating(true); setStatus('generating'); setStatusMsg('Enviando para Seedance 2.0...'); setResultUrl('')
 
-    // Substitui @NomePersonagem por @imageN automaticamente
+    // ── SALVAGUARDA: detecta @ids no prompt que não têm ref associada ──
+    // Se algum personagem foi mencionado no prompt (ex: @theos) mas não
+    // está no refImgs, tenta adicionar as imagens dele da biblioteca antes
+    // de enviar. Garante que o @id seja convertido para @imageN corretamente.
+    let workingRefImgs = [...refImgs]
+    const mentionRegex = /@(\w+)/g
+    const mentionedInPrompt = new Set<string>()
+    let m: RegExpExecArray | null
+    while ((m = mentionRegex.exec(prompts[lang])) !== null) {
+      const id = m[1].toLowerCase()
+      // Ignora tags técnicas já resolvidas (@image1, @video1, etc)
+      if (/^image\d+$/.test(id) || /^video\d+$/.test(id) || /^audio\d+$/.test(id)) continue
+      if (CHARACTERS.find(c => c.id === id)) mentionedInPrompt.add(id)
+    }
+    // Para cada personagem mencionado, garante que suas imagens estão no refImgs
+    const addedChars: Character[] = []
+    for (const id of Array.from(mentionedInPrompt)) {
+      const alreadyHas = workingRefImgs.some(r => r.charId === id)
+      if (alreadyHas) continue
+      const entry = library[id]
+      if (!entry?.images?.length) continue
+      const char = CHARACTERS.find(c => c.id === id)!
+      addedChars.push(char)
+      for (const img of entry.images) {
+        if (workingRefImgs.length >= 9) break
+        workingRefImgs.push({ url: img, label: `@image${workingRefImgs.length + 1}`, name: char.name, fromLib: true, charId: id })
+      }
+    }
+    if (addedChars.length > 0) {
+      // Sincroniza state para o usuário ver o que foi adicionado
+      setRefImgs(workingRefImgs)
+      if (mode !== 'omni_reference') setMode('omni_reference')
+      const newSelChars = [...selChars]
+      addedChars.forEach(c => { if (!newSelChars.find(x => x.id === c.id)) newSelChars.push(c) })
+      setSelChars(newSelChars)
+    }
+
+    // Substitui @NomePersonagem por @imageN automaticamente (usa workingRefImgs)
     let finalPrompt = prompts[lang]
-    refImgs.forEach((r, i) => {
+    workingRefImgs.forEach((r, i) => {
       if (r.name) {
         // Substitui @Nome, @nome (case insensitive) pelo @imageN correto
         const namePattern = new RegExp(`@${r.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'gi')
@@ -1098,7 +1154,7 @@ export function AAZStudio() {
       if (lastUrl) body.last_frame_url = lastUrl
     }
     if (mode === 'omni_reference') {
-      if (refImgs.length) body.reference_images = refImgs.map(r => r.url)
+      if (workingRefImgs.length) body.reference_images = workingRefImgs.map(r => r.url)
       if (refVids.length) body.reference_videos = refVids.map(r => r.url)
       if (refAuds.length) body.reference_audios = refAuds.map(r => r.url)
     }
