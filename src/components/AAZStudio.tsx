@@ -448,9 +448,7 @@ export function AAZStudio() {
     }
   }, [currentProject, currentEpisode])
 
-  /* asset panel in studio */
-  const [showAssets, setShowAssets] = useState(false)
-  const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'scenes'>('scenarios')
+  const [libTab, setLibTab] = useState<'chars' | 'scenarios' | 'scenes'>('chars')
 
   /* scene director */
   const [sdDesc, setSdDesc] = useState('')
@@ -757,12 +755,10 @@ export function AAZStudio() {
   }
 
   const injectSceneAsFirstFrame = (scene: SceneAsset) => {
-    if (scene.lastFrameUrl) {
-      setFirstUrl(scene.lastFrameUrl); setFirstPreview(scene.lastFrameUrl)
-      setMode('first_last_frames')
-    } else if (scene.videoUrl) {
-      setChain(true); setLastResult(scene.videoUrl)
-    }
+    // Navega pro Estúdio e ativa encadeamento usando o vídeo como referência
+    setTab('studio')
+    setLastResult(scene.videoUrl)
+    setChain(true)
   }
 
   const injectTags = () => {
@@ -925,7 +921,6 @@ export function AAZStudio() {
 
               <Input placeholder="Novo episódio..." value={newEpName} onChange={e => setNewEpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createEpisode()} style={{ width: 180 }} />
               <button onClick={createEpisode} disabled={!newEpName.trim()} style={{ background: newEpName.trim() ? C.purple : C.card, border: `1px solid ${newEpName.trim() ? C.purple : C.border}`, borderRadius: 8, padding: '8px 16px', cursor: newEpName.trim() ? 'pointer' : 'default', color: newEpName.trim() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar</button>
-              <button onClick={() => setShowAssets(!showAssets)} style={{ background: showAssets ? C.purple : C.card, border: `1px solid ${showAssets ? C.purple : C.border}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: showAssets ? '#fff' : C.textDim, fontSize: 13, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Assets</button>
             </div>
 
             {/* Input inline para novo projeto */}
@@ -941,44 +936,65 @@ export function AAZStudio() {
               </div>
             )}
 
-            {/* Painel de Assets colapsável */}
-            {showAssets && (
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '16px', maxHeight: 280, overflowY: 'auto' }}>
-                <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
-                  {[['scenarios', 'Cenários'], ['scenes', 'Cenas']].map(([id, lbl]) => (
-                    <button key={id} onClick={() => setLibTab(id as 'chars' | 'scenarios' | 'scenes')} style={{ flex: 1, padding: '6px', borderRadius: 8, background: libTab === id ? C.card : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
-                  ))}
+            {/* Faixa contextual — cenas do episódio ativo */}
+            {currentEpisode && (() => {
+              const epScenes = sceneAssets
+                .filter(s => s.episodeId === currentEpisode.id)
+                .sort((a, b) => a.sceneNumber - b.sceneNumber)
+              return (
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>
+                      🎬 {currentEpisode.name?.trim() || '(sem nome)'} · {epScenes.length} cena{epScenes.length !== 1 ? 's' : ''}
+                    </div>
+                    {epScenes.length >= 2 && (
+                      <button
+                        disabled
+                        title="Assistir todas as cenas em sequência (em breve)"
+                        style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 12px', cursor: 'not-allowed', color: C.textDim, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+                      >▶ Assistir episódio</button>
+                    )}
+                  </div>
+                  {epScenes.length === 0 ? (
+                    <div style={{ color: C.textDim, fontSize: 12, padding: '8px 0' }}>
+                      Nenhuma cena neste episódio ainda. Gere a primeira abaixo.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6 }}>
+                      {epScenes.map(scene => (
+                        <div key={scene.id} style={{ flexShrink: 0, width: 160, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                          <div
+                            style={{ position: 'relative', width: '100%', aspectRatio: '16/9', background: '#000', cursor: 'pointer' }}
+                            onClick={() => setPlayerModalScene(scene)}
+                          >
+                            <video
+                              src={scene.videoUrl}
+                              muted
+                              playsInline
+                              preload="metadata"
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                              onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play().catch(() => {})}
+                              onMouseLeave={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0 }}
+                            />
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.2)' }}>
+                              <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(167,139,250,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: '#fff' }}>▶</div>
+                            </div>
+                          </div>
+                          <div style={{ padding: '6px 8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, color: C.text }}>#{scene.sceneNumber} · {scene.duration}s</span>
+                            <button
+                              onClick={() => injectSceneAsFirstFrame(scene)}
+                              title="Usar como referência para encadear a próxima cena"
+                              style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.gold, fontSize: 11, fontFamily: 'inherit' }}
+                            >🔗</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-
-                {/* Cenários */}
-                {libTab === 'scenarios' && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {scenarios.length === 0 ? <div style={{ color: C.textDim, fontSize: 13 }}>Nenhum cenário salvo.</div> : scenarios.map(s => (
-                      <button key={s.id} onClick={() => injectScenario(s)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 100 }}>
-                        <img src={s.imageUrl} alt={s.name} style={{ width: 88, height: 50, borderRadius: 8, objectFit: 'cover' }} />
-                        <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>{s.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {/* Cenas do episódio */}
-                {libTab === 'scenes' && (
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {!currentEpisode ? <div style={{ color: C.textDim, fontSize: 13 }}>Selecione um episódio acima.</div> :
-                      sceneAssets.filter(s => s.episodeId === currentEpisode.id).length === 0 ? <div style={{ color: C.textDim, fontSize: 13 }}>Nenhuma cena neste episódio.</div> :
-                      sceneAssets.filter(s => s.episodeId === currentEpisode.id).map(scene => (
-                        <button key={scene.id} onClick={() => injectSceneAsFirstFrame(scene)} title="Usar como frame inicial da próxima cena" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 6, cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 100 }}>
-                          <div style={{ width: 88, height: 50, borderRadius: 8, background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🎬</div>
-                          <span style={{ fontSize: 11, color: C.text, fontWeight: 600 }}>Cena {scene.sceneNumber}</span>
-                          <span style={{ fontSize: 10, color: C.textDim }}>{scene.duration}s</span>
-                        </button>
-                      ))
-                    }
-                  </div>
-                )}
-              </div>
-            )}
+              )
+            })()}
 
             {/* Video Preview — grande */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden', minHeight: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
