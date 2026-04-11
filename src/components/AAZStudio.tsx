@@ -202,7 +202,6 @@ export function AAZStudio() {
       const p = data.prompts as { lang: string; prompt: string }[]
       setPrompts({
         pt: p.find(x => x.lang === 'pt-br')?.prompt ?? '',
-        es: '',
         en: p.find(x => x.lang === 'en')?.prompt ?? '',
       })
       setSdStatus('success'); setSdMsg('Prompts gerados e injetados nas abas PT e EN!')
@@ -217,8 +216,8 @@ export function AAZStudio() {
   const [mode, setMode] = useState('text_to_video')
   const [ratio, setRatio] = useState('16:9')
   const [duration, setDuration] = useState(5)
-  const [lang, setLang] = useState<'pt' | 'es' | 'en'>('pt')
-  const [prompts, setPrompts] = useState<Record<'pt' | 'es' | 'en', string>>({ pt: '', es: '', en: '' })
+  const [lang, setLang] = useState<'pt' | 'en'>('pt')
+  const [prompts, setPrompts] = useState<Record<'pt' | 'en', string>>({ pt: '', en: '' })
 
   /* refs omni */
   const [refImgs, setRefImgs] = useState<RefItem[]>([])
@@ -544,12 +543,12 @@ export function AAZStudio() {
             <div>
               <Label>Prompt</Label>
               <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 12 }}>
-                {[['pt', 'PT-BR'], ['es', 'ES'], ['en', 'EN']].map(([l, lbl]) => (
-                  <button key={l} onClick={() => setLang(l as 'pt' | 'es' | 'en')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: lang === l ? C.surface : 'transparent', border: lang === l ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: lang === l ? C.text : C.textDim, transition: 'all 0.15s', fontFamily: 'inherit' }}>{lbl}</button>
+                {[['pt', 'PT-BR'], ['en', 'EN']].map(([l, lbl]) => (
+                  <button key={l} onClick={() => setLang(l as 'pt' | 'en')} style={{ flex: 1, padding: '8px', borderRadius: 8, background: lang === l ? C.surface : 'transparent', border: lang === l ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: lang === l ? C.text : C.textDim, transition: 'all 0.15s', fontFamily: 'inherit' }}>{lbl}</button>
                 ))}
               </div>
               <textarea
-                placeholder={lang === 'pt' ? 'Descreva a cena...' : lang === 'es' ? 'Describe la escena...' : 'Describe the scene...'}
+                placeholder={lang === 'pt' ? 'Descreva a cena...' : 'Describe the scene...'}
                 value={prompts[lang]}
                 onChange={e => setPrompts(p => ({ ...p, [lang]: e.target.value }))}
                 style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 100 }}
