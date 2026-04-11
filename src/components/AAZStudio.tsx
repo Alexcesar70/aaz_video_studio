@@ -44,7 +44,8 @@ interface Character { id: string; name: string; emoji: string; color: string; de
 interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
 interface LibraryEntry { charId: string; name: string; emoji: string; images: string[]; createdAt: string }
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
-interface Episode { id: string; name: string; createdAt: string }
+interface Project { id: string; name: string; createdAt: string }
+interface Episode { id: string; name: string; projectId?: string | null; createdAt: string }
 interface SceneAsset { id: string; episodeId: string; sceneNumber: number; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
@@ -135,6 +136,26 @@ export function AAZStudio() {
     try { await fetch(`/api/scenarios/${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch {}
   }
 
+  /* projects */
+  const [projects, setProjects] = useState<Project[]>([])
+  const [currentProject, setCurrentProject] = useState<Project | null>(null)
+  const [newProjectName, setNewProjectName] = useState('')
+  const [showNewProjectInput, setShowNewProjectInput] = useState(false)
+
+  const loadProjects = useCallback(async () => {
+    try { const r = await fetch('/api/projects'); if (r.ok) setProjects(await r.json()) } catch {}
+  }, [])
+
+  const createProject = async () => {
+    if (!newProjectName.trim()) return
+    const p: Project = { id: `prj_${Date.now()}`, name: newProjectName.trim(), createdAt: new Date().toISOString() }
+    setProjects(prev => [...prev, p])
+    setCurrentProject(p)
+    setNewProjectName('')
+    setShowNewProjectInput(false)
+    try { await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(p) }) } catch {}
+  }
+
   /* episodes */
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null)
@@ -146,10 +167,20 @@ export function AAZStudio() {
 
   const createEpisode = async () => {
     if (!newEpName.trim()) return
-    const ep: Episode = { id: `ep_${Date.now()}`, name: newEpName, createdAt: new Date().toISOString() }
+    const ep: Episode = {
+      id: `ep_${Date.now()}`,
+      name: newEpName,
+      projectId: currentProject?.id ?? null,
+      createdAt: new Date().toISOString()
+    }
     setEpisodes(p => [...p, ep]); setCurrentEpisode(ep); setNewEpName('')
     try { await fetch('/api/episodes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ep) }) } catch {}
   }
+
+  /* episodes filtrados pelo projeto selecionado */
+  const filteredEpisodes = currentProject
+    ? episodes.filter(e => e.projectId === currentProject.id)
+    : episodes
 
   const deleteEpisode = async (id: string) => {
     setEpisodes(p => p.filter(e => e.id !== id))
@@ -166,7 +197,14 @@ export function AAZStudio() {
   }, [])
 
   /* load all data */
-  useEffect(() => { loadScenarios(); loadEpisodes(); loadScenes() }, [loadScenarios, loadEpisodes, loadScenes])
+  useEffect(() => { loadProjects(); loadScenarios(); loadEpisodes(); loadScenes() }, [loadProjects, loadScenarios, loadEpisodes, loadScenes])
+
+  /* Se o episódio selecionado não pertence ao projeto atual, desseleciona */
+  useEffect(() => {
+    if (currentProject && currentEpisode && currentEpisode.projectId !== currentProject.id) {
+      setCurrentEpisode(null)
+    }
+  }, [currentProject, currentEpisode])
 
   /* asset panel in studio */
   const [showAssets, setShowAssets] = useState(false)
@@ -458,16 +496,46 @@ export function AAZStudio() {
           {/* ── Esquerda: Preview grande + Prompt ── */}
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
 
-            {/* Ideia 5: Episódio seletor */}
+            {/* Projeto + Episódio seletor */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <select value={currentEpisode?.id ?? ''} onChange={e => setCurrentEpisode(episodes.find(ep => ep.id === e.target.value) ?? null)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 14, fontFamily: 'inherit', flex: 1, outline: 'none' }}>
-                <option value="">Selecione um episódio</option>
-                {episodes.map(ep => <option key={ep.id} value={ep.id}>{ep.name}</option>)}
+              {/* Projeto */}
+              <select
+                value={currentProject?.id ?? ''}
+                onChange={e => {
+                  const val = e.target.value
+                  if (val === '__new__') { setShowNewProjectInput(true); return }
+                  setCurrentProject(projects.find(p => p.id === val) ?? null)
+                }}
+                style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 14, fontFamily: 'inherit', flex: 1, outline: 'none' }}
+              >
+                <option value="">📁 Todos os projetos</option>
+                {projects.map(p => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
+                <option value="__new__">＋ Novo projeto...</option>
               </select>
-              <Input placeholder="Novo episódio..." value={newEpName} onChange={e => setNewEpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createEpisode()} style={{ width: 200 }} />
+
+              {/* Episódio */}
+              <select value={currentEpisode?.id ?? ''} onChange={e => setCurrentEpisode(filteredEpisodes.find(ep => ep.id === e.target.value) ?? null)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 14, fontFamily: 'inherit', flex: 1, outline: 'none' }}>
+                <option value="">🎬 Selecione um episódio</option>
+                {filteredEpisodes.map(ep => <option key={ep.id} value={ep.id}>{ep.name}</option>)}
+              </select>
+
+              <Input placeholder="Novo episódio..." value={newEpName} onChange={e => setNewEpName(e.target.value)} onKeyDown={e => e.key === 'Enter' && createEpisode()} style={{ width: 180 }} />
               <button onClick={createEpisode} disabled={!newEpName.trim()} style={{ background: newEpName.trim() ? C.purple : C.card, border: `1px solid ${newEpName.trim() ? C.purple : C.border}`, borderRadius: 8, padding: '8px 16px', cursor: newEpName.trim() ? 'pointer' : 'default', color: newEpName.trim() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar</button>
               <button onClick={() => setShowAssets(!showAssets)} style={{ background: showAssets ? C.purple : C.card, border: `1px solid ${showAssets ? C.purple : C.border}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: showAssets ? '#fff' : C.textDim, fontSize: 13, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Assets</button>
             </div>
+
+            {/* Input inline para novo projeto */}
+            {showNewProjectInput && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: `${C.purple}10`, border: `1px solid ${C.purple}40`, borderRadius: 8, padding: '10px 12px' }}>
+                <span style={{ fontSize: 13, color: C.purple, fontWeight: 600 }}>Novo projeto:</span>
+                <Input autoFocus placeholder="Nome do projeto..." value={newProjectName} onChange={e => setNewProjectName(e.target.value)} onKeyDown={e => {
+                  if (e.key === 'Enter') createProject()
+                  if (e.key === 'Escape') { setShowNewProjectInput(false); setNewProjectName('') }
+                }} style={{ flex: 1 }} />
+                <button onClick={createProject} disabled={!newProjectName.trim()} style={{ background: newProjectName.trim() ? C.purple : C.card, border: `1px solid ${newProjectName.trim() ? C.purple : C.border}`, borderRadius: 8, padding: '8px 16px', cursor: newProjectName.trim() ? 'pointer' : 'default', color: newProjectName.trim() ? '#fff' : C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Criar</button>
+                <button onClick={() => { setShowNewProjectInput(false); setNewProjectName('') }} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 14px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}>Cancelar</button>
+              </div>
+            )}
 
             {/* Ideia 4: Painel de Assets colapsável */}
             {showAssets && (
