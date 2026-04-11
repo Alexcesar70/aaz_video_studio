@@ -572,7 +572,9 @@ export function AAZStudio() {
 
   /* Mention @ no textarea do Assistente */
   const sdDescRef = useRef<HTMLTextAreaElement>(null)
+  const promptTextareaRef = useRef<HTMLTextAreaElement>(null)
   const [mention, setMention] = useState<{ start: number; query: string; highlightIdx: number } | null>(null)
+  const [promptMention, setPromptMention] = useState<{ start: number; query: string; highlightIdx: number } | null>(null)
 
   // Dado o conteúdo atual e a posição do cursor, detecta se o usuário
   // está digitando um mention @xxx. Retorna { start, query } ou null.
@@ -683,6 +685,90 @@ export function AAZStudio() {
     }
   }
 
+  /* ── Autocomplete @ no textarea do PROMPT final (PT/EN) ── */
+  const promptMentionMatches = useMemo(() => {
+    if (!promptMention) return [] as Character[]
+    const q = promptMention.query.toLowerCase()
+    const all = CHARACTERS
+      .filter(c => c.id.toLowerCase().startsWith(q) || c.name.toLowerCase().startsWith(q))
+      .sort((a, b) => {
+        const aHas = library[a.id]?.images?.length ? 1 : 0
+        const bHas = library[b.id]?.images?.length ? 1 : 0
+        return bHas - aHas
+      })
+    return all.slice(0, 7)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promptMention, library])
+
+  const handlePromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    const cursor = e.target.selectionStart ?? value.length
+    setPrompts(p => ({ ...p, [lang]: value }))
+    const detected = detectMention(value, cursor)
+    if (detected) {
+      setPromptMention({ start: detected.start, query: detected.query, highlightIdx: 0 })
+    } else {
+      setPromptMention(null)
+    }
+  }
+
+  const selectPromptMention = (char: Character) => {
+    if (!promptMention) return
+    const current = prompts[lang]
+    const before = current.slice(0, promptMention.start)
+    const after = current.slice(promptMention.start + 1 + promptMention.query.length)
+    const replacement = `@${char.id} `
+    const newText = before + replacement + after
+    setPrompts(p => ({ ...p, [lang]: newText }))
+    setPromptMention(null)
+
+    // Adiciona ao sidebar direito (se não estiver)
+    if (!selChars.find(c => c.id === char.id)) {
+      setSelChars(p => [...p, char])
+    }
+
+    // Se tem refs na biblioteca, força modo omni e injeta direto no refImgs
+    const entry = library[char.id]
+    if (entry?.images?.length) {
+      if (mode !== 'omni_reference') setMode('omni_reference')
+      setRefImgs(p => {
+        const next = [...p]
+        for (const img of entry.images) {
+          if (next.length >= 9) break
+          if (next.some(r => r.url === img)) continue
+          next.push({ url: img, label: `@image${next.length + 1}`, name: char.name, fromLib: true, charId: char.id })
+        }
+        return next
+      })
+    }
+
+    // Reposiciona o cursor
+    window.setTimeout(() => {
+      const ta = promptTextareaRef.current
+      if (ta) {
+        const pos = before.length + replacement.length
+        ta.focus()
+        ta.setSelectionRange(pos, pos)
+      }
+    }, 0)
+  }
+
+  const handlePromptKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!promptMention || promptMentionMatches.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setPromptMention(m => m ? { ...m, highlightIdx: (m.highlightIdx + 1) % promptMentionMatches.length } : m)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setPromptMention(m => m ? { ...m, highlightIdx: (m.highlightIdx - 1 + promptMentionMatches.length) % promptMentionMatches.length } : m)
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      selectPromptMention(promptMentionMatches[promptMention.highlightIdx])
+    } else if (e.key === 'Escape') {
+      setPromptMention(null)
+    }
+  }
+
   const runSceneDirector = async () => {
     if (!sdDesc.trim()) { setSdStatus('error'); setSdMsg('Descreva a cena.'); return }
     setSdStatus('generating'); setSdMsg('Claude está escrevendo os prompts...')
@@ -755,7 +841,68 @@ export function AAZStudio() {
     })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
+
+  /**
+   * Sincronização reativa: sempre que o texto dos prompts ou da
+   * descrição do Assistente muda, detecta @ids canônicos mencionados
+   * e garante que suas imagens estejam no refImgs.
+   *
+   * Cobre colagem de prompt pronto, edição manual, importação, etc.
+   * Se o @id é um personagem com refs na biblioteca e ainda não está
+   * no refImgs, é adicionado automaticamente.
+   */
   const [prompts, setPrompts] = useState<Record<'pt' | 'en', string>>({ pt: '', en: '' })
+  useEffect(() => {
+    const combinedText = `${prompts.pt}\n${prompts.en}\n${sdDesc}`
+    const mentionRegex = /@(\w+)/g
+    const mentionedIds = new Set<string>()
+    let m: RegExpExecArray | null
+    while ((m = mentionRegex.exec(combinedText)) !== null) {
+      const id = m[1].toLowerCase()
+      // Ignora tags técnicas já resolvidas
+      if (/^image\d+$/.test(id) || /^video\d+$/.test(id) || /^audio\d+$/.test(id)) continue
+      if (CHARACTERS.find(c => c.id === id)) mentionedIds.add(id)
+    }
+    if (mentionedIds.size === 0) return
+
+    const toAdd: Character[] = []
+    mentionedIds.forEach(id => {
+      const alreadyHas = refImgs.some(r => r.charId === id)
+      if (alreadyHas) return
+      const entry = library[id]
+      if (!entry?.images?.length) return
+      const char = CHARACTERS.find(c => c.id === id)
+      if (char) toAdd.push(char)
+    })
+
+    if (toAdd.length === 0) return
+
+    // Adiciona as imagens dos personagens faltantes
+    setRefImgs(p => {
+      const next = [...p]
+      for (const char of toAdd) {
+        const entry = library[char.id]
+        if (!entry?.images?.length) continue
+        for (const img of entry.images) {
+          if (next.length >= 9) break
+          if (next.some(r => r.url === img)) continue
+          next.push({ url: img, label: `@image${next.length + 1}`, name: char.name, fromLib: true, charId: char.id })
+        }
+      }
+      return next
+    })
+    // Adiciona ao sidebar (selChars)
+    setSelChars(p => {
+      const next = [...p]
+      for (const char of toAdd) {
+        if (!next.find(c => c.id === char.id)) next.push(char)
+      }
+      return next
+    })
+    // Garante modo Omni Reference
+    if (mode !== 'omni_reference') setMode('omni_reference')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prompts.pt, prompts.en, sdDesc, library])
 
   /* refs omni */
   const [refImgs, setRefImgs] = useState<RefItem[]>([])
@@ -1574,15 +1721,56 @@ export function AAZStudio() {
                 ))}
               </div>
               <div style={{ fontSize: 11, color: C.textDim, marginBottom: 6 }}>
-                {promptMode === 'assistant' ? 'Prompt gerado (editável antes de gerar o vídeo)' : 'Escreva o prompt diretamente'}
+                {promptMode === 'assistant' ? 'Prompt gerado (editável antes de gerar o vídeo) — @ para mencionar personagens' : 'Escreva o prompt diretamente — digite @ para mencionar um personagem'}
               </div>
-              <textarea
-                placeholder={lang === 'pt' ? 'Descreva a cena...' : 'Describe the scene...'}
-                value={prompts[lang]}
-                onChange={e => setPrompts(p => ({ ...p, [lang]: e.target.value }))}
-                style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 100 }}
-                rows={4}
-              />
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  ref={promptTextareaRef}
+                  placeholder={lang === 'pt' ? 'Descreva a cena...' : 'Describe the scene...'}
+                  value={prompts[lang]}
+                  onChange={handlePromptChange}
+                  onKeyDown={handlePromptKeyDown}
+                  onBlur={() => window.setTimeout(() => setPromptMention(null), 150)}
+                  style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px', color: C.text, fontSize: 14, fontFamily: 'inherit', lineHeight: 1.7, resize: 'vertical', outline: 'none', boxSizing: 'border-box', minHeight: 100 }}
+                  rows={4}
+                />
+                {/* Dropdown de mention (prompt) */}
+                {promptMention && promptMentionMatches.length > 0 && (
+                  <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4, background: C.card, border: `1px solid ${C.purple}60`, borderRadius: 10, boxShadow: `0 8px 24px rgba(0,0,0,0.4)`, zIndex: 50, maxHeight: 260, overflowY: 'auto' }}>
+                    <div style={{ padding: '8px 12px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+                      PERSONAGEM {promptMention.query && `· "${promptMention.query}"`}
+                    </div>
+                    {promptMentionMatches.map((char, i) => {
+                      const hasRefs = !!library[char.id]?.images?.length
+                      const isHighlighted = i === promptMention.highlightIdx
+                      return (
+                        <button
+                          key={char.id}
+                          onMouseDown={e => { e.preventDefault(); selectPromptMention(char) }}
+                          onMouseEnter={() => setPromptMention(m => m ? { ...m, highlightIdx: i } : m)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 12px', background: isHighlighted ? `${C.purple}20` : 'transparent', border: 'none', cursor: 'pointer', color: C.text, fontSize: 13, fontFamily: 'inherit', textAlign: 'left' }}
+                        >
+                          <span style={{ fontSize: 20 }}>{char.emoji}</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                            <span style={{ fontWeight: 600, color: isHighlighted ? C.purple : C.text }}>{char.name}</span>
+                            <span style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace' }}>@{char.id}</span>
+                          </div>
+                          {hasRefs ? (
+                            <span style={{ fontSize: 9, color: C.green, background: `${C.green}15`, padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.green}40`, whiteSpace: 'nowrap' }}>
+                              {library[char.id].images.length} refs
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 9, color: C.textDim, whiteSpace: 'nowrap' }}>sem refs</span>
+                          )}
+                        </button>
+                      )
+                    })}
+                    <div style={{ padding: '6px 12px', fontSize: 10, color: C.textDim, borderTop: `1px solid ${C.border}` }}>
+                      ↑↓ navegar · Enter selecionar · Esc fechar
+                    </div>
+                  </div>
+                )}
+              </div>
               {/* Tags @ clicáveis — insere @Nome no prompt, convertido para @imageN ao enviar */}
               {refImgs.length > 0 && (
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 10 }}>
