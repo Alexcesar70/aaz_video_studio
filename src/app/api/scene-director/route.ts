@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { SCENE_DIRECTOR_SYSTEM } from '@/lib/sceneDirectorSystem'
+import { getSceneDirectorSystem } from '@/lib/sceneDirectorSystem'
+import { getMood } from '@/lib/moods'
 
 /**
  * POST /api/scene-director
@@ -48,23 +49,31 @@ export async function POST(request: NextRequest) {
       parts.push(`Target video duration: ${body.duration} seconds — calibrate the number of beats accordingly.`)
     }
     if (body.emotion) {
-      parts.push(`Emotional tone / conflict: ${body.emotion} — express through body physics.`)
+      parts.push(`Emotional tone / conflict (expressed as body physics — NOT as visual mood): ${body.emotion}`)
+    }
+    if (body.mood) {
+      const mood = getMood(body.mood)
+      if (mood.videoPromptInjection) {
+        parts.push(`Visual mood (lighting/palette/atmosphere — applied to Style & Mood block): ${mood.shortLabel} — ${mood.narrative}`)
+      }
     }
 
     parts.push('')
     parts.push('REMINDERS:')
     parts.push('- If the creator included dialogue (even implied), preserve it verbatim in the Audio section.')
     parts.push('- Use @charid tags for every character mention.')
+    parts.push('- Mood = visual lighting/atmosphere (goes in Style & Mood block). Emotion = character body physics (goes in Dynamic Description). They can contrast.')
     parts.push('- Return ONLY the JSON array with PT-BR and EN objects, each with the 4 sections.')
 
     const userMessage = parts.join('\n')
 
     // ── Chamada à Claude API com retry em overloaded ──────────
     const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'
+    const systemPrompt = getSceneDirectorSystem(body.mood)
     const requestBody = JSON.stringify({
       model,
       max_tokens: 4096,
-      system: SCENE_DIRECTOR_SYSTEM,
+      system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
     })
 

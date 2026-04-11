@@ -6,6 +6,7 @@ import { VIDEO_ENGINES, DEFAULT_ENGINE_ID, getEngine } from '@/lib/videoEngines'
 import { IMAGE_ENGINES, DEFAULT_IMAGE_ENGINE_ID, getImageEngine } from '@/lib/imageEngines'
 import type { Asset, AssetType } from '@/lib/assets'
 import { LEAD_CHARACTERS, slugify, isLeadId, defaultEmoji } from '@/lib/assets'
+import { MOODS, DEFAULT_MOOD_ID, getMood, type MoodId } from '@/lib/moods'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -50,7 +51,7 @@ interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt:
 interface Project { id: string; name: string; createdAt: string }
 interface Episode { id: string; name: string; projectId?: string | null; createdAt: string }
 type SceneStatus = 'draft' | 'approved' | 'rejected'
-interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus }
+interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus; mood?: MoodId }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
 /* ── Atoms ── */
@@ -373,15 +374,20 @@ function SceneAssetsStrip({
   refImgs,
   promptText,
   atAssets,
+  mood,
+  onMoodChange,
   onRemove,
   onOpenAtelier,
 }: {
   refImgs: RefItem[]
   promptText: string
   atAssets: Asset[]
+  mood: MoodId
+  onMoodChange: (m: MoodId) => void
   onRemove: (charId: string) => void
   onOpenAtelier: () => void
 }) {
+  const currentMood = getMood(mood)
   // Agrupa refImgs por charId (asset único) — conta quantas imagens cada um tem
   const grouped = new Map<string, { name: string; count: number; emoji: string; color: string; type: AssetType; fromLib: boolean }>()
   for (const r of refImgs) {
@@ -421,7 +427,7 @@ function SceneAssetsStrip({
     if (!grouped.has(id)) pendingMentions.push(id)
   }
 
-  if (grouped.size === 0 && pendingMentions.length === 0) return null
+  const hasAnyAsset = grouped.size > 0 || pendingMentions.length > 0
 
   return (
     <div style={{
@@ -436,8 +442,47 @@ function SceneAssetsStrip({
       flexWrap: 'wrap',
     }}>
       <span style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>
-        ASSETS DA CENA
+        {hasAnyAsset ? 'CENA' : 'MOOD DA CENA'}
       </span>
+
+      {/* Mood chip — sempre visível, wrap em select transparente pra trocar */}
+      <div style={{ position: 'relative', display: 'inline-flex' }}>
+        <div
+          title="Mood visual da cena — clique pra trocar"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            background: `${C.purple}15`,
+            border: `1px solid ${C.purple}50`,
+            borderRadius: 20,
+            padding: '4px 10px',
+            fontSize: 12,
+            color: C.purple,
+            fontWeight: 600,
+            pointerEvents: 'none',
+          }}
+        >
+          <span style={{ fontSize: 14 }}>{currentMood.icon}</span>
+          <span>{currentMood.shortLabel}</span>
+          <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+        </div>
+        <select
+          value={mood}
+          onChange={e => onMoodChange(e.target.value as MoodId)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            opacity: 0,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+          }}
+        >
+          {MOODS.map(m => (
+            <option key={m.id} value={m.id}>{m.label} — {m.narrative}</option>
+          ))}
+        </select>
+      </div>
 
       {Array.from(grouped.entries()).map(([key, g]) => (
         <div
@@ -528,6 +573,7 @@ function QuickCreateAssetModal({
   const [idEdited, setIdEdited] = useState(false)
   const [desc, setDesc] = useState('')
   const [engineId, setEngineId] = useState(DEFAULT_IMAGE_ENGINE_ID)
+  const [mood, setMood] = useState<MoodId>(DEFAULT_MOOD_ID)
   const [variations, setVariations] = useState(4)
   const [refUrl, setRefUrl] = useState('')
   const [refining, setRefining] = useState(false)
@@ -554,7 +600,7 @@ function QuickCreateAssetModal({
       const res = await fetch('/api/image-director', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, description: desc, has_reference: !!refUrl }),
+        body: JSON.stringify({ type, description: desc, has_reference: !!refUrl, mood }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
       const data = await res.json() as { prompt: string; name_suggestion: string }
@@ -713,6 +759,12 @@ function QuickCreateAssetModal({
               </>
             )}
 
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 4 }}>MOOD / TOM VISUAL</div>
+              <select value={mood} onChange={e => setMood(e.target.value as MoodId)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', width: '100%' }}>
+                {MOODS.map(m => <option key={m.id} value={m.id}>{m.label} — {m.narrative}</option>)}
+              </select>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 8 }}>
               <select value={engineId} onChange={e => setEngineId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none' }}>
                 {IMAGE_ENGINES.map(eng => (
@@ -847,6 +899,7 @@ export function AAZStudio() {
   const [atIdEdited, setAtIdEdited] = useState(false)
   const [atDesc, setAtDesc] = useState('')
   const [atEngineId, setAtEngineId] = useState<string>(DEFAULT_IMAGE_ENGINE_ID)
+  const [atMood, setAtMood] = useState<MoodId>(DEFAULT_MOOD_ID)
   const [atVariations, setAtVariations] = useState(4)
   const [atRefUrl, setAtRefUrl] = useState('')
   const [atRefining, setAtRefining] = useState(false)
@@ -1222,6 +1275,7 @@ export function AAZStudio() {
   const [sdDesc, setSdDesc] = useState('')
   const [sdSetting, setSdSetting] = useState('')
   const [sdEmotion, setSdEmotion] = useState('')
+  const [sdMood, setSdMood] = useState<MoodId>(DEFAULT_MOOD_ID)
   const [sdStatus, setSdStatus] = useState('idle')
   const [sdMsg, setSdMsg] = useState('')
 
@@ -1503,6 +1557,7 @@ export function AAZStudio() {
           setting: sdSetting || undefined,
           duration,
           emotion: sdEmotion || undefined,
+          mood: sdMood,
         }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
@@ -1909,10 +1964,12 @@ export function AAZStudio() {
   }
 
   const injectSceneAsFirstFrame = (scene: SceneAsset) => {
-    // Navega pro Estúdio e ativa encadeamento usando o vídeo como referência
+    // Navega pro Estúdio e ativa encadeamento usando o vídeo como referência.
+    // Herda o mood da cena anterior (se tiver) — continuidade visual.
     setTab('studio')
     setLastResult(scene.videoUrl)
     setChain(true)
+    if (scene.mood) setSdMood(scene.mood)
   }
 
   /**
@@ -1939,6 +1996,7 @@ export function AAZStudio() {
     const doReset = () => {
       setPrompts({ pt: '', en: '' })
       setSdDesc(''); setSdSetting(''); setSdEmotion('')
+      setSdMood(DEFAULT_MOOD_ID)
       setSdStatus('idle'); setSdMsg('')
       setRefImgs([]); setRefVids([]); setRefAuds([])
       setFirstUrl(''); setLastUrl(''); setFirstPreview(''); setLastPreview('')
@@ -2098,6 +2156,7 @@ export function AAZStudio() {
         characters: selChars.map(c => c.id), duration, cost,
         createdAt: new Date().toISOString(),
         status: 'draft',
+        mood: sdMood,
       }
       setSceneAssets(p => [...p, scene])
       fetch('/api/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scene) }).catch(() => {})
@@ -2131,7 +2190,7 @@ export function AAZStudio() {
       const res = await fetch('/api/image-director', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: atType, description: atDesc, has_reference: !!atRefUrl }),
+        body: JSON.stringify({ type: atType, description: atDesc, has_reference: !!atRefUrl, mood: atMood }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
       const data = await res.json() as { prompt: string; name_suggestion: string; tags: string[] }
@@ -2682,9 +2741,27 @@ export function AAZStudio() {
                       <Input placeholder="Ex: Parque, Clube da Aliança..." value={sdSetting} onChange={e => setSdSetting(e.target.value)} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>EMOÇÃO / TOM (opcional)</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>EMOÇÃO DO PERSONAGEM (opcional)</div>
                       <Input placeholder="Ex: alegria, tensão, reflexão..." value={sdEmotion} onChange={e => setSdEmotion(e.target.value)} />
                     </div>
+                  </div>
+
+                  {/* Mood visual da cena — campo separado da emoção. Mood afeta
+                      iluminação/paleta/atmosfera (bloco Style & Mood); emoção
+                      afeta body physics dos personagens. Podem contrastar. */}
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: C.purple, marginBottom: 6, letterSpacing: '0.3px' }}>
+                      MOOD VISUAL DA CENA <span style={{ color: C.textDim, fontWeight: 400 }}>— iluminação, paleta, atmosfera</span>
+                    </div>
+                    <select
+                      value={sdMood}
+                      onChange={e => setSdMood(e.target.value as MoodId)}
+                      style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 13, fontFamily: 'inherit', width: '100%', outline: 'none' }}
+                    >
+                      {MOODS.map(m => (
+                        <option key={m.id} value={m.id}>{m.label} — {m.narrative}</option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Contexto herdado do Estúdio */}
@@ -2717,6 +2794,8 @@ export function AAZStudio() {
                 refImgs={refImgs}
                 promptText={prompts[lang]}
                 atAssets={atAssets}
+                mood={sdMood}
+                onMoodChange={setSdMood}
                 onRemove={(charId) => {
                   setRefImgs(p => p.filter(r => r.charId !== charId).map((r, i) => ({ ...r, label: `@image${i + 1}` })))
                   setSelChars(p => p.filter(c => c.id !== charId))
@@ -3307,6 +3386,22 @@ export function AAZStudio() {
                       />
                     </>
                   )}
+                </div>
+
+                <div>
+                  <Label>Mood / Tom visual</Label>
+                  <select
+                    value={atMood}
+                    onChange={e => setAtMood(e.target.value as MoodId)}
+                    style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, fontFamily: 'inherit', width: '100%', outline: 'none' }}
+                  >
+                    {MOODS.map(m => (
+                      <option key={m.id} value={m.id}>{m.label}</option>
+                    ))}
+                  </select>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4, fontStyle: 'italic' }}>
+                    {getMood(atMood).narrative}
+                  </div>
                 </div>
 
                 <div>

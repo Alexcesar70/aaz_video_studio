@@ -41,6 +41,7 @@ export async function POST(request: NextRequest) {
       type?: AssetType
       description?: string
       has_reference?: boolean
+      mood?: string
     }
 
     if (!body.type || !['character', 'scenario', 'item'].includes(body.type)) {
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'description é obrigatória.' }, { status: 400 })
     }
 
-    const systemPrompt = getImageDirectorSystemPrompt(body.type)
+    const systemPrompt = getImageDirectorSystemPrompt(body.type, body.mood)
 
     const userMessage = [
       `Asset type: ${body.type}`,

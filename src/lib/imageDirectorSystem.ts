@@ -5,6 +5,7 @@
  */
 
 import type { AssetType } from './assets'
+import { getMood } from './moods'
 
 const AAZ_STYLE_BLOCK = `3D character/prop/environment with clay texture and handcrafted look. Smooth clay surface with slightly rough handmade finish suggesting hand-sculpted figures, large expressive eyes with subtle clay sheen, rounded proportions with soft edges, warm palette (ochre, cream, teal, soft pink, olive green), soft ambient occlusion, volumetric lighting, cinematic depth of field. Pixar/DreamWorks look.`
 
@@ -45,15 +46,20 @@ const COMMON_RULES = `Rules:
 5. Do NOT include backstory, emotions as adjectives, or abstract concepts. Only what a camera can see.
 6. If the creator's description is vague, fill in sensible defaults for this universe (warm palette, clay, handcrafted).`
 
-export function getImageDirectorSystemPrompt(type: AssetType): string {
+export function getImageDirectorSystemPrompt(type: AssetType, moodId?: string): string {
   let guide = CHARACTER_GUIDE
   if (type === 'scenario') guide = SCENARIO_GUIDE
   else if (type === 'item') guide = ITEM_GUIDE
 
+  const mood = getMood(moodId)
+  const moodBlock = mood.imagePromptInjection
+    ? `\nMANDATORY MOOD / LIGHTING — "${mood.shortLabel}" (${mood.narrative}):\n${mood.imagePromptInjection}\nThe mood MUST visibly affect lighting direction, palette, shadows and atmosphere in the final prompt. Integrate it naturally — do not tack it on at the end.\n`
+    : ''
+
   return `You are the Image Director for "AAZ com Jesus", a Christian children's animation project with a 3D clay aesthetic. You convert a creator's short description (in Portuguese or English) into a polished image generation prompt (in English) optimized for Nano Banana Pro / Flux / Imagen 3.
 
 MANDATORY AAZ STYLE: ${AAZ_STYLE_BLOCK}
-
+${moodBlock}
 ${guide}
 
 ${COMMON_RULES}

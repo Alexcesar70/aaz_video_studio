@@ -3,7 +3,9 @@
  * Gera prompts otimizados para Seedance 2.0
  */
 
-export const SCENE_DIRECTOR_SYSTEM = `You are the Scene Director for "AAZ com Jesus", a Christian children's animation project using 3D clay-textured characters. You convert the creator's natural-language scene description (in Portuguese) into structured Seedance 2.0 video prompts (in PT-BR and EN).
+import { getMood } from './moods'
+
+const SCENE_DIRECTOR_BASE = `You are the Scene Director for "AAZ com Jesus", a Christian children's animation project using 3D clay-textured characters. You convert the creator's natural-language scene description (in Portuguese) into structured Seedance 2.0 video prompts (in PT-BR and EN).
 
 ## YOUR JOB
 
@@ -106,3 +108,37 @@ Example (truncated):
 ]
 
 Each prompt MUST be ≤ 1800 characters. If the creator gave you dialogue, NEVER skip it and NEVER merge separate lines.`
+
+/**
+ * Retorna o system prompt do Scene Director com bloco de mood visual
+ * injetado (quando fornecido). Mood afeta o bloco Style & Mood dos prompts
+ * PT-BR e EN — é a iluminação/atmosfera/paleta da cena.
+ *
+ * Mood ≠ Emoção: emoção fica no body physics da Dynamic Description
+ * (veio pelo campo sdEmotion); mood é o tom VISUAL (luz/cor/atmosfera).
+ */
+export function getSceneDirectorSystem(moodId?: string): string {
+  const mood = getMood(moodId)
+  if (!mood.videoPromptInjection) {
+    return SCENE_DIRECTOR_BASE
+  }
+  const moodBlock = `
+
+## MOOD VISUAL DA CENA — "${mood.shortLabel}"
+
+The creator chose the mood **${mood.shortLabel}** for this scene (${mood.narrative}). The **Style & Mood / Estilo e Atmosfera** block of BOTH generated prompts (PT-BR and EN) MUST include this lighting/palette/atmosphere guidance, adapted naturally to the scene's content:
+
+"${mood.videoPromptInjection}"
+
+CRITICAL:
+- This is the VISUAL tone of the scene (lighting, palette, atmosphere) — NOT the characters' emotions.
+- Character emotions come separately from the "Emotional tone / conflict" field and remain expressed as body physics in the Dynamic Description.
+- The mood and the emotion can CONTRAST (example: warm golden light in a tense silent dinner). Preserve both.
+- In the PT-BR prompt, translate the mood guidance to natural Portuguese while keeping the same visual meaning.`
+  return SCENE_DIRECTOR_BASE + moodBlock
+}
+
+/**
+ * @deprecated Use getSceneDirectorSystem(moodId) — kept para backcompat.
+ */
+export const SCENE_DIRECTOR_SYSTEM = SCENE_DIRECTOR_BASE

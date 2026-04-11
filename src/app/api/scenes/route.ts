@@ -6,6 +6,8 @@ interface SceneAsset {
   id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string
   videoUrl: string; lastFrameUrl: string; characters: string[]
   duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus
+  /** Mood visual usado na geração (da lib moods). Opcional — retrocompat. */
+  mood?: string
 }
 
 const ORPHAN = '__orphan__'

@@ -7,6 +7,7 @@ interface SceneAsset {
   sceneNumber: number; title?: string; prompt: string
   videoUrl: string; lastFrameUrl: string; characters: string[]
   duration: number; cost: string; createdAt: string; status?: SceneStatus
+  mood?: string
 }
 
 const ORPHAN = '__orphan__'
