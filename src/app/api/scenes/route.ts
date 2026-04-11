@@ -8,6 +8,10 @@ interface SceneAsset {
   duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus
   /** Mood visual usado na geração (da lib moods). Opcional — retrocompat. */
   mood?: string
+  /** Localização da cena (sdSetting), herdada em cenas encadeadas. Opcional. */
+  setting?: string
+  /** Emoção dos personagens (sdEmotion), herdada em cenas encadeadas. Opcional. */
+  emotion?: string
 }
 
 const ORPHAN = '__orphan__'

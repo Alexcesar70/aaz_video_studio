@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSceneDirectorSystem } from '@/lib/sceneDirectorSystem'
+import { getSceneDirectorSystem, type ChainFromContext } from '@/lib/sceneDirectorSystem'
 import { getMood } from '@/lib/moods'
 
 /**
@@ -58,6 +58,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Chain context — se esta cena é continuação de outra, o cliente
+    // envia o objeto chain_from que vira contexto pro Claude.
+    const chainFrom = body.chain_from as ChainFromContext | null | undefined
+    if (chainFrom) {
+      parts.push('')
+      parts.push(`This is a DIRECT CONTINUATION of scene #${chainFrom.sceneNumber}${chainFrom.sceneTitle ? ` "${chainFrom.sceneTitle}"` : ''}. See the CONTINUATION CONTEXT block in the system prompt for full details.`)
+    }
+
     parts.push('')
     parts.push('REMINDERS:')
     parts.push('- If the creator included dialogue (even implied), preserve it verbatim in the Audio section.')
@@ -69,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     // ── Chamada à Claude API com retry em overloaded ──────────
     const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'
-    const systemPrompt = getSceneDirectorSystem(body.mood)
+    const systemPrompt = getSceneDirectorSystem(body.mood, chainFrom ?? null)
     const requestBody = JSON.stringify({
       model,
       max_tokens: 4096,

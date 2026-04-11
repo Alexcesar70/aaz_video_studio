@@ -110,19 +110,48 @@ Example (truncated):
 Each prompt MUST be ≤ 1800 characters. If the creator gave you dialogue, NEVER skip it and NEVER merge separate lines.`
 
 /**
- * Retorna o system prompt do Scene Director com bloco de mood visual
- * injetado (quando fornecido). Mood afeta o bloco Style & Mood dos prompts
- * PT-BR e EN — é a iluminação/atmosfera/paleta da cena.
+ * Contexto de encadeamento (chain) — quando a cena em criação é uma
+ * continuação direta de uma cena anterior. Ativa um bloco extra no
+ * system prompt que instrui o Claude a produzir uma continuação
+ * orgânica (abrir mid-action, herdar personagens, narrar transição
+ * de mood quando mudar, etc).
+ */
+export interface ChainFromContext {
+  /** Número da cena anterior (ex: 3) */
+  sceneNumber: number
+  /** Título da cena anterior, se houver */
+  sceneTitle?: string
+  /** Últimas 400 chars do prompt da cena anterior (ou menos) */
+  previousPromptTail: string
+  /** Mood da cena anterior (id) */
+  previousMoodId?: string
+  /** Emoção da cena anterior, se foi persistida (opcional) */
+  previousEmotion?: string
+  /** IDs dos personagens que estavam na cena anterior */
+  inheritedCharacters: string[]
+}
+
+/**
+ * Retorna o system prompt do Scene Director com os blocos opcionais
+ * de mood visual e chain context injetados.
  *
  * Mood ≠ Emoção: emoção fica no body physics da Dynamic Description
- * (veio pelo campo sdEmotion); mood é o tom VISUAL (luz/cor/atmosfera).
+ * (campo sdEmotion); mood é o tom VISUAL (luz/cor/atmosfera).
+ *
+ * Chain context: quando presente, instrui o Claude que esta cena é
+ * uma continuação de outra. Claude deve abrir mid-action, manter o
+ * elenco da cena anterior, e — se o mood mudou — narrar a transição
+ * visual explicitamente no primeiro beat da Dynamic Description.
  */
-export function getSceneDirectorSystem(moodId?: string): string {
+export function getSceneDirectorSystem(
+  moodId?: string,
+  chainFrom?: ChainFromContext | null
+): string {
   const mood = getMood(moodId)
-  if (!mood.videoPromptInjection) {
-    return SCENE_DIRECTOR_BASE
-  }
-  const moodBlock = `
+  let prompt = SCENE_DIRECTOR_BASE
+
+  if (mood.videoPromptInjection) {
+    prompt += `
 
 ## MOOD VISUAL DA CENA — "${mood.shortLabel}"
 
@@ -135,10 +164,56 @@ CRITICAL:
 - Character emotions come separately from the "Emotional tone / conflict" field and remain expressed as body physics in the Dynamic Description.
 - The mood and the emotion can CONTRAST (example: warm golden light in a tense silent dinner). Preserve both.
 - In the PT-BR prompt, translate the mood guidance to natural Portuguese while keeping the same visual meaning.`
-  return SCENE_DIRECTOR_BASE + moodBlock
+  }
+
+  if (chainFrom) {
+    const prevMood = getMood(chainFrom.previousMoodId)
+    const moodChanged = prevMood.id !== mood.id && mood.id !== 'free' && prevMood.id !== 'free'
+    const charsList = chainFrom.inheritedCharacters.length
+      ? chainFrom.inheritedCharacters.map(c => `@${c}`).join(', ')
+      : '(nenhum — criador vai especificar)'
+    const titlePart = chainFrom.sceneTitle ? ` ("${chainFrom.sceneTitle}")` : ''
+
+    prompt += `
+
+## CONTINUATION CONTEXT — CENA #${chainFrom.sceneNumber}${titlePart}
+
+**This scene is a DIRECT CONTINUATION of a previous scene.** The previous scene is also being sent to the video generation model as a reference video (via Omni Reference), so the model will visually "see" the previous moments.
+
+### What the previous scene established
+- **Cast on screen**: ${charsList}
+- **Previous mood**: ${prevMood.shortLabel}${chainFrom.previousEmotion ? `\n- **Previous emotional tone**: ${chainFrom.previousEmotion}` : ''}
+- **Previous scene ended with (last beats of the prompt)**:
+  """
+  ${chainFrom.previousPromptTail}
+  """
+
+### HOW TO WRITE THE CONTINUATION
+
+1. **OPEN MID-ACTION.** Do NOT re-introduce the setting or characters from scratch. The audience already knows where they are and who's there. Your first beat must pick up immediately after the previous scene's final moment.
+
+2. **KEEP THE CAST** from the previous scene unless the creator explicitly listed different characters. Characters that were present MUST still be present in the same physical space (same body positions if that makes sense).
+
+3. **VISUAL STYLE CONTINUITY.** Because the previous video is a reference, match its visual signature — same clay texture, same palette baseline, same lens feel. The Static Description should describe the characters with the same canonical appearance as the previous scene.
+
+${moodChanged
+  ? `4. **MOOD TRANSITION — CRITICAL.** The previous scene was in **${prevMood.shortLabel}** mood. This new scene is in **${mood.shortLabel}** mood. You MUST narrate this visual transition explicitly in the FIRST BEAT of the Dynamic Description. Examples:
+   - warm → dramatic: "the warm light begins to drain from the room, shadows lengthen across @abraao's face"
+   - warm → intimate_night: "the afternoon glow fades as candles flicker to life one by one"
+   - warm → ethereal: "soft golden dust starts to drift upward, catching a strange new light"
+   The transition is VISIBLE — do not cut to the new mood abruptly.`
+  : `4. **VISUAL CONTINUITY.** Mood stays the same as the previous scene (**${prevMood.shortLabel}**). Lighting, palette and atmosphere should feel seamless — the audience should not perceive a break.`
+}
+
+5. **DIALOGUE AWARENESS.** Characters may reference what just happened in the previous scene if the creator's description implies it. Keep dialogue natural; do not recap.
+
+6. **Cap the recap.** Do NOT dedicate more than 1 beat to the transition from the previous scene. The rest of the prompt belongs to the NEW action the creator described.`
+  }
+
+  return prompt
 }
 
 /**
- * @deprecated Use getSceneDirectorSystem(moodId) — kept para backcompat.
+ * @deprecated Use getSceneDirectorSystem(moodId, chainFrom) — kept para backcompat.
  */
 export const SCENE_DIRECTOR_SYSTEM = SCENE_DIRECTOR_BASE

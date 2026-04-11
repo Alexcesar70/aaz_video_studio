@@ -51,7 +51,7 @@ interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt:
 interface Project { id: string; name: string; createdAt: string }
 interface Episode { id: string; name: string; projectId?: string | null; createdAt: string }
 type SceneStatus = 'draft' | 'approved' | 'rejected'
-interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus; mood?: MoodId }
+interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus; mood?: MoodId; setting?: string; emotion?: string }
 interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
 
 /* ── Atoms ── */
@@ -1543,6 +1543,18 @@ export function AAZStudio() {
       mentionedIds.forEach(id => allCharIdsSet.add(id))
       const allCharIds = Array.from(allCharIdsSet)
 
+      // Se está encadeando, monta o chain_from pro Claude entender
+      // que esta cena é continuação e deve abrir mid-action.
+      const chainFromPayload = chainSource ? {
+        sceneNumber: chainSource.sceneNumber,
+        sceneTitle: chainSource.title,
+        // Últimas 400 chars do prompt da cena anterior
+        previousPromptTail: chainSource.prompt.slice(-400),
+        previousMoodId: chainSource.mood,
+        previousEmotion: chainSource.emotion,
+        inheritedCharacters: chainSource.characters,
+      } : undefined
+
       const res = await fetch('/api/scene-director', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1553,6 +1565,7 @@ export function AAZStudio() {
           duration,
           emotion: sdEmotion || undefined,
           mood: sdMood,
+          chain_from: chainFromPayload,
         }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
@@ -1745,6 +1758,8 @@ export function AAZStudio() {
   /* chain */
   const [chain, setChain] = useState(false)
   const [lastResult, setLastResult] = useState('')
+  /* Chain context — cena fonte quando encadeando (pra banner + chain_from no scene director) */
+  const [chainSource, setChainSource] = useState<SceneAsset | null>(null)
   const [generateAudio, setGenerateAudio] = useState(true)
   const [promptMode, setPromptMode] = useState<'assistant' | 'free'>('assistant')
 
@@ -1958,13 +1973,115 @@ export function AAZStudio() {
     setRefImgs(p => [...p, { url: s.imageUrl, label: `@image${idx}`, name: `Cenário · ${s.name}` }])
   }
 
+  /**
+   * Encadeia uma cena como continuação da próxima — Opção C completa.
+   *
+   * O que acontece:
+   * 1. Navega pro Estúdio
+   * 2. Salva a cena fonte em chainSource (usado pelo banner + chain_from)
+   * 3. Ativa modo omni_reference (pra reference_videos funcionar)
+   * 4. Injeta o vídeo da cena anterior como @video1 em refVids (push
+   *    outros pra @video2/3 — vídeo fonte sempre primeiro)
+   * 5. Herda mood, setting e emotion (criador pode sobrescrever)
+   * 6. Herda personagens (leads e customs) com refs da biblioteca
+   *    injetadas no refImgs
+   * 7. Marca chain=true + lastResult pra retrocompat com o
+   *    first_frame_url do Seedance
+   * 8. Limpa o prompt e descrição do assistente (nova cena começa
+   *    do zero narrativamente — só o contexto visual é herdado)
+   * 9. Mostra toast + foca o textarea do assistente
+   */
   const injectSceneAsFirstFrame = (scene: SceneAsset) => {
-    // Navega pro Estúdio e ativa encadeamento usando o vídeo como referência.
-    // Herda o mood da cena anterior (se tiver) — continuidade visual.
     setTab('studio')
+    setChainSource(scene)
     setLastResult(scene.videoUrl)
     setChain(true)
+
+    // Mood / setting / emotion herdados (criador edita se quiser)
     if (scene.mood) setSdMood(scene.mood)
+    setSdSetting(scene.setting ?? '')
+    setSdEmotion(scene.emotion ?? '')
+
+    // Força modo omni pra usar reference_videos
+    setMode('omni_reference')
+
+    // Adiciona o vídeo da cena anterior como @video1 (empurra outros)
+    setRefVids(prev => {
+      const filtered = prev.filter(r => r.url !== scene.videoUrl)
+      const next: RefItem[] = [
+        { url: scene.videoUrl, label: '@video1', name: `Cena #${scene.sceneNumber}${scene.title ? ' — ' + scene.title : ''}`, fromLib: true, charId: `chain_source_${scene.id}` },
+        ...filtered,
+      ].slice(0, 3).map((r, i) => ({ ...r, label: `@video${i + 1}` }))
+      return next
+    })
+
+    // Herda personagens da cena fonte com refs da biblioteca
+    const inheritedChars: Character[] = []
+    const inheritedRefImgs: RefItem[] = []
+    for (const charId of scene.characters) {
+      // Tenta achar em CHARACTERS (leads) primeiro
+      const lead = CHARACTERS.find(c => c.id === charId)
+      if (lead) {
+        inheritedChars.push(lead)
+        // Injeta refs da library[charId] se houver
+        const entry = library[charId]
+        if (entry?.images?.length) {
+          for (const img of entry.images) {
+            if (inheritedRefImgs.length >= 9) break
+            inheritedRefImgs.push({ url: img, label: `@image${inheritedRefImgs.length + 1}`, name: entry.name, fromLib: true, charId })
+          }
+        }
+        continue
+      }
+      // Tenta achar nos customs do Atelier
+      const custom = atAssets.find(a => a.id === charId && a.type === 'character' && !a.isOfficial)
+      if (custom) {
+        inheritedChars.push({
+          id: custom.id,
+          name: custom.name,
+          emoji: custom.emoji ?? '👤',
+          color: C.purple,
+          desc: custom.description ?? '',
+        })
+        for (const img of custom.imageUrls) {
+          if (inheritedRefImgs.length >= 9) break
+          inheritedRefImgs.push({ url: img, label: `@image${inheritedRefImgs.length + 1}`, name: custom.name, fromLib: true, charId: custom.id })
+        }
+      }
+    }
+    setSelChars(inheritedChars)
+    setRefImgs(inheritedRefImgs)
+
+    // Limpa o prompt e a descrição (nova cena começa do zero narrativamente)
+    setPrompts({ pt: '', en: '' })
+    setSdDesc('')
+
+    // Toast de feedback imediato
+    const labelTitle = scene.title?.trim() ? ` "${scene.title.trim()}"` : ''
+    setToast(`🔗 Encadeando a partir da Cena #${scene.sceneNumber}${labelTitle}. Elenco e mood herdados.`)
+    window.setTimeout(() => setToast(''), 5000)
+
+    // Foca o textarea do assistente (nova cena) após o re-render
+    window.setTimeout(() => {
+      sdDescRef.current?.focus()
+      sdDescRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 150)
+  }
+
+  /**
+   * Desfaz o encadeamento ativo — remove a cena fonte da referência,
+   * limpa lastResult + chain + chainSource. Mantém elenco/mood/setting
+   * já herdados (criador não perde trabalho, só o link é desfeito).
+   */
+  const unchain = () => {
+    if (!chainSource) return
+    // Remove o vídeo da cena fonte das refs
+    setRefVids(prev => prev.filter(r => r.charId !== `chain_source_${chainSource.id}`).map((r, i) => ({ ...r, label: `@video${i + 1}` })))
+    setLastResult('')
+    setChain(false)
+    setChainSource(null)
+    setToast('Encadeamento desfeito. Elenco e mood foram mantidos.')
+    window.setTimeout(() => setToast(''), 3000)
   }
 
   /**
@@ -1996,7 +2113,7 @@ export function AAZStudio() {
       setRefImgs([]); setRefVids([]); setRefAuds([])
       setFirstUrl(''); setLastUrl(''); setFirstPreview(''); setLastPreview('')
       setResultUrl(''); setStatus('idle'); setStatusMsg('')
-      setChain(false)
+      setChain(false); setChainSource(null)
       setSceneNumberInput(''); setSceneTitleInput('')
       setToast(currentEpisode ? `Pronto para criar nova cena em "${currentEpisode.name?.trim() || '(sem nome)'}"` : 'Pronto para criar nova cena')
       window.setTimeout(() => setToast(''), 3500)
@@ -2152,6 +2269,8 @@ export function AAZStudio() {
         createdAt: new Date().toISOString(),
         status: 'draft',
         mood: sdMood,
+        setting: sdSetting.trim() || undefined,
+        emotion: sdEmotion.trim() || undefined,
       }
       setSceneAssets(p => [...p, scene])
       fetch('/api/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scene) }).catch(() => {})
@@ -2360,6 +2479,65 @@ export function AAZStudio() {
 
           {/* ── Esquerda: Preview grande + Prompt ── */}
           <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }}>
+
+            {/* Banner de chain — aparece quando encadeando de outra cena */}
+            {chainSource && (
+              <div style={{
+                background: `linear-gradient(90deg, ${C.purple}18, ${C.blue}12)`,
+                border: `1px solid ${C.purple}60`,
+                borderRadius: 12,
+                padding: '12px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+              }}>
+                <video
+                  src={chainSource.videoUrl}
+                  muted
+                  playsInline
+                  preload="metadata"
+                  style={{ width: 80, height: 48, borderRadius: 6, objectFit: 'cover', background: '#000', border: `1px solid ${C.purple}40` }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: C.purple, letterSpacing: '0.5px', marginBottom: 3 }}>
+                    🔗 ENCADEANDO DE
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    Cena #{chainSource.sceneNumber}
+                    {chainSource.title && <span style={{ color: C.textDim, marginLeft: 6 }}>— {chainSource.title}</span>}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span>{chainSource.duration}s</span>
+                    <span>·</span>
+                    <span>{chainSource.characters.length} personagens herdados</span>
+                    {chainSource.mood && (
+                      <>
+                        <span>·</span>
+                        <span>Mood {getMood(chainSource.mood).shortLabel} {sdMood !== chainSource.mood ? `→ ${getMood(sdMood).shortLabel}` : '(mantido)'}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={unchain}
+                  title="Desfazer encadeamento — elenco e mood permanecem"
+                  style={{
+                    background: 'transparent',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 8,
+                    padding: '7px 14px',
+                    cursor: 'pointer',
+                    color: C.textDim,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    fontFamily: 'inherit',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  ✕ Desfazer
+                </button>
+              </div>
+            )}
 
             {/* Projeto + Episódio seletor */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
