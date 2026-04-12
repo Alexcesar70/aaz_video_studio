@@ -1139,7 +1139,7 @@ function AdminPanel({
             <span>Admin Panel</span>
           </div>
           <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-            Mission control da produção · {monthLabel}
+            Mission control da produção · {monthLabel} · v2.1
           </div>
         </div>
         <button
