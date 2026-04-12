@@ -11,6 +11,7 @@ import {
 } from '@/lib/users'
 import { bootstrapDefaultOrg } from '@/lib/organizations'
 import { emitEvent } from '@/lib/activity'
+import { checkLoginRateLimit, recordLoginAttempt } from '@/lib/rateLimit'
 
 const SESSION_COOKIE = 'aaz_session'
 
@@ -30,6 +31,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Email e senha são obrigatórios.' },
         { status: 400 }
+      )
+    }
+
+    // Rate limit — bloqueia brute force por IP e por email
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+      ?? request.headers.get('x-real-ip')
+      ?? 'unknown'
+    const rateCheck = await checkLoginRateLimit(ip, email)
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: rateCheck.reason, retryAfterSeconds: rateCheck.retryAfterSeconds },
+        { status: 429 }
       )
     }
 
@@ -60,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!user) {
-      // Mensagem genérica pra não vazar existência de email
+      await recordLoginAttempt(ip, email, false)
       return NextResponse.json(
         { error: 'Email ou senha incorretos.' },
         { status: 401 }
@@ -76,11 +89,15 @@ export async function POST(request: NextRequest) {
 
     const passwordOk = await verifyPassword(password, user.passwordHash)
     if (!passwordOk) {
+      await recordLoginAttempt(ip, email, false, user.id)
       return NextResponse.json(
         { error: 'Email ou senha incorretos.' },
         { status: 401 }
       )
     }
+
+    // Login OK — limpa contadores de rate limit
+    await recordLoginAttempt(ip, email, true, user.id)
 
     // Touch lastActive (não bloqueia login se falhar)
     touchLastActive(user.id).catch(() => {})
