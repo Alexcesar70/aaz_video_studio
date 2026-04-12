@@ -8,7 +8,7 @@ const C = {
   red: '#F87171', purple: '#A78BFA', text: '#E8E8F0', textDim: '#9898B0',
 }
 
-type View = 'dashboard' | 'orgs' | 'plans' | 'users' | 'financial' | 'pricing' | 'security'
+type View = 'dashboard' | 'orgs' | 'plans' | 'users' | 'financial' | 'pricing' | 'security' | 'revenue' | 'costs' | 'profit'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type D = Record<string, any>
@@ -72,9 +72,9 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
       {/* Linha 1: Saúde financeira */}
       <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>SAÚDE FINANCEIRA</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <KPI label="Receita do mês" value={`$${revenue.toFixed(2)}`} sub="créditos vendidos" color={C.green} onClick={() => onNavigate('financial')} />
-        <KPI label="Custos totais" value={`$${totalCosts.toFixed(2)}`} sub={`Segmind: $${segmindCost.toFixed(2)} · Claude: $${claudeCost.toFixed(2)}`} color={C.blue} onClick={() => onNavigate('financial')} />
-        <KPI label="Lucro bruto" value={`$${grossProfit.toFixed(2)}`} sub={`${profitPct.toFixed(0)}% de margem`} color={grossProfit >= 0 ? C.green : C.red} onClick={() => onNavigate('financial')} />
+        <KPI label="Receita bruta" value={`$${revenue.toFixed(2)}`} sub="créditos vendidos" color={C.green} onClick={() => onNavigate('revenue')} />
+        <KPI label="Custos totais" value={`$${totalCosts.toFixed(2)}`} sub={`Segmind: $${segmindCost.toFixed(2)} · Claude: $${claudeCost.toFixed(2)}`} color={C.blue} onClick={() => onNavigate('costs')} />
+        <KPI label="Lucro bruto" value={`$${grossProfit.toFixed(2)}`} color={grossProfit >= 0 ? C.green : C.red} onClick={() => onNavigate('profit')} />
         <KPI label="Saldo Segmind" value={`$${bal.toFixed(2)}`} sub={daysLeft < 999 ? `~${daysLeft} dias restantes` : 'sem gasto ainda'} color={bal < 50 ? C.red : C.green} />
       </div>
 
@@ -630,6 +630,290 @@ const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'security', label: 'Segurança', icon: '🔒' },
 ]
 
+function RevenueView({ onNavigate }: { onNavigate: (v: View) => void }) {
+  const [orgs, setOrgs] = useState<D[]>([])
+  const [txns, setTxns] = useState<D[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterStatus, setFilterStatus] = useState('all')
+
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([
+      fetch('/api/admin/organizations').then(r => r.json()),
+      fetch('/api/admin/export?orgId=all&from=2026-01-01&to=2030-01-01&format=json').then(r => r.json()).catch(() => ({ transactions: [] })),
+    ]).then(([orgData, txnData]) => {
+      setOrgs(orgData.organizations ?? [])
+      // Coleta top_ups de todas as orgs
+      const allTopUps: D[] = []
+      for (const o of (orgData.organizations ?? [])) {
+        if (o.walletId) {
+          fetch(`/api/admin/export?orgId=${o.id}&from=2026-01-01&to=2030-01-01&format=json`)
+            .then(r => r.json()).then(d => {
+              const ups = (d.transactions ?? []).filter((t: D) => t.amountUsd > 0)
+              if (ups.length) setTxns(prev => [...prev, ...ups.map((t: D) => ({ ...t, orgName: o.name, orgId: o.id }))])
+            }).catch(() => {})
+        }
+      }
+    }).finally(() => setLoading(false))
+  }, [])
+
+  const totalRevenue = orgs.reduce((s, o) => s + (o.walletBalance ?? 0) + (o.totalSpent ?? 0), 0)
+  const orgsWithRevenue = orgs.filter(o => (o.walletBalance ?? 0) + (o.totalSpent ?? 0) > 0)
+  const ticketMedio = orgsWithRevenue.length > 0 ? totalRevenue / orgsWithRevenue.length : 0
+  const filteredOrgs = filterStatus === 'all' ? orgs : orgs.filter(o => o.status === filterStatus)
+
+  // Ranking por receita (totalTopUps da wallet, approximated from walletBalance + totalSpent)
+  const ranked = [...filteredOrgs].sort((a, b) => ((b.walletBalance ?? 0) + (b.totalSpent ?? 0)) - ((a.walletBalance ?? 0) + (a.totalSpent ?? 0)))
+
+  const inputStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none' }
+
+  if (loading) return <div style={{ color: C.textDim }}>Carregando receitas...</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span onClick={() => onNavigate('dashboard')} style={{ color: C.blue, cursor: 'pointer', fontSize: 12 }}>← Dashboard</span>
+        <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Receita Bruta</div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <KPI label="Receita total" value={`$${totalRevenue.toFixed(2)}`} color={C.green} />
+        <KPI label="Ticket médio/org" value={`$${ticketMedio.toFixed(2)}`} sub={`${orgsWithRevenue.length} org(s) com receita`} color={C.blue} />
+        <KPI label="Última recarga" value={txns.length > 0 ? `$${txns[0]?.amountUsd?.toFixed(2) ?? '—'}` : '—'} sub={txns.length > 0 ? txns[0]?.orgName : ''} color={C.gold} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <span style={{ fontSize: 12, color: C.textDim }}>Filtrar:</span>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={inputStyle}>
+          <option value="all">Todas</option><option value="active">Ativas</option><option value="suspended">Suspensas</option>
+        </select>
+      </div>
+
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>Ranking de clientes por receita</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '40px 2fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, borderBottom: `1px solid ${C.border}` }}>
+          <div>#</div><div>CLIENTE</div><div style={{ textAlign: 'right' }}>RECEITA</div><div style={{ textAlign: 'right' }}>SALDO</div><div>STATUS</div>
+        </div>
+        {ranked.map((o, i) => {
+          const rev = (o.walletBalance ?? 0) + (o.totalSpent ?? 0)
+          const pct = totalRevenue > 0 ? (rev / totalRevenue) * 100 : 0
+          return (
+            <div key={o.id} onClick={() => onNavigate('orgs')} style={{ display: 'grid', gridTemplateColumns: '40px 2fr 1fr 1fr 1fr', gap: 8, padding: '10px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80`, cursor: 'pointer', alignItems: 'center' }}>
+              <div style={{ width: 24, height: 24, borderRadius: '50%', background: i === 0 ? C.gold : C.border, color: i === 0 ? '#000' : C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{i + 1}</div>
+              <div>
+                <div style={{ color: C.text, fontWeight: 600 }}>{o.name}</div>
+                <div style={{ height: 4, background: C.card, borderRadius: 2, marginTop: 4 }}><div style={{ height: '100%', width: `${pct}%`, background: C.green, borderRadius: 2 }} /></div>
+              </div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.green, fontWeight: 700 }}>${rev.toFixed(2)}</div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.textDim }}>${(o.walletBalance ?? 0).toFixed(2)}</div>
+              <div><span style={{ fontSize: 10, fontWeight: 700, color: o.status === 'active' ? C.green : C.red }}>{o.status === 'active' ? 'Ativo' : 'Suspenso'}</span></div>
+            </div>
+          )
+        })}
+      </div>
+
+      {txns.length > 0 && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>Histórico de recargas</div>
+          <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+            {txns.sort((a, b) => b.createdAt?.localeCompare(a.createdAt ?? '') ?? 0).map((t, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '130px 2fr 1fr', gap: 8, padding: '8px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
+                <div style={{ color: C.textDim, fontFamily: 'monospace', fontSize: 11 }}>{new Date(t.createdAt).toLocaleDateString('pt-BR')} {new Date(t.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div style={{ color: C.text }}>{t.orgName} · {t.description}</div>
+                <div style={{ textAlign: 'right', color: C.green, fontFamily: 'monospace', fontWeight: 700 }}>+${t.amountUsd?.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CostsView() {
+  const [data, setData] = useState<D | null>(null)
+  useEffect(() => { fetch('/api/admin/dashboard').then(r => r.json()).then(setData).catch(() => {}) }, [])
+  if (!data) return <div style={{ color: C.textDim }}>Carregando custos...</div>
+
+  const events = (data.recentEvents ?? []).filter((e: D) => e.meta?.cost > 0)
+  const segCost = events.reduce((s: number, e: D) => s + (e.meta?.extra?.segmindCostUsd ?? (!e.meta?.extra?.claudeCostUsd ? (e.meta?.cost ?? 0) : 0)), 0)
+  const claudeCost = events.reduce((s: number, e: D) => s + (e.meta?.extra?.claudeCostUsd ?? 0), 0)
+  const totalCost = segCost + claudeCost
+  const avgPerGen = events.length > 0 ? totalCost / events.length : 0
+
+  // Custo por engine
+  const engineMap = new Map<string, { calls: number; cost: number }>()
+  for (const e of events) {
+    const eng = e.meta?.engineId ?? (e.type?.includes('director') ? e.type.replace('_called', '') : 'unknown')
+    const cost = e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? e.meta?.cost ?? 0
+    if (!engineMap.has(eng)) engineMap.set(eng, { calls: 0, cost: 0 })
+    const b = engineMap.get(eng)!
+    b.calls++; b.cost += cost
+  }
+  const engineRank = Array.from(engineMap.entries()).sort((a, b) => b[1].cost - a[1].cost)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Custos Totais</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KPI label="Custo total" value={`$${totalCost.toFixed(2)}`} color={C.red} />
+        <KPI label="Segmind" value={`$${segCost.toFixed(2)}`} sub={totalCost > 0 ? `${((segCost / totalCost) * 100).toFixed(0)}% do total` : ''} color={C.blue} />
+        <KPI label="Claude (Anthropic)" value={`$${claudeCost.toFixed(2)}`} sub={totalCost > 0 ? `${((claudeCost / totalCost) * 100).toFixed(0)}% do total` : ''} color={C.purple} />
+        <KPI label="Custo médio/geração" value={`$${avgPerGen.toFixed(3)}`} sub={`${events.length} gerações`} color={C.gold} />
+      </div>
+
+      {/* Breakdown visual */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>Custos por provedor</div>
+        {[['Segmind', segCost, C.blue], ['Claude (Anthropic)', claudeCost, C.purple], ['Google (futuro)', 0, C.textDim]].map(([name, cost, color]) => (
+          <div key={name as string} style={{ marginBottom: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+              <span style={{ color: C.text }}>{name as string}</span>
+              <span style={{ color: color as string, fontFamily: 'monospace', fontWeight: 700 }}>${(cost as number).toFixed(2)} {totalCost > 0 ? `(${(((cost as number) / totalCost) * 100).toFixed(0)}%)` : ''}</span>
+            </div>
+            <div style={{ height: 8, background: C.card, borderRadius: 4 }}>
+              <div style={{ height: '100%', width: totalCost > 0 ? `${((cost as number) / totalCost) * 100}%` : '0%', background: color as string, borderRadius: 4, transition: 'width 0.3s' }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Custo por engine */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>Custo por engine</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, borderBottom: `1px solid ${C.border}` }}>
+          <div>ENGINE</div><div style={{ textAlign: 'right' }}>CHAMADAS</div><div style={{ textAlign: 'right' }}>CUSTO TOTAL</div><div style={{ textAlign: 'right' }}>CUSTO MÉDIO</div>
+        </div>
+        {engineRank.map(([id, d]) => (
+          <div key={id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
+            <div style={{ color: C.text, fontWeight: 600 }}>{id}</div>
+            <div style={{ textAlign: 'right', color: C.textDim }}>{d.calls}</div>
+            <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.red }}>${d.cost.toFixed(3)}</div>
+            <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.textDim }}>${(d.cost / d.calls).toFixed(3)}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Lista cronológica */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>Custos por transação (mais recente primeiro)</div>
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {events.sort((a: D, b: D) => (b.timestamp ?? '').localeCompare(a.timestamp ?? '')).map((e: D) => {
+            const cost = e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? e.meta?.cost ?? 0
+            const provider = e.meta?.extra?.claudeCostUsd ? 'Claude' : 'Segmind'
+            const dt = new Date(e.timestamp)
+            return (
+              <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '130px 80px 2fr 1fr', gap: 8, padding: '8px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
+                <div style={{ color: C.textDim, fontFamily: 'monospace', fontSize: 11 }}>{dt.toLocaleDateString('pt-BR')} {dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div><span style={{ fontSize: 10, fontWeight: 700, color: provider === 'Segmind' ? C.blue : C.purple }}>{provider}</span></div>
+                <div style={{ color: C.text }}>{e.userName} · {e.meta?.engineId ?? e.type?.replace('_called', '')}</div>
+                <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.red, fontWeight: 600 }}>${cost.toFixed(3)}</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ProfitView() {
+  const [data, setData] = useState<D | null>(null)
+  useEffect(() => { fetch('/api/admin/dashboard').then(r => r.json()).then(setData).catch(() => {}) }, [])
+  if (!data) return <div style={{ color: C.textDim }}>Carregando L/P...</div>
+
+  const events = (data.recentEvents ?? []).filter((e: D) => e.meta?.cost > 0)
+
+  // Calcula L/P por transação
+  const rows = events.map((e: D) => {
+    const hasNew = e.meta?.extra?.segmindCostUsd != null || e.meta?.extra?.claudeCostUsd != null
+    const apiCost = hasNew ? (e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? 0) : (e.meta?.cost ?? 0)
+    const sale = hasNew ? (e.meta?.cost ?? 0) : apiCost * 1.4
+    return { ...e, sale, apiCost, profit: sale - apiCost }
+  })
+
+  const totSale = rows.reduce((s: number, r: D) => s + r.sale, 0)
+  const totCost = rows.reduce((s: number, r: D) => s + r.apiCost, 0)
+  const totProfit = totSale - totCost
+
+  // L/P por engine
+  const engMap = new Map<string, { sale: number; cost: number }>()
+  for (const r of rows) {
+    const eng = r.meta?.engineId ?? r.type?.replace('_called', '') ?? '?'
+    if (!engMap.has(eng)) engMap.set(eng, { sale: 0, cost: 0 })
+    const b = engMap.get(eng)!
+    b.sale += r.sale; b.cost += r.apiCost
+  }
+  const engRank = Array.from(engMap.entries()).sort((a, b) => (b[1].sale - b[1].cost) - (a[1].sale - a[1].cost))
+
+  // Mais/menos lucrativo
+  const bestEngine = engRank.length > 0 ? engRank[0] : null
+  const worstEngine = engRank.length > 1 ? engRank[engRank.length - 1] : null
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Lucro / Prejuízo</div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KPI label="Lucro bruto" value={`$${totProfit.toFixed(2)}`} color={totProfit >= 0 ? C.green : C.red} />
+        <KPI label="Receita total" value={`$${totSale.toFixed(2)}`} color={C.green} />
+        <KPI label="Engine + lucrativa" value={bestEngine ? bestEngine[0] : '—'} sub={bestEngine ? `$${(bestEngine[1].sale - bestEngine[1].cost).toFixed(2)} lucro` : ''} color={C.gold} />
+        <KPI label="Engine - lucrativa" value={worstEngine ? worstEngine[0] : '—'} sub={worstEngine ? `$${(worstEngine[1].sale - worstEngine[1].cost).toFixed(2)} lucro` : ''} color={C.textDim} />
+      </div>
+
+      {/* Margem por engine */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>Margem por engine</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, borderBottom: `1px solid ${C.border}` }}>
+          <div>ENGINE</div><div style={{ textAlign: 'right' }}>VENDA</div><div style={{ textAlign: 'right' }}>CUSTO</div><div style={{ textAlign: 'right' }}>LUCRO</div><div style={{ textAlign: 'right' }}>MARGEM</div>
+        </div>
+        {engRank.map(([id, d]) => {
+          const profit = d.sale - d.cost
+          const margin = d.sale > 0 ? (profit / d.sale) * 100 : 0
+          return (
+            <div key={id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
+              <div style={{ color: C.text, fontWeight: 600 }}>{id}</div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.green }}>${d.sale.toFixed(2)}</div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.red }}>${d.cost.toFixed(2)}</div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: profit >= 0 ? C.green : C.red }}>${profit.toFixed(2)}</div>
+              <div style={{ textAlign: 'right', fontWeight: 700, color: margin >= 30 ? C.green : margin >= 10 ? C.gold : C.red }}>{margin.toFixed(0)}%</div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Tabela L/P por transação */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>L/P por transação</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '130px 2fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, borderBottom: `1px solid ${C.border}` }}>
+          <div>DATA</div><div>DESCRIÇÃO</div><div style={{ textAlign: 'right' }}>VENDA</div><div style={{ textAlign: 'right' }}>CUSTO</div><div style={{ textAlign: 'right' }}>LUCRO</div>
+        </div>
+        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+          {rows.sort((a: D, b: D) => (b.timestamp ?? '').localeCompare(a.timestamp ?? '')).map((r: D) => {
+            const dt = new Date(r.timestamp)
+            return (
+              <div key={r.id} style={{ display: 'grid', gridTemplateColumns: '130px 2fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
+                <div style={{ color: C.textDim, fontFamily: 'monospace', fontSize: 11 }}>{dt.toLocaleDateString('pt-BR')} {dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                <div style={{ color: C.text }}>{r.userName} · {r.type?.replace(/_/g, ' ')}</div>
+                <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.green }}>${r.sale.toFixed(3)}</div>
+                <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.red }}>${r.apiCost.toFixed(3)}</div>
+                <div style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: r.profit >= 0 ? C.green : C.red }}>${r.profit.toFixed(3)}</div>
+              </div>
+            )
+          })}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '130px 2fr 1fr 1fr 1fr', gap: 8, padding: '12px 16px', borderTop: `2px solid ${C.border}`, background: C.card, fontSize: 13, fontWeight: 700 }}>
+          <div></div><div style={{ color: C.text }}>TOTAL</div>
+          <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.green }}>${totSale.toFixed(2)}</div>
+          <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.red }}>${totCost.toFixed(2)}</div>
+          <div style={{ textAlign: 'right', fontFamily: 'monospace', color: totProfit >= 0 ? C.green : C.red }}>${totProfit.toFixed(2)}</div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SecurityView() {
   const [logs, setLogs] = useState<D[]>([])
   const [loading, setLoading] = useState(false)
@@ -808,6 +1092,9 @@ export function SuperAdmin() {
         {view === 'financial' && <FinancialView />}
         {view === 'pricing' && <PricingView />}
         {view === 'security' && <SecurityView />}
+        {view === 'revenue' && <RevenueView onNavigate={setView} />}
+        {view === 'costs' && <CostsView />}
+        {view === 'profit' && <ProfitView />}
       </div>
     </div>
   )
