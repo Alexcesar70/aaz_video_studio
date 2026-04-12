@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
 import { getAuthUser, requireAdmin, AuthError } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { del as blobDel } from '@vercel/blob'
 
@@ -25,6 +26,12 @@ interface Episode {
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    // ── Permission check ──
+    const patchAuth = getAuthUser(request)
+    if (patchAuth && !hasPermission(patchAuth.permissions, patchAuth.role, PERMISSIONS.MANAGE_EPISODES)) {
+      return NextResponse.json({ error: 'Sem permissão para gerenciar episódios.' }, { status: 403 })
+    }
+
     const redis = await getRedis()
     const key = `aaz:ep:${params.id}`
     const val = await redis.get(key)
@@ -133,8 +140,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    // ── Permission check ──
+    const delAuth = getAuthUser(request)
+    if (delAuth && !hasPermission(delAuth.permissions, delAuth.role, PERMISSIONS.MANAGE_EPISODES)) {
+      return NextResponse.json({ error: 'Sem permissão para gerenciar episódios.' }, { status: 403 })
+    }
+
     const redis = await getRedis()
     // Se havia final video, apaga do Blob
     const val = await redis.get(`aaz:ep:${params.id}`)

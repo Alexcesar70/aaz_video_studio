@@ -7,6 +7,7 @@ import { IMAGE_ENGINES, DEFAULT_IMAGE_ENGINE_ID, getImageEngine } from '@/lib/im
 import type { Asset, AssetType } from '@/lib/assets'
 import { LEAD_CHARACTERS, slugify, isLeadId, defaultEmoji } from '@/lib/assets'
 import { MOODS, DEFAULT_MOOD_ID, getMood, type MoodId } from '@/lib/moods'
+import { PERMISSIONS, PERMISSION_LABELS, PRODUCTS, PRODUCT_LABELS, hasPermission, type Permission, type Product } from '@/lib/permissions'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -20,6 +21,16 @@ const C = {
   goldGlow: '#C9A84C30', blue: '#5B8DEF', blueGlow: '#5B8DEF20',
   green: '#4ADE80', greenGlow: '#4ADE8020', red: '#F87171', purple: '#A78BFA',
   purpleGlow: '#A78BFA20', text: '#E8E8F0', textDim: '#9898B0',
+}
+
+/** Shape of the current logged-in user from /api/auth/me (Phase 4: + permissions/products) */
+type CurrentUser = {
+  id: string
+  email: string
+  name: string
+  role: 'super_admin' | 'admin' | 'creator'
+  permissions?: string[]
+  products?: string[]
 }
 
 const CHARACTERS = [
@@ -78,7 +89,7 @@ interface HistoryTabProps {
   scenes: SceneAsset[]
   projects: Project[]
   episodes: Episode[]
-  currentUser: { id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null
+  currentUser: CurrentUser | null
   onPlay: (scene: SceneAsset) => void
   onDownload: (url: string, filename: string) => void
   onDelete: (id: string) => void
@@ -998,6 +1009,8 @@ interface AdminUser {
   status: 'active' | 'revoked'
   monthlyBudgetUsd?: number
   assignedProjectIds?: string[]
+  permissions?: string[]
+  products?: string[]
   createdAt: string
   lastActiveAt?: string
   createdBy: string
@@ -1043,7 +1056,7 @@ function AdminPanel({
   currentUser,
   onOpenDelivery,
 }: {
-  currentUser: { id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null
+  currentUser: CurrentUser | null
   onOpenDelivery: (ep: Episode) => void
 }) {
   const [subTab, setSubTab] = useState<'dashboard' | 'users' | 'review' | 'spend'>('dashboard')
@@ -1940,8 +1953,13 @@ function InviteUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'admin' | 'creator'>('creator')
   const [budget, setBudget] = useState('')
+  const [selPermissions, setSelPermissions] = useState<string[]>([])
+  const [selProducts, setSelProducts] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  const togglePermission = (p: string) => setSelPermissions(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
+  const toggleProduct = (p: string) => setSelProducts(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
 
   const submit = async () => {
     if (!name.trim() || !email.trim()) { setError('Nome e email são obrigatórios.'); return }
@@ -1955,6 +1973,8 @@ function InviteUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           email: email.trim(),
           role,
           monthlyBudgetUsd: budget ? parseFloat(budget) : undefined,
+          permissions: selPermissions.length > 0 ? selPermissions : undefined,
+          products: selProducts.length > 0 ? selProducts : undefined,
         }),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
@@ -1967,9 +1987,12 @@ function InviteUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
     }
   }
 
+  const allPerms = Object.values(PERMISSIONS) as Permission[]
+  const allProducts = Object.values(PRODUCTS) as Product[]
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 460, padding: 24 }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 500, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>Convidar criador</div>
         <div style={{ fontSize: 12, color: C.textDim, marginBottom: 20 }}>Uma senha será gerada automaticamente. Envie por WhatsApp/Slack.</div>
 
@@ -1985,14 +2008,53 @@ function InviteUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>ROLE</div>
             <select value={role} onChange={e => setRole(e.target.value as 'admin' | 'creator')} style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, fontFamily: 'inherit', outline: 'none' }}>
-              <option value="creator">🎨 Creator — cria cenas/assets</option>
-              <option value="admin">👑 Admin — vê tudo, gerencia tudo</option>
+              <option value="creator">Creator -- cria cenas/assets</option>
+              <option value="admin">Admin -- ve tudo, gerencia tudo</option>
             </select>
           </div>
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>BUDGET MENSAL (OPCIONAL, USD)</div>
             <Input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="50" step="10" />
           </div>
+
+          {/* Permissions (Phase 4) — only shown for creator role */}
+          {role === 'creator' && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 8, letterSpacing: '0.5px' }}>PERMISSOES (OPCIONAL — SEM SELECAO = TODAS DO ROLE)</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {allPerms.map(p => (
+                  <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0', fontSize: 13, color: C.text }}>
+                    <input
+                      type="checkbox"
+                      checked={selPermissions.includes(p)}
+                      onChange={() => togglePermission(p)}
+                      style={{ accentColor: C.purple, width: 16, height: 16 }}
+                    />
+                    {PERMISSION_LABELS[p]}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Products (Phase 4) */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 8, letterSpacing: '0.5px' }}>PRODUTOS (OPCIONAL — SEM SELECAO = TODOS)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {allProducts.map(p => (
+                <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0', fontSize: 13, color: C.text }}>
+                  <input
+                    type="checkbox"
+                    checked={selProducts.includes(p)}
+                    onChange={() => toggleProduct(p)}
+                    style={{ accentColor: C.blue, width: 16, height: 16 }}
+                  />
+                  {PRODUCT_LABELS[p]}
+                </label>
+              ))}
+            </div>
+          </div>
+
           {error && <div style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '9px 12px', fontSize: 12, color: C.red }}>{error}</div>}
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
             <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Cancelar</button>
@@ -2014,7 +2076,7 @@ function EpisodeDeliveryModal({
   onUpdated,
 }: {
   episode: Episode
-  currentUser: { id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null
+  currentUser: CurrentUser | null
   onClose: () => void
   onUpdated: (updated: Episode) => void
 }) {
@@ -2268,7 +2330,7 @@ export function AAZStudio() {
   const [tab, setTab] = useState('studio')
 
   /* Sessão atual (quem tá logado) — admin vê aba extra */
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
   const [myBudget, setMyBudget] = useState<{ usedUsd: number; capUsd?: number; percentageUsed?: number } | null>(null)
   useEffect(() => {
     fetch('/api/auth/me')
@@ -2277,6 +2339,14 @@ export function AAZStudio() {
       .catch(() => {})
   }, [])
   const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'super_admin'
+
+  // Permission helpers (Phase 4) — derived from currentUser.permissions
+  const canGenerateVideo = !currentUser || hasPermission(currentUser.permissions, currentUser.role, PERMISSIONS.GENERATE_VIDEO)
+  const canGenerateImage = !currentUser || hasPermission(currentUser.permissions, currentUser.role, PERMISSIONS.GENERATE_IMAGE)
+  const canUseSceneDirector = !currentUser || hasPermission(currentUser.permissions, currentUser.role, PERMISSIONS.USE_SCENE_DIRECTOR)
+  const canUseImageDirector = !currentUser || hasPermission(currentUser.permissions, currentUser.role, PERMISSIONS.USE_IMAGE_DIRECTOR)
+  const canManageEpisodes = !currentUser || hasPermission(currentUser.permissions, currentUser.role, PERMISSIONS.MANAGE_EPISODES)
+  const canManageAssets = !currentUser || hasPermission(currentUser.permissions, currentUser.role, PERMISSIONS.MANAGE_ASSETS)
 
   // Carrega budget do creator (admin/super_admin não tem cap)
   const loadMyBudget = useCallback(async () => {
@@ -4378,10 +4448,11 @@ export function AAZStudio() {
 
                   <button
                     onClick={runSceneDirector}
-                    disabled={!sdDesc.trim() || sdStatus === 'generating'}
-                    style={{ background: !sdDesc.trim() || sdStatus === 'generating' ? C.card : C.purple, border: `1px solid ${!sdDesc.trim() || sdStatus === 'generating' ? C.border : C.purple}`, borderRadius: 10, padding: '12px', cursor: !sdDesc.trim() || sdStatus === 'generating' ? 'not-allowed' : 'pointer', color: !sdDesc.trim() || sdStatus === 'generating' ? C.textDim : '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit' }}
+                    disabled={!sdDesc.trim() || sdStatus === 'generating' || !canUseSceneDirector}
+                    title={!canUseSceneDirector ? 'Sem permissao para usar o Scene Director' : undefined}
+                    style={{ background: !sdDesc.trim() || sdStatus === 'generating' || !canUseSceneDirector ? C.card : C.purple, border: `1px solid ${!sdDesc.trim() || sdStatus === 'generating' || !canUseSceneDirector ? C.border : C.purple}`, borderRadius: 10, padding: '12px', cursor: !sdDesc.trim() || sdStatus === 'generating' || !canUseSceneDirector ? 'not-allowed' : 'pointer', color: !sdDesc.trim() || sdStatus === 'generating' || !canUseSceneDirector ? C.textDim : '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', opacity: !canUseSceneDirector ? 0.5 : 1 }}
                   >
-                    {sdStatus === 'generating' ? '⟳ Claude escrevendo...' : '⚡ Gerar Prompt com IA'}
+                    {!canUseSceneDirector ? 'Sem permissao' : sdStatus === 'generating' ? '⟳ Claude escrevendo...' : 'Gerar Prompt com IA'}
                   </button>
 
                   {sdStatus !== 'idle' && sdStatus !== 'generating' && (
@@ -4516,8 +4587,8 @@ export function AAZStudio() {
                   ))}
                 </select>
               </div>
-              <button onClick={generate} disabled={generating} style={{ flex: 1, background: generating ? C.card : C.purple, border: `1px solid ${generating ? C.border : C.purple}`, borderRadius: 12, padding: '12px 16px', cursor: generating ? 'not-allowed' : 'pointer', color: generating ? C.textDim : '#fff', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-end' }}>
-                {generating ? '⟳ Gerando...' : 'Gerar Cena'}
+              <button onClick={generate} disabled={generating || !canGenerateVideo} title={!canGenerateVideo ? 'Sem permissao para gerar videos' : undefined} style={{ flex: 1, background: (generating || !canGenerateVideo) ? C.card : C.purple, border: `1px solid ${(generating || !canGenerateVideo) ? C.border : C.purple}`, borderRadius: 12, padding: '12px 16px', cursor: (generating || !canGenerateVideo) ? 'not-allowed' : 'pointer', color: (generating || !canGenerateVideo) ? C.textDim : '#fff', fontSize: 15, fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-end', opacity: !canGenerateVideo ? 0.5 : 1 }}>
+                {!canGenerateVideo ? 'Sem permissao' : generating ? '⟳ Gerando...' : 'Gerar Cena'}
               </button>
             </div>
 
@@ -4943,21 +5014,22 @@ export function AAZStudio() {
                   <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                     <button
                       onClick={atRefinePrompt}
-                      disabled={atRefining || !atDesc.trim()}
+                      disabled={atRefining || !atDesc.trim() || !canUseImageDirector}
+                      title={!canUseImageDirector ? 'Sem permissao para usar o Image Director' : undefined}
                       style={{
                         background: C.purpleGlow,
                         border: `1px solid ${C.purple}50`,
                         borderRadius: 8,
                         padding: '8px 14px',
-                        cursor: atRefining ? 'wait' : 'pointer',
+                        cursor: (atRefining || !canUseImageDirector) ? 'not-allowed' : 'pointer',
                         color: C.purple,
                         fontSize: 13,
                         fontWeight: 600,
                         fontFamily: 'inherit',
-                        opacity: (atRefining || !atDesc.trim()) ? 0.5 : 1,
+                        opacity: (atRefining || !atDesc.trim() || !canUseImageDirector) ? 0.5 : 1,
                       }}
                     >
-                      {atRefining ? '⟳ Refinando...' : '✨ Refinar com IA'}
+                      {!canUseImageDirector ? 'Sem permissao' : atRefining ? '⟳ Refinando...' : 'Refinar com IA'}
                     </button>
                     <div style={{ flex: 1, textAlign: 'right', fontSize: 11, color: C.textDim, alignSelf: 'center' }}>
                       {atDesc.length} caracteres
@@ -5059,20 +5131,22 @@ export function AAZStudio() {
 
                 <button
                   onClick={atGenerate}
-                  disabled={atGenerating || !atDesc.trim() || !atName.trim()}
+                  disabled={atGenerating || !atDesc.trim() || !atName.trim() || !canGenerateImage}
+                  title={!canGenerateImage ? 'Sem permissao para gerar imagens' : undefined}
                   style={{
-                    background: atGenerating ? C.card : C.purple,
-                    border: `1px solid ${atGenerating ? C.border : C.purple}`,
+                    background: (atGenerating || !canGenerateImage) ? C.card : C.purple,
+                    border: `1px solid ${(atGenerating || !canGenerateImage) ? C.border : C.purple}`,
                     borderRadius: 12,
                     padding: '14px',
-                    cursor: (atGenerating || !atDesc.trim() || !atName.trim()) ? 'not-allowed' : 'pointer',
-                    color: atGenerating ? C.textDim : '#fff',
+                    cursor: (atGenerating || !atDesc.trim() || !atName.trim() || !canGenerateImage) ? 'not-allowed' : 'pointer',
+                    color: (atGenerating || !canGenerateImage) ? C.textDim : '#fff',
                     fontSize: 15,
                     fontWeight: 700,
                     fontFamily: 'inherit',
+                    opacity: !canGenerateImage ? 0.5 : 1,
                   }}
                 >
-                  {atGenerating ? '⟳ Gerando...' : `⚡ Gerar ${atVariations} variações`}
+                  {!canGenerateImage ? 'Sem permissao' : atGenerating ? '⟳ Gerando...' : `Gerar ${atVariations} variações`}
                 </button>
 
                 {atStatus && (

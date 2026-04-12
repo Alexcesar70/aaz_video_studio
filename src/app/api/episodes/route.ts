@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
 import { getAuthUser } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 
 const PREFIX = 'aaz:ep:'
@@ -54,11 +55,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authUser = getAuthUser(request)
+    if (authUser && !hasPermission(authUser.permissions, authUser.role, PERMISSIONS.MANAGE_EPISODES)) {
+      return NextResponse.json({ error: 'Sem permissão para gerenciar episódios.' }, { status: 403 })
+    }
+
     const entry: Episode = await request.json()
     if (!entry.id || !entry.name?.trim()) {
       return NextResponse.json({ error: 'id e name são obrigatórios.' }, { status: 400 })
     }
-    const authUser = getAuthUser(request)
     if (authUser && !entry.createdBy) {
       entry.createdBy = authUser.id
     }

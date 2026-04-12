@@ -16,6 +16,10 @@ export interface AuthUser {
   role: UserRole
   /** ID da organização à qual o usuário pertence (opcional para retrocompat) */
   organizationId?: string
+  /** Granular permissions (Phase 4). Empty = fall back to role defaults. */
+  permissions?: string[]
+  /** Product access (Phase 4). Empty = inherit from org. */
+  products?: string[]
 }
 
 /**
@@ -28,13 +32,23 @@ export function getAuthUser(request: NextRequest): AuthUser | null {
   const name = request.headers.get('x-user-name')
   const role = request.headers.get('x-user-role') as UserRole | null
   const organizationId = request.headers.get('x-org-id')
+  const permissionsRaw = request.headers.get('x-user-permissions')
+  const productsRaw = request.headers.get('x-user-products')
   if (!id || !role) return null
+
+  let permissions: string[] | undefined
+  let products: string[] | undefined
+  try { permissions = permissionsRaw ? JSON.parse(permissionsRaw) : undefined } catch { /* ignore */ }
+  try { products = productsRaw ? JSON.parse(productsRaw) : undefined } catch { /* ignore */ }
+
   return {
     id,
     email: email ?? '',
     name: name ?? '',
     role,
     organizationId: organizationId ?? undefined,
+    permissions,
+    products,
   }
 }
 

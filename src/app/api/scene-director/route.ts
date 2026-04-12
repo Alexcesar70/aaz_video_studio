@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSceneDirectorSystem, type ChainFromContext } from '@/lib/sceneDirectorSystem'
 import { getMood } from '@/lib/moods'
 import { getAuthUser } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 
 /**
@@ -22,6 +23,12 @@ export async function POST(request: NextRequest) {
         { error: 'ANTHROPIC_API_KEY não configurada no servidor.' },
         { status: 500 }
       )
+    }
+
+    // ── Permission check ──
+    const earlyAuth = getAuthUser(request)
+    if (earlyAuth && !hasPermission(earlyAuth.permissions, earlyAuth.role, PERMISSIONS.USE_SCENE_DIRECTOR)) {
+      return NextResponse.json({ error: 'Sem permissão para usar o Scene Director.' }, { status: 403 })
     }
 
     const body = await request.json()

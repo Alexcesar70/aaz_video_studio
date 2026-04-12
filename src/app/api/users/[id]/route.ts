@@ -51,6 +51,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       status?: UserStatus
       monthlyBudgetUsd?: number
       assignedProjectIds?: string[]
+      permissions?: string[]
+      products?: string[]
       resetPassword?: boolean
       newPassword?: string
     }

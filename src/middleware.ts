@@ -38,6 +38,12 @@ export async function middleware(request: NextRequest) {
     if (payload.email) requestHeaders.set('x-user-email', String(payload.email))
     if (payload.name) requestHeaders.set('x-user-name', String(payload.name))
     if (payload.organizationId) requestHeaders.set('x-org-id', String(payload.organizationId))
+    if (payload.permissions && Array.isArray(payload.permissions)) {
+      requestHeaders.set('x-user-permissions', JSON.stringify(payload.permissions))
+    }
+    if (payload.products && Array.isArray(payload.products)) {
+      requestHeaders.set('x-user-products', JSON.stringify(payload.products))
+    }
 
     // Bloqueio de rotas /admin/* — somente super_admin tem acesso
     if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {

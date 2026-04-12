@@ -8,6 +8,7 @@ import {
   type CommonImageBody,
 } from '@/lib/imageEngines'
 import { getAuthUser } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkBudget } from '@/lib/budget'
 
@@ -68,6 +69,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'prompt é obrigatório.' }, { status: 400 })
     }
 
+    // ── Permission check ──
+    const preAuthUser = getAuthUser(request)
+    if (preAuthUser && !hasPermission(preAuthUser.permissions, preAuthUser.role, PERMISSIONS.GENERATE_IMAGE)) {
+      return NextResponse.json({ error: 'Sem permissão para gerar imagens.' }, { status: 403 })
+    }
+
     const engineId = body.engineId ?? DEFAULT_IMAGE_ENGINE_ID
     const engine = IMAGE_ENGINES.find(e => e.id === engineId) ?? getImageEngine(DEFAULT_IMAGE_ENGINE_ID)
 
@@ -77,7 +84,6 @@ export async function POST(request: NextRequest) {
     )
 
     // ── Budget check — bloqueia antes de gastar se user atingiu cap ──
-    const preAuthUser = getAuthUser(request)
     if (preAuthUser) {
       const estimatedCost = n * engine.pricePerImage
       const budget = await checkBudget(preAuthUser.id, estimatedCost)

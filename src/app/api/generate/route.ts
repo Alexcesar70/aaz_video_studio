@@ -8,6 +8,7 @@ import {
   type CommonVideoBody,
 } from '@/lib/videoEngines'
 import { getAuthUser } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkBudget } from '@/lib/budget'
 import { getSegmindCredits } from '@/lib/segmind'
@@ -54,12 +55,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'duration e aspect_ratio são obrigatórios.' }, { status: 400 })
     }
 
+    // ── Permission check — bloqueia se user não tem permissão ──
+    const preAuthUser = getAuthUser(request)
+    if (preAuthUser && !hasPermission(preAuthUser.permissions, preAuthUser.role, PERMISSIONS.GENERATE_VIDEO)) {
+      return NextResponse.json({ error: 'Sem permissão para gerar vídeos.' }, { status: 403 })
+    }
+
     // Resolve engine — default se não vier id válido
     const engineId = body.engineId ?? DEFAULT_ENGINE_ID
     const engine = VIDEO_ENGINES.find(e => e.id === engineId) ?? getEngine(DEFAULT_ENGINE_ID)
 
     // ── Budget check — bloqueia antes de gastar se user atingiu cap ──
-    const preAuthUser = getAuthUser(request)
     if (preAuthUser) {
       const estimatedCost = (body.duration ?? 0) * engine.pricePerSecond
       const budget = await checkBudget(preAuthUser.id, estimatedCost)

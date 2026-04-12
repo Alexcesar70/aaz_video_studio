@@ -39,6 +39,8 @@ export async function POST(request: NextRequest) {
       monthlyBudgetUsd?: number
       assignedProjectIds?: string[]
       password?: string // opcional — admin pode forçar uma senha específica
+      permissions?: string[]
+      products?: string[]
     }
 
     if (!body.name || !body.email || !body.role) {
@@ -61,6 +63,8 @@ export async function POST(request: NextRequest) {
       password: body.password,
       monthlyBudgetUsd: body.monthlyBudgetUsd,
       assignedProjectIds: body.assignedProjectIds,
+      permissions: body.permissions,
+      products: body.products,
       createdBy: admin.id,
     })
 

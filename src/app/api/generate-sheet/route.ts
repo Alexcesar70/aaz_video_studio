@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
+import { getAuthUser } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 
 /**
  * POST /api/generate-sheet
@@ -41,6 +43,12 @@ export async function POST(request: NextRequest) {
         { error: 'SEGMIND_API_KEY não configurada no servidor.' },
         { status: 500 }
       )
+    }
+
+    // ── Permission check ──
+    const authUser = getAuthUser(request)
+    if (authUser && !hasPermission(authUser.permissions, authUser.role, PERMISSIONS.GENERATE_IMAGE)) {
+      return NextResponse.json({ error: 'Sem permissão para gerar imagens.' }, { status: 403 })
     }
 
     const body = await request.json()

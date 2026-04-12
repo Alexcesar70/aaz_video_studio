@@ -115,6 +115,36 @@ Desenvolvedor: **Alexandre** (solo).
 - **Asset model**: `Asset` interface em `src/lib/assets.ts` ganhou campo `organizationId`
 - **Nenhuma chave Redis renomeada** — retrocompat total
 
+### Phase 4 — Granular Permissions + Product Access (COMPLETA)
+
+- `src/lib/permissions.ts` — constantes, tipos e helpers de permissão/produto
+  - 7 permissões: `generate_video`, `generate_image`, `use_scene_director`, `use_image_director`, `manage_episodes`, `manage_assets`, `view_analytics`
+  - 3 produtos: `aaz_studio`, `courses`, `community`
+  - `hasPermission()` — checa permissão com fallback para defaults do role
+  - `hasProductAccess()` — checa acesso a produto (org-level + user-level)
+  - `DEFAULT_PERMISSIONS` — mapa role -> permissões default
+  - `PERMISSION_LABELS` / `PRODUCT_LABELS` — labels PT-BR para UI
+- **JWT + middleware**: permissions/products incluídos no JWT e propagados via headers
+  - `src/middleware.ts` — injeta `x-user-permissions` e `x-user-products`
+  - `src/lib/auth.ts` — `AuthUser.permissions` e `AuthUser.products` lidos dos headers
+  - `/api/auth/login` — inclui permissions/products no JWT payload e na resposta
+  - `/api/auth/me` — retorna effective permissions (explicit ou default do role)
+- **Permission checks em 8 API routes**:
+  - `/api/generate` — `generate_video`
+  - `/api/generate-image` — `generate_image`
+  - `/api/generate-sheet` — `generate_image`
+  - `/api/scene-director` — `use_scene_director`
+  - `/api/image-director` — `use_image_director`
+  - `/api/episodes` (POST) — `manage_episodes`
+  - `/api/episodes/[id]` (PATCH/DELETE) — `manage_episodes`
+  - `/api/assets` (POST) — `manage_assets`
+- **UI (AAZStudio.tsx)**:
+  - Botões de gerar desabilitados + tooltip quando sem permissão
+  - InviteUserModal com checkboxes de permissões e produtos
+  - Tipo `CurrentUser` unificado com `permissions?` e `products?`
+- **Admin user management**: `/api/users` POST e `/api/users/[id]` PATCH aceitam permissions/products
+- **Retrocompat total**: users sem permissions explícitas herdam defaults do role
+
 ---
 
 ## PENDENTE / MELHORIAS FUTURAS

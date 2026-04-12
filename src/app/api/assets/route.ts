@@ -11,6 +11,7 @@ import {
   slugify,
 } from '@/lib/assets'
 import { getAuthUser } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 
 /**
@@ -129,6 +130,12 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // ── Permission check ──
+    const postAuth = getAuthUser(request)
+    if (postAuth && !hasPermission(postAuth.permissions, postAuth.role, PERMISSIONS.MANAGE_ASSETS)) {
+      return NextResponse.json({ error: 'Sem permissão para gerenciar assets.' }, { status: 403 })
+    }
+
     const body = await request.json() as Partial<Asset>
 
     if (!body.type || !['character', 'scenario', 'item'].includes(body.type)) {

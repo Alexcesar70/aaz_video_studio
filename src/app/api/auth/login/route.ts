@@ -105,6 +105,12 @@ export async function POST(request: NextRequest) {
     if (user.organizationId) {
       tokenPayload.organizationId = user.organizationId
     }
+    if (user.permissions && user.permissions.length > 0) {
+      tokenPayload.permissions = user.permissions
+    }
+    if (user.products && user.products.length > 0) {
+      tokenPayload.products = user.products
+    }
 
     const token = await new SignJWT(tokenPayload)
       .setProtectedHeader({ alg: 'HS256' })
@@ -120,6 +126,8 @@ export async function POST(request: NextRequest) {
         name: user.name,
         role: user.role,
         organizationId: user.organizationId,
+        permissions: user.permissions ?? [],
+        products: user.products ?? [],
       },
     })
 

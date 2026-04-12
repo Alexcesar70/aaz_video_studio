@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getImageDirectorSystemPrompt } from '@/lib/imageDirectorSystem'
 import type { AssetType } from '@/lib/assets'
 import { getAuthUser } from '@/lib/auth'
+import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 
 /**
@@ -37,6 +38,12 @@ export async function POST(request: NextRequest) {
         { error: 'ANTHROPIC_API_KEY não configurada.' },
         { status: 500 }
       )
+    }
+
+    // ── Permission check ──
+    const earlyAuth = getAuthUser(request)
+    if (earlyAuth && !hasPermission(earlyAuth.permissions, earlyAuth.role, PERMISSIONS.USE_IMAGE_DIRECTOR)) {
+      return NextResponse.json({ error: 'Sem permissão para usar o Image Director.' }, { status: 403 })
     }
 
     const body = await request.json() as {
