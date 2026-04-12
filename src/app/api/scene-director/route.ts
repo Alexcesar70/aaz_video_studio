@@ -5,6 +5,7 @@ import { getAuthUser } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
+import { getClientPrice, recordEngineCost } from '@/lib/pricing'
 
 /**
  * POST /api/scene-director
@@ -32,11 +33,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Sem permissão para usar o Scene Director.' }, { status: 403 })
     }
 
-    // ── Wallet balance check — estimated cost for Claude call ──
+    // ── Wallet balance check — usa preço do cliente (com margem) ──
     let walletId: string | null = null
+    const clientPricePerCall = await getClientPrice('scene-director', 0.015)
     if (earlyAuth) {
-      const estimatedCost = 0.015 // ~$0.015 per Scene Director call
-      const walletCheck = await checkWalletBalance(earlyAuth.id, earlyAuth.organizationId, estimatedCost)
+      const walletCheck = await checkWalletBalance(earlyAuth.id, earlyAuth.organizationId, clientPricePerCall)
       walletId = walletCheck.walletId
       if (!walletCheck.allowed) {
         return NextResponse.json(
@@ -186,11 +187,14 @@ export async function POST(request: NextRequest) {
     const costSource = (inputTokens > 0 || outputTokens > 0) ? 'real' : 'estimated'
     const cost = costSource === 'real' ? realCost : 0.015
 
-    // ── Wallet deduction — must complete before response ──
+    // ── Registra custo real para média dinâmica ──
+    if (cost > 0) recordEngineCost('scene-director', cost).catch(() => {})
+
+    // ── Wallet deduction — cobra preço do CLIENTE (com margem) ──
     let walletDeducted = false
-    if (walletId && cost > 0) {
+    if (walletId && clientPricePerCall > 0) {
       try {
-        const txn = await spendCredits(walletId, cost, `Scene Director call`, {
+        const txn = await spendCredits(walletId, clientPricePerCall, `Scene Director`, {
           generationType: 'scene_director',
           userId: earlyAuth?.id,
         })

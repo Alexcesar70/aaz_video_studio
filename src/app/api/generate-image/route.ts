@@ -12,6 +12,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkBudget } from '@/lib/budget'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
+import { getClientPrice, recordEngineCost } from '@/lib/pricing'
 
 /**
  * POST /api/generate-image
@@ -103,11 +104,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Wallet balance check — bloqueia se org sem saldo ──
+    // ── Wallet balance check — usa preço do cliente (com margem) ──
     let walletId: string | null = null
+    const clientPricePerImg = await getClientPrice(engine.id, engine.pricePerImage)
     if (preAuthUser) {
-      const estimatedCost = n * engine.pricePerImage
-      const walletCheck = await checkWalletBalance(preAuthUser.id, preAuthUser.organizationId, estimatedCost)
+      const walletCheck = await checkWalletBalance(preAuthUser.id, preAuthUser.organizationId, n * clientPricePerImg)
       walletId = walletCheck.walletId
       if (!walletCheck.allowed) {
         return NextResponse.json(
@@ -236,19 +237,24 @@ export async function POST(request: NextRequest) {
       `errors=${errors.length}`
     )
 
-    // ── Wallet deduction — must complete before response ──
-    const actualCost = imageUrls.length * engine.pricePerImage
+    // ── Registra custo real para média dinâmica ──
+    if (imageUrls.length > 0) {
+      recordEngineCost(engine.id, engine.pricePerImage).catch(() => {})
+    }
+
+    // ── Wallet deduction — cobra preço do CLIENTE (com margem) ──
+    const clientChargeUsd = imageUrls.length * clientPricePerImg
     let walletDeducted = false
-    if (walletId && actualCost > 0) {
+    if (walletId && clientChargeUsd > 0) {
       try {
-        const txn = await spendCredits(walletId, actualCost, `Image generation (${engine.name}, ${imageUrls.length} images)`, {
+        const txn = await spendCredits(walletId, clientChargeUsd, `${imageUrls.length} imagem(ns) · ${engine.name}`, {
           generationType: 'image',
           engineId: engine.id,
           userId: preAuthUser?.id,
         })
         walletDeducted = txn !== null
         if (!walletDeducted) {
-          console.warn(`[/api/generate-image] Wallet deduction failed — insufficient balance (walletId=${walletId}, cost=${actualCost})`)
+          console.warn(`[/api/generate-image] Wallet deduction failed — insufficient balance (walletId=${walletId}, cost=${clientChargeUsd})`)
         }
       } catch (walletErr) {
         console.error('[/api/generate-image] Wallet deduction error:', walletErr)
@@ -266,7 +272,7 @@ export async function POST(request: NextRequest) {
         organizationId: authUser.organizationId,
         type: 'image_generated',
         meta: {
-          cost: actualCost,
+          cost: clientChargeUsd,
           engineId: engine.id,
           variations: imageUrls.length,
           extra: { walletDeducted },

@@ -13,6 +13,7 @@ import { emitEvent } from '@/lib/activity'
 import { checkBudget } from '@/lib/budget'
 import { getSegmindCredits } from '@/lib/segmind'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
+import { getClientPrice, recordEngineCost } from '@/lib/pricing'
 
 /**
  * POST /api/generate
@@ -85,11 +86,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ── Wallet balance check — bloqueia se org sem saldo ──
+    // ── Wallet balance check — usa preço do cliente (com margem) ──
     let walletId: string | null = null
+    const clientPricePerSec = await getClientPrice(engine.id, engine.pricePerSecond)
+    const clientEstimatedCost = (body.duration ?? 0) * clientPricePerSec
     if (preAuthUser) {
-      const estimatedCost = (body.duration ?? 0) * engine.pricePerSecond
-      const walletCheck = await checkWalletBalance(preAuthUser.id, preAuthUser.organizationId, estimatedCost)
+      const walletCheck = await checkWalletBalance(preAuthUser.id, preAuthUser.organizationId, clientEstimatedCost)
       walletId = walletCheck.walletId
       if (!walletCheck.allowed) {
         return NextResponse.json(
@@ -196,11 +198,17 @@ export async function POST(request: NextRequest) {
       ` | before=${creditsBefore} after=${creditsAfter}`
     )
 
-    // ── Wallet deduction — must complete before response ──
+    // ── Registra custo real para média dinâmica da pricing table ──
+    if (costUsd > 0 && body.duration && body.duration > 0) {
+      recordEngineCost(engine.id, costUsd / body.duration).catch(() => {})
+    }
+
+    // ── Wallet deduction — cobra o preço do CLIENTE (com margem), não o custo real ──
+    const clientChargeUsd = (body.duration ?? 0) * clientPricePerSec
     let walletDeducted = false
-    if (walletId && costUsd > 0) {
+    if (walletId && clientChargeUsd > 0) {
       try {
-        const txn = await spendCredits(walletId, costUsd, `Video generation (${engine.name}, ${body.duration}s)`, {
+        const txn = await spendCredits(walletId, clientChargeUsd, `Cena ${body.duration}s · ${engine.name}`, {
           generationType: 'video',
           engineId: engine.id,
           userId: preAuthUser?.id,
