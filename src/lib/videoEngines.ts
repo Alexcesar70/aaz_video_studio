@@ -224,8 +224,9 @@ export function buildEnginePayload(
     }
   }
 
-  // First/Last frames
-  if (engine.features.firstLastFrames) {
+  // First/Last frames — MUTUAMENTE EXCLUSIVO com Omni Reference
+  // O Segmind rejeita se enviar first/last frame junto com reference_images
+  if (engine.features.firstLastFrames && body.mode !== 'omni_reference') {
     if (body.first_frame_url) base.first_frame_url = body.first_frame_url
     if (body.last_frame_url) base.last_frame_url = body.last_frame_url
   }
