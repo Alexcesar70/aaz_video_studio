@@ -169,6 +169,7 @@ export async function bootstrapPricingTable(): Promise<void> {
     { engineId: 'ideogram-v2', engineName: 'Ideogram V2', type: 'image', unit: 'image', baseCost: 0.08, marginFactor: m },
     { engineId: 'scene-director', engineName: 'Scene Director (Claude)', type: 'director', unit: 'call', baseCost: 0.015, marginFactor: m },
     { engineId: 'image-director', engineName: 'Image Director (Claude)', type: 'director', unit: 'call', baseCost: 0.005, marginFactor: m },
+    { engineId: 'suno-v4', engineName: 'Suno V4 (Música)', type: 'director', unit: 'call', baseCost: 0.11, marginFactor: m },
   ]
 
   const now = new Date().toISOString()
