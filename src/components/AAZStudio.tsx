@@ -2617,6 +2617,18 @@ export function AAZStudio() {
   }, [currentUser])
   useEffect(() => { loadMyWallet() }, [loadMyWallet])
 
+  // Client pricing — preços da pricing table (com margem do Super Admin)
+  const [clientPrices, setClientPrices] = useState<Record<string, number>>({})
+  useEffect(() => {
+    fetch('/api/pricing').then(r => r.json()).then(d => {
+      const map: Record<string, number> = {}
+      for (const p of (d.prices ?? [])) map[p.engineId] = p.pricePerUnit
+      setClientPrices(map)
+    }).catch(() => {})
+  }, [])
+  // Helper: retorna preço do cliente ou fallback do hardcoded
+  const cp = (engineId: string, fallback: number) => clientPrices[engineId] ?? fallback
+
   // BRL conversion toggle
   const [showBrl, setShowBrl] = useState(false)
   const [brlRate, setBrlRate] = useState<number | null>(null)
@@ -2662,7 +2674,7 @@ export function AAZStudio() {
   const atRefInput = useRef<HTMLInputElement>(null)
 
   const atEngine = useMemo(() => getImageEngine(atEngineId), [atEngineId])
-  const atTotalCost = (atEngine.pricePerImage * atVariations).toFixed(2)
+  const atTotalCost = (cp(atEngine.id, atEngine.pricePerImage) * atVariations).toFixed(2)
 
   const loadAssets = useCallback(async (type?: AssetType) => {
     setAtLoading(true)
@@ -3548,7 +3560,7 @@ export function AAZStudio() {
   const audRef = useRef<HTMLInputElement>(null)
 
   /* Custo calculado com base na engine selecionada (preço estimado) */
-  const cost = (duration * engine.pricePerSecond).toFixed(2)
+  const cost = (duration * cp(engine.id, engine.pricePerSecond)).toFixed(2)
   const totalCost = history.reduce((s, h) => s + parseFloat(h.cost), 0).toFixed(2)
 
   /* Warnings quando a engine escolhida não suporta uma feature ativa */
@@ -4218,7 +4230,7 @@ export function AAZStudio() {
           <Pill color={C.textDim}>{engine.name}</Pill>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Pill color={C.green}>~${engine.pricePerSecond}/s</Pill>
+          <Pill color={C.green}>${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s</Pill>
           <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
           {/* Budget pill pra creators com cap mensal */}
           {myBudget && myBudget.capUsd !== undefined && (
@@ -4904,7 +4916,7 @@ export function AAZStudio() {
                 >
                   {VIDEO_ENGINES.map(eng => (
                     <option key={eng.id} value={eng.id}>
-                      {eng.name} · ~${eng.pricePerSecond}/s
+                      {eng.name} · ${cp(eng.id, eng.pricePerSecond).toFixed(2)}/s
                     </option>
                   ))}
                 </select>
@@ -5168,7 +5180,7 @@ export function AAZStudio() {
             {/* Custo (preço estimado baseado na engine selecionada) */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · ~${engine.pricePerSecond}/s</div>
+                <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · ${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s</div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>~${cost}</div>
               </div>
               <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', letterSpacing: '0.3px' }}>
@@ -5410,7 +5422,7 @@ export function AAZStudio() {
                   >
                     {IMAGE_ENGINES.map(eng => (
                       <option key={eng.id} value={eng.id}>
-                        {eng.name} · ~${eng.pricePerImage}/img
+                        {eng.name} · ${cp(eng.id, eng.pricePerImage).toFixed(3)}/img
                       </option>
                     ))}
                   </select>
@@ -5445,7 +5457,7 @@ export function AAZStudio() {
 
                 <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontSize: 13, color: C.textDim }}>{atVariations} × ~${atEngine.pricePerImage}</div>
+                    <div style={{ fontSize: 13, color: C.textDim }}>{atVariations} × ${cp(atEngine.id, atEngine.pricePerImage).toFixed(3)}</div>
                     <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>~${atTotalCost}</div>
                   </div>
                   <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginTop: 4 }}>Preço estimado · {atEngine.name}</div>
