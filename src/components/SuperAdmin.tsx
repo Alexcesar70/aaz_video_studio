@@ -162,7 +162,11 @@ function OrgsView() {
 
   const loadDetail = useCallback((id: string) => {
     setSelected(id); setDetail(null); setMsg('')
-    fetch(`/api/admin/organizations/${id}`).then(r => r.json()).then(setDetail).catch(() => {})
+    fetch(`/api/admin/organizations/${id}`).then(r => r.json()).then(d => {
+      // Normaliza: API retorna 'organization', frontend usa 'org'
+      if (d.organization && !d.org) d.org = d.organization
+      setDetail(d)
+    }).catch(() => {})
   }, [])
 
   const addCredits = async () => {
