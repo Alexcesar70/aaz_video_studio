@@ -88,7 +88,7 @@ export async function setEnginePricing(pricing: EnginePricing): Promise<void> {
 
 // ── Custo médio dinâmico ──
 
-/** Registra um custo real de uma chamada (para cálculo de média). */
+/** Registra um custo real de uma chamada e recalcula o preço automaticamente. */
 export async function recordEngineCost(engineId: string, costPerUnit: number): Promise<void> {
   const redis = await getRedis()
   const key = `${COSTS_PREFIX}${engineId}`
@@ -96,6 +96,19 @@ export async function recordEngineCost(engineId: string, costPerUnit: number): P
   await redis.rPush(key, costPerUnit.toString())
   // Mantém só os últimos 20
   await redis.lTrim(key, -20, -1)
+
+  // Recalcula preço automaticamente com a nova média
+  const ep = await getEnginePricing(engineId)
+  if (ep) {
+    const avg = await getAverageEngineCost(engineId)
+    if (avg.count > 0) {
+      ep.baseCost = avg.avg
+      ep.clientPrice = Math.round(avg.avg * ep.marginFactor * 10000) / 10000
+      ep.sampleCount = avg.count
+      ep.updatedAt = new Date().toISOString()
+      await setEnginePricing(ep)
+    }
+  }
 }
 
 /** Calcula o custo médio das últimas N chamadas. */
