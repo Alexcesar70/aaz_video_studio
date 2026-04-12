@@ -394,7 +394,7 @@ function UsersView() {
           <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1fr 1fr 1fr', gap: 8, padding: '10px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80`, alignItems: 'center' }}>
             <div style={{ color: C.text, fontWeight: 600 }}>{u.name}</div>
             <div style={{ color: C.textDim }}>{u.email}</div>
-            <div style={{ color: C.textDim, fontSize: 11 }}>{u.orgName ?? '—'}</div>
+            <div style={{ color: u.orgName ? C.text : C.textDim, fontSize: 11, fontWeight: u.orgName ? 600 : 400 }}>{u.orgName ?? 'Individual'}</div>
             <div><span style={{ fontSize: 10, fontWeight: 700, color: u.role === 'super_admin' ? C.gold : u.role === 'admin' ? C.purple : C.textDim }}>{u.role}</span></div>
             <div><span style={{ fontSize: 10, fontWeight: 700, color: u.status === 'active' ? C.green : C.red }}>{u.status === 'active' ? 'Ativo' : 'Revogado'}</span></div>
             <div style={{ display: 'flex', gap: 4 }}>
