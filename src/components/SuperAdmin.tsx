@@ -58,9 +58,25 @@ function OrgsView() {
   const [creditAmt, setCreditAmt] = useState('')
   const [creditDesc, setCreditDesc] = useState('')
   const [msg, setMsg] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
+  const [plans, setPlans] = useState<D[]>([])
+  const [newOrg, setNewOrg] = useState({ name: '', type: 'team', plan: '', billingEmail: '', maxUsers: '5', leaderCanCreate: true })
 
-  const load = useCallback(() => { fetch('/api/admin/organizations').then(r => r.json()).then(d => setOrgs(d.organizations ?? [])).catch(() => {}) }, [])
+  const load = useCallback(() => {
+    fetch('/api/admin/organizations').then(r => r.json()).then(d => setOrgs(d.organizations ?? [])).catch(() => {})
+    fetch('/api/admin/plans').then(r => r.json()).then(d => setPlans(d.plans ?? [])).catch(() => {})
+  }, [])
   useEffect(load, [load])
+
+  const createOrg = async () => {
+    if (!newOrg.name.trim()) return
+    const r = await fetch('/api/admin/organizations', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newOrg, maxUsers: parseInt(newOrg.maxUsers) || 5, products: ['aaz_studio'] })
+    })
+    if (r.ok) { setShowCreate(false); setNewOrg({ name: '', type: 'team', plan: '', billingEmail: '', maxUsers: '5', leaderCanCreate: true }); load(); setMsg('Organização criada!') }
+    else { const d = await r.json().catch(() => ({})); setMsg(d.error ?? 'Erro ao criar') }
+  }
 
   const loadDetail = useCallback((id: string) => {
     setSelected(id); setDetail(null); setMsg('')
@@ -84,7 +100,55 @@ function OrgsView() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Organizações</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Organizações</div>
+        <button onClick={() => setShowCreate(!showCreate)} style={btnStyle}>{showCreate ? 'Cancelar' : '+ Nova Organização'}</button>
+      </div>
+
+      {showCreate && (
+        <div style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>Nova Organização</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 4, fontWeight: 700 }}>NOME</div>
+              <input placeholder="Nome da organização" value={newOrg.name} onChange={e => setNewOrg({ ...newOrg, name: e.target.value })} style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 4, fontWeight: 700 }}>EMAIL DE BILLING</div>
+              <input placeholder="email@empresa.com" value={newOrg.billingEmail} onChange={e => setNewOrg({ ...newOrg, billingEmail: e.target.value })} style={inputStyle} />
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 4, fontWeight: 700 }}>TIPO</div>
+              <select value={newOrg.type} onChange={e => setNewOrg({ ...newOrg, type: e.target.value })} style={inputStyle}>
+                <option value="individual">Individual</option>
+                <option value="team">Time</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 4, fontWeight: 700 }}>PLANO</div>
+              <select value={newOrg.plan} onChange={e => setNewOrg({ ...newOrg, plan: e.target.value })} style={inputStyle}>
+                <option value="">Selecione...</option>
+                {plans.filter(p => p.isActive).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 4, fontWeight: 700 }}>MAX USUÁRIOS</div>
+              <input type="number" value={newOrg.maxUsers} onChange={e => setNewOrg({ ...newOrg, maxUsers: e.target.value })} style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 4, fontWeight: 700 }}>LÍDER CRIA CONTEÚDO?</div>
+              <select value={newOrg.leaderCanCreate ? 'sim' : 'nao'} onChange={e => setNewOrg({ ...newOrg, leaderCanCreate: e.target.value === 'sim' })} style={inputStyle}>
+                <option value="sim">Sim</option>
+                <option value="nao">Não</option>
+              </select>
+            </div>
+          </div>
+          <button onClick={createOrg} style={{ ...btnStyle, alignSelf: 'flex-start', marginTop: 4 }}>Criar organização</button>
+          {msg && <div style={{ fontSize: 12, color: msg.includes('Erro') ? C.red : C.green }}>{msg}</div>}
+        </div>
+      )}
       <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 8, padding: '10px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
           <div>NOME</div><div>PLANO</div><div>TIPO</div><div>MEMBROS</div><div>SALDO</div><div>STATUS</div>
