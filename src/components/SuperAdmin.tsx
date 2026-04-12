@@ -31,26 +31,28 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
 
   const bal = data.segmindBalance ?? 0
   const revenue = data.totalRevenue ?? 0
-  const spend = data.totalSpend ?? 0
-  const margin = revenue > 0 ? revenue - spend : 0
-  const marginPct = revenue > 0 ? (margin / revenue) * 100 : 0
-  const costPct = revenue > 0 ? (spend / revenue) * 100 : 0
-  // Projeção: quantos dias o saldo Segmind dura no ritmo atual
-  const dailySpend = spend > 0 ? spend / Math.max(new Date().getDate(), 1) : 0
+  const totalCosts = data.totalSpend ?? 0
+  const segmindCost = data.segmindCost ?? totalCosts
+  const claudeCost = data.claudeCost ?? 0
+  const grossProfit = revenue - totalCosts
+  const profitPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0
+  const dailySpend = totalCosts > 0 ? totalCosts / Math.max(new Date().getDate(), 1) : 0
   const daysLeft = dailySpend > 0 ? Math.floor(bal / dailySpend) : 999
 
   // Alertas
   const alerts: { level: 'red' | 'yellow'; msg: string }[] = []
-  if (bal < 10) alerts.push({ level: 'red', msg: `Saldo Segmind crítico — $${bal.toFixed(2)} restantes (~${daysLeft} dias)` })
-  else if (bal < 50) alerts.push({ level: 'yellow', msg: `Saldo Segmind baixo — $${bal.toFixed(2)} (~${daysLeft} dias)` })
+  if (bal < 50) alerts.push({ level: bal < 10 ? 'red' : 'yellow', msg: `Saldo Segmind ${bal < 10 ? 'crítico' : 'baixo'} — $${bal.toFixed(2)} restantes (~${daysLeft} dias)` })
   if ((data.lowBalanceOrgs ?? 0) > 0) alerts.push({ level: 'yellow', msg: `${data.lowBalanceOrgs} organização(ões) com saldo baixo — oportunidade de recarga` })
   if ((data.inactiveOrgs ?? 0) > 0) alerts.push({ level: 'yellow', msg: `${data.inactiveOrgs} organização(ões) inativa(s) há >7 dias` })
+  if (grossProfit < 0) alerts.push({ level: 'red', msg: `Prejuízo acumulado: $${Math.abs(grossProfit).toFixed(2)} — custos maiores que receita` })
+
+  // Tabela L/P a partir dos eventos recentes
+  const costEvents = (data.recentEvents ?? []).filter((e: D) => e.meta?.cost > 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Dashboard</div>
 
-      {/* Alertas */}
       {alerts.length > 0 && (
         <div style={{ background: `${C.red}10`, border: `1px solid ${C.red}30`, borderRadius: 12, padding: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 8 }}>ATENÇÃO</div>
@@ -66,9 +68,9 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
       <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>SAÚDE FINANCEIRA</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
         <KPI label="Receita do mês" value={`$${revenue.toFixed(2)}`} sub="créditos vendidos" color={C.green} onClick={() => onNavigate('financial')} />
-        <KPI label="Custo Segmind" value={`$${spend.toFixed(2)}`} sub={`${costPct.toFixed(0)}% da receita`} color={costPct > 70 ? C.red : costPct > 50 ? C.gold : C.blue} onClick={() => onNavigate('financial')} />
-        <KPI label="Margem" value={`$${margin.toFixed(2)}`} sub={`${marginPct.toFixed(0)}% de margem`} color={marginPct >= 50 ? C.green : marginPct >= 30 ? C.gold : C.red} />
-        <KPI label="Saldo Segmind" value={`$${bal.toFixed(2)}`} sub={daysLeft < 999 ? `~${daysLeft} dias restantes` : 'sem gasto ainda'} color={bal < 10 ? C.red : bal < 50 ? C.gold : C.green} />
+        <KPI label="Custos totais" value={`$${totalCosts.toFixed(2)}`} sub={`Segmind: $${segmindCost.toFixed(2)} · Claude: $${claudeCost.toFixed(2)}`} color={C.blue} onClick={() => onNavigate('financial')} />
+        <KPI label="Lucro bruto" value={`$${grossProfit.toFixed(2)}`} sub={`${profitPct.toFixed(0)}% de margem`} color={grossProfit >= 0 ? C.green : C.red} onClick={() => onNavigate('financial')} />
+        <KPI label="Saldo Segmind" value={`$${bal.toFixed(2)}`} sub={daysLeft < 999 ? `~${daysLeft} dias restantes` : 'sem gasto ainda'} color={bal < 50 ? C.red : C.green} />
       </div>
 
       {/* Linha 2: Gestão de clientes */}
@@ -80,16 +82,48 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
         <KPI label="Usuários" value={`${data.activeUsers ?? 0}`} sub={`${data.totalUsers ?? 0} total`} color={C.purple} onClick={() => onNavigate('users')} />
       </div>
 
-      {/* Linha 3: Operacional */}
-      <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginTop: 4 }}>OPERACIONAL</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <KPI label="Gerações hoje" value={`${data.generationsToday ?? 0}`} sub="vídeos + imagens" color={C.blue} />
-        <KPI label="Gerações semana" value={`${data.generationsWeek ?? 0}`} sub={`$${(data.weeklySpend ?? 0).toFixed(2)} gasto`} color={C.purple} />
-        <KPI label="Engine top" value={data.topEngine ?? '—'} sub={`${data.topEnginePercent ?? 0}% das gerações`} color={C.gold} />
-        <KPI label="Planos ativos" value={`${data.activePlans ?? 0}`} sub="configurados" color={C.green} onClick={() => onNavigate('plans')} />
+      {/* Tabela L/P Acumulados */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginTop: 4 }}>LUCROS / PREJUÍZOS ACUMULADOS</div>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '140px 2fr 1fr 1fr 1fr', gap: 8, padding: '10px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+          <div>DATA</div><div>DESCRIÇÃO</div><div style={{ textAlign: 'right' }}>VENDA</div><div style={{ textAlign: 'right' }}>CUSTO</div><div style={{ textAlign: 'right' }}>LUCRO</div>
+        </div>
+        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+          {costEvents.length === 0
+            ? <div style={{ color: C.textDim, padding: 20, textAlign: 'center', fontSize: 12 }}>Sem transações ainda.</div>
+            : costEvents.slice(0, 30).map((e: D) => {
+              const sale = e.meta?.cost ?? 0
+              const apiCost = e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? 0
+              const profit = sale - apiCost
+              const dt = new Date(e.timestamp)
+              return (
+                <div key={e.id} style={{ display: 'grid', gridTemplateColumns: '140px 2fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80`, alignItems: 'center' }}>
+                  <div style={{ color: C.textDim, fontFamily: 'monospace', fontSize: 11 }}>{dt.toLocaleDateString('pt-BR')} {dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
+                  <div style={{ color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{e.userName} · {e.type?.replace(/_/g, ' ')}</div>
+                  <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.green }}>${sale.toFixed(3)}</div>
+                  <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.red }}>${apiCost.toFixed(3)}</div>
+                  <div style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: profit >= 0 ? C.green : C.red }}>${profit.toFixed(3)}</div>
+                </div>
+              )
+            })
+          }
+        </div>
+        {costEvents.length > 0 && (() => {
+          const totSale = costEvents.reduce((s: number, e: D) => s + (e.meta?.cost ?? 0), 0)
+          const totCost = costEvents.reduce((s: number, e: D) => s + (e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? 0), 0)
+          const totProfit = totSale - totCost
+          return (
+            <div style={{ display: 'grid', gridTemplateColumns: '140px 2fr 1fr 1fr 1fr', gap: 8, padding: '12px 16px', borderTop: `2px solid ${C.border}`, background: C.card, fontSize: 13, fontWeight: 700 }}>
+              <div></div><div style={{ color: C.text }}>TOTAL</div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.green }}>${totSale.toFixed(2)}</div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.red }}>${totCost.toFixed(2)}</div>
+              <div style={{ textAlign: 'right', fontFamily: 'monospace', color: totProfit >= 0 ? C.green : C.red }}>${totProfit.toFixed(2)}</div>
+            </div>
+          )
+        })()}
       </div>
 
-      {/* Top clientes + Atividade (lado a lado) */}
+      {/* Top clientes + Operacional (lado a lado) */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 4 }}>
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
@@ -108,19 +142,13 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
           }
         </div>
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Atividade recente</div>
-            <span onClick={() => onNavigate('users')} style={{ fontSize: 10, color: C.blue, cursor: 'pointer' }}>Ver todos →</span>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>Operacional</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span style={{ color: C.textDim }}>Gerações hoje</span><span style={{ color: C.text, fontWeight: 600 }}>{data.generationsToday ?? 0}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span style={{ color: C.textDim }}>Gerações semana</span><span style={{ color: C.text, fontWeight: 600 }}>{data.generationsWeek ?? 0}</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span style={{ color: C.textDim }}>Engine top</span><span style={{ color: C.gold, fontWeight: 600 }}>{data.topEngine ?? '—'} ({data.topEnginePercent ?? 0}%)</span></div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}><span style={{ color: C.textDim }}>Planos ativos</span><span onClick={() => onNavigate('plans')} style={{ color: C.blue, fontWeight: 600, cursor: 'pointer' }}>{data.activePlans ?? 0} →</span></div>
           </div>
-          {(data.recentEvents ?? []).length === 0
-            ? <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: 16 }}>Sem atividade ainda.</div>
-            : (data.recentEvents ?? []).slice(0, 8).map((e: D) => (
-              <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.border}80`, fontSize: 11 }}>
-                <span style={{ color: C.text }}><span style={{ fontWeight: 600 }}>{e.userName ?? 'User'}</span> <span style={{ color: C.textDim }}>{e.type?.replace(/_/g, ' ')}</span></span>
-                <span style={{ color: C.textDim, fontSize: 10 }}>{e.meta?.cost ? `$${e.meta.cost.toFixed(3)}` : ''}</span>
-              </div>
-            ))
-          }
         </div>
       </div>
 
