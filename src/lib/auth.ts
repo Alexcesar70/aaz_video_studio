@@ -60,6 +60,18 @@ export function requireAdmin(request: NextRequest): AuthUser {
 }
 
 /**
+ * Retorna o usuário autenticado ou lança erro se não for super_admin.
+ * Usado no topo de APIs /api/admin/** exclusivas do dono da plataforma.
+ */
+export function requireSuperAdmin(request: NextRequest): AuthUser {
+  const user = getAuthUser(request)
+  if (!user || user.role !== 'super_admin') {
+    throw new AuthError('Super admin access required', 403)
+  }
+  return user
+}
+
+/**
  * Retorna o usuário autenticado ou lança erro se não estiver logado.
  */
 export function requireAuth(request: NextRequest): AuthUser {

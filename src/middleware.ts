@@ -39,9 +39,12 @@ export async function middleware(request: NextRequest) {
     if (payload.name) requestHeaders.set('x-user-name', String(payload.name))
     if (payload.organizationId) requestHeaders.set('x-org-id', String(payload.organizationId))
 
-    // Bloqueio de rotas /admin/* pra não-admins
+    // Bloqueio de rotas /admin/* — somente super_admin tem acesso
     if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-      if (payload.role !== 'admin' && payload.role !== 'super_admin') {
+      if (payload.role !== 'super_admin') {
+        if (pathname.startsWith('/api/admin')) {
+          return NextResponse.json({ error: 'Super admin access required' }, { status: 403 })
+        }
         const studioUrl = new URL('/studio', request.url)
         return NextResponse.redirect(studioUrl)
       }
