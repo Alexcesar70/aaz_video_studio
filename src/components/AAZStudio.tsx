@@ -1025,6 +1025,11 @@ interface ActivityEventView {
     sceneId?: string
     assetId?: string
     targetUserId?: string
+    extra?: {
+      costSource?: 'real' | 'estimated'
+      estimatedCostUsd?: number
+      realCostUsd?: number | null
+    }
   }
 }
 
@@ -1180,7 +1185,7 @@ function AdminPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KpiCard label="Gasto este mês" value={monthly ? `~$${monthly.totalCost.toFixed(2)}` : '—'} sub="estimado" color={C.green} />
+            <KpiCard label="Gasto este mês" value={monthly ? `$${monthly.totalCost.toFixed(2)}` : '—'} sub="vídeos: custo real · resto: estimado" color={C.green} />
             <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
             <KpiCard label="Cenas (semana)" value={`${scenesThisWeek}`} sub="vídeos gerados" color={C.blue} />
             <KpiCard label="Assets (semana)" value={`${assetsThisWeek}`} sub="novos na biblioteca" color={C.gold} />
@@ -1423,7 +1428,8 @@ function AdminPanel({
           </div>
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
             <div style={{ fontSize: 11, color: C.textDim, marginBottom: 12, fontStyle: 'italic' }}>
-              Valores são estimativas baseadas nos preços unitários de cada motor. O valor real cobrado pelo Segmind/Anthropic pode variar.
+              Cenas de vídeo refletem o custo real cobrado pelo Segmind (saldo antes vs. depois da geração).
+              Imagens, Scene Director e Image Director são estimativas baseadas nos preços unitários de cada motor.
             </div>
             {monthly && Object.keys(monthly.byUser).length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1444,14 +1450,14 @@ function AdminPanel({
                       <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.image_generated ?? 0}</div>
                       <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.scene_director_called ?? 0}</div>
                       <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.image_director_called ?? 0}</div>
-                      <div style={{ color: C.green, fontWeight: 700, fontFamily: 'monospace', textAlign: 'right' }}>~${data.cost.toFixed(2)}</div>
+                      <div style={{ color: C.green, fontWeight: 700, fontFamily: 'monospace', textAlign: 'right' }}>${data.cost.toFixed(2)}</div>
                     </div>
                   )
                 })}
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '12px 0 0', fontSize: 13, fontWeight: 700, borderTop: `2px solid ${C.border}`, marginTop: 6 }}>
                   <div style={{ color: C.text }}>TOTAL</div>
                   <div></div><div></div><div></div><div></div>
-                  <div style={{ color: C.green, fontFamily: 'monospace', textAlign: 'right' }}>~${monthly.totalCost.toFixed(2)}</div>
+                  <div style={{ color: C.green, fontFamily: 'monospace', textAlign: 'right' }}>${monthly.totalCost.toFixed(2)}</div>
                 </div>
               </div>
             ) : (
@@ -1502,6 +1508,8 @@ function ActivityRow({ event }: { event: ActivityEventView }) {
   const icon = activityIcon(event.type)
   const desc = activityDescription(event)
   const when = relativeTime(new Date(event.timestamp))
+  const costSource = event.meta.extra?.costSource
+  const isRealCost = costSource === 'real'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: C.card, fontSize: 12 }}>
       <span style={{ fontSize: 16 }}>{icon}</span>
@@ -1512,7 +1520,14 @@ function ActivityRow({ event }: { event: ActivityEventView }) {
         </div>
       </div>
       {event.meta.cost !== undefined && (
-        <span style={{ fontSize: 10, color: C.green, fontFamily: 'monospace' }}>~${event.meta.cost.toFixed(3)}</span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {isRealCost ? (
+            <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: `${C.green}20`, border: `1px solid ${C.green}50`, borderRadius: 4, padding: '1px 5px', letterSpacing: '0.3px' }}>REAL</span>
+          ) : (
+            <span style={{ fontSize: 9, color: C.textDim, fontStyle: 'italic' }}>est.</span>
+          )}
+          <span style={{ fontSize: 10, color: C.green, fontFamily: 'monospace' }}>${event.meta.cost.toFixed(3)}</span>
+        </span>
       )}
       <span style={{ fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' }}>{when}</span>
     </div>
