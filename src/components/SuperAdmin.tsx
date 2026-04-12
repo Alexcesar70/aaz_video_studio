@@ -8,7 +8,7 @@ const C = {
   red: '#F87171', purple: '#A78BFA', text: '#E8E8F0', textDim: '#9898B0',
 }
 
-type View = 'dashboard' | 'orgs' | 'plans' | 'users' | 'financial' | 'pricing'
+type View = 'dashboard' | 'orgs' | 'plans' | 'users' | 'financial' | 'pricing' | 'security'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type D = Record<string, any>
@@ -506,7 +506,56 @@ const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'users', label: 'Usuários', icon: '👥' },
   { id: 'financial', label: 'Financeiro', icon: '💰' },
   { id: 'pricing', label: 'Precificação', icon: '🏷' },
+  { id: 'security', label: 'Segurança', icon: '🔒' },
 ]
+
+function SecurityView() {
+  const [logs, setLogs] = useState<D[]>([])
+  const [loading, setLoading] = useState(false)
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/admin/login-logs?limit=100').then(r => r.json()).then(d => setLogs(d.logs ?? [])).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+  useEffect(load, [load])
+
+  const failCount = logs.filter(l => !l.success).length
+  const uniqueIps = new Set(logs.filter(l => !l.success).map(l => l.ip)).size
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Segurança</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <KPI label="Tentativas (total)" value={`${logs.length}`} sub="últimas 100" color={C.blue} />
+        <KPI label="Falhas" value={`${failCount}`} sub={`${uniqueIps} IP(s) distintos`} color={failCount > 10 ? C.red : C.green} />
+        <KPI label="Sucessos" value={`${logs.length - failCount}`} sub="logins válidos" color={C.green} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Log de tentativas de login</div>
+        <button onClick={load} disabled={loading} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 12px', color: C.textDim, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' }}>{loading ? 'Atualizando...' : 'Atualizar'}</button>
+      </div>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '150px 2fr 1.5fr 1fr 0.8fr', gap: 8, padding: '10px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+          <div>DATA/HORA</div><div>EMAIL</div><div>IP</div><div>USUÁRIO</div><div>STATUS</div>
+        </div>
+        <div style={{ maxHeight: 500, overflowY: 'auto' }}>
+          {logs.map((l, i) => {
+            const dt = new Date(l.timestamp)
+            return (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '150px 2fr 1.5fr 1fr 0.8fr', gap: 8, padding: '8px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80`, alignItems: 'center', background: !l.success ? `${C.red}08` : 'transparent' }}>
+                <div style={{ color: C.textDim, fontFamily: 'monospace', fontSize: 11 }}>{dt.toLocaleDateString('pt-BR')} {dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</div>
+                <div style={{ color: C.text }}>{l.email}</div>
+                <div style={{ color: C.textDim, fontFamily: 'monospace', fontSize: 11 }}>{l.ip}</div>
+                <div style={{ color: C.textDim }}>{l.userId ?? '—'}</div>
+                <div><span style={{ fontSize: 10, fontWeight: 700, color: l.success ? C.green : C.red, background: l.success ? `${C.green}20` : `${C.red}20`, padding: '2px 8px', borderRadius: 4 }}>{l.success ? 'OK' : 'FALHA'}</span></div>
+              </div>
+            )
+          })}
+          {logs.length === 0 && <div style={{ color: C.textDim, padding: 20, textAlign: 'center', fontSize: 12 }}>Nenhuma tentativa registrada.</div>}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function PricingView() {
   const [config, setConfig] = useState<D | null>(null)
@@ -637,6 +686,7 @@ export function SuperAdmin() {
         {view === 'users' && <UsersView />}
         {view === 'financial' && <FinancialView />}
         {view === 'pricing' && <PricingView />}
+        {view === 'security' && <SecurityView />}
       </div>
     </div>
   )
