@@ -390,23 +390,37 @@ function UsersView() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Usuários</div>
       <input placeholder="Buscar por nome ou email..." value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, width: '100%', maxWidth: 400 }} />
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1fr 1fr 1fr', gap: 8, padding: '10px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
-          <div>NOME</div><div>EMAIL</div><div>ORG</div><div>ROLE</div><div>STATUS</div><div>AÇÕES</div>
-        </div>
-        {filtered.slice(0, 50).map(u => (
-          <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 2fr 1.5fr 1fr 1fr 1fr', gap: 8, padding: '10px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80`, alignItems: 'center' }}>
-            <div style={{ color: C.text, fontWeight: 600 }}>{u.name}</div>
-            <div style={{ color: C.textDim }}>{u.email}</div>
-            <div style={{ color: u.orgName ? C.text : C.textDim, fontSize: 11, fontWeight: u.orgName ? 600 : 400 }}>{u.orgName ?? 'Individual'}</div>
-            <div><span style={{ fontSize: 10, fontWeight: 700, color: u.role === 'super_admin' ? C.gold : u.role === 'admin' ? C.purple : C.textDim }}>{u.role}</span></div>
-            <div><span style={{ fontSize: 10, fontWeight: 700, color: u.status === 'active' ? C.green : C.red }}>{u.status === 'active' ? 'Ativo' : 'Revogado'}</span></div>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button onClick={() => { setSelected(u); setNewPw(null); setMsg('') }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: '4px 8px', color: C.textDim, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Detalhes</button>
+
+      {(() => {
+        // Agrupa por org
+        const groups = new Map<string, { orgName: string; users: D[] }>()
+        for (const u of filtered) {
+          const key = u.orgName || '__individual__'
+          if (!groups.has(key)) groups.set(key, { orgName: u.orgName || '', users: [] })
+          groups.get(key)!.users.push(u)
+        }
+        return Array.from(groups.entries()).map(([key, g]) => (
+          <div key={key} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+            <div style={{ padding: '10px 16px', background: C.card, borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 14 }}>{key === '__individual__' ? '👤' : '🏢'}</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: key === '__individual__' ? C.textDim : C.gold }}>{key === '__individual__' ? 'Sem organização' : g.orgName}</span>
+              <span style={{ fontSize: 11, color: C.textDim }}>· {g.users.length} membro{g.users.length > 1 ? 's' : ''}</span>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '2fr 2.5fr 1fr 1fr 1fr', gap: 8, padding: '8px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+              <div>NOME</div><div>EMAIL</div><div>ROLE</div><div>STATUS</div><div>AÇÕES</div>
+            </div>
+            {g.users.map(u => (
+              <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '2fr 2.5fr 1fr 1fr 1fr', gap: 8, padding: '10px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80`, alignItems: 'center' }}>
+                <div style={{ color: C.text, fontWeight: 600 }}>{u.name}</div>
+                <div style={{ color: C.textDim }}>{u.email}</div>
+                <div><span style={{ fontSize: 10, fontWeight: 700, color: u.role === 'super_admin' ? C.gold : u.role === 'admin' ? C.purple : C.textDim }}>{u.role}</span></div>
+                <div><span style={{ fontSize: 10, fontWeight: 700, color: u.status === 'active' ? C.green : C.red }}>{u.status === 'active' ? 'Ativo' : 'Revogado'}</span></div>
+                <div><button onClick={() => { setSelected(u); setNewPw(null); setMsg('') }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 4, padding: '4px 8px', color: C.textDim, fontSize: 10, cursor: 'pointer', fontFamily: 'inherit' }}>Detalhes</button></div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        ))
+      })()}
 
       {selected && (
         <div onClick={() => { setSelected(null); setNewPw(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
