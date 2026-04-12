@@ -5,7 +5,9 @@ import {
   verifyPassword,
   bootstrapAdminIfEmpty,
   touchLastActive,
+  updateUser,
   LEAD_ADMIN_ID,
+  LEAD_ADMIN_EMAIL,
 } from '@/lib/users'
 import { bootstrapDefaultOrg } from '@/lib/organizations'
 import { emitEvent } from '@/lib/activity'
@@ -48,7 +50,15 @@ export async function POST(request: NextRequest) {
       // o getUserByEmail abaixo vai falhar com mensagem própria.
     }
 
-    const user = await getUserByEmail(email)
+    let user = await getUserByEmail(email)
+
+    // Migração: promove lead admin para super_admin se ainda estiver como admin
+    if (user && user.email === LEAD_ADMIN_EMAIL && user.role === 'admin') {
+      await updateUser(user.id, { role: 'super_admin' })
+      user = { ...user, role: 'super_admin' }
+      console.log('[auth/login] Lead admin promovido para super_admin')
+    }
+
     if (!user) {
       // Mensagem genérica pra não vazar existência de email
       return NextResponse.json(
