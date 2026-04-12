@@ -1060,7 +1060,7 @@ function AdminPanel({
     try {
       const [usersRes, eventsRes, monthlyRes, epsRes] = await Promise.all([
         fetch('/api/users'),
-        fetch('/api/activity?mode=events&limit=100'),
+        fetch('/api/activity?mode=events&limit=500'),
         fetch('/api/activity?mode=monthly'),
         fetch('/api/episodes'),
       ])
@@ -1090,9 +1090,18 @@ function AdminPanel({
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  // Deriva agregados pro dashboard
+  // Deriva agregados pro dashboard — calculados dos eventos (mais confiável que daily aggregates)
   const now = new Date()
+  const currentMonth = now.toISOString().slice(0, 7) // "2026-04"
   const monthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  // Eventos do mês atual (filtro por timestamp)
+  const monthlyEvents = events.filter(e => e.timestamp.slice(0, 7) === currentMonth)
+
+  // Gasto total do mês — soma direta dos custos dos eventos
+  const computedMonthlyCost = monthlyEvents
+    .filter(e => e.meta.cost != null && e.meta.cost > 0)
+    .reduce((sum, e) => sum + (e.meta.cost ?? 0), 0)
 
   // Atividade últimos 7 dias = usuários com lastActiveAt recente
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -1102,8 +1111,17 @@ function AdminPanel({
   const scenesThisWeek = events.filter(e => e.type === 'scene_generated' && e.timestamp >= sevenDaysAgo).length
   const assetsThisWeek = events.filter(e => e.type === 'asset_saved' && e.timestamp >= sevenDaysAgo).length
 
-  // Top criadores por gasto (monthly.byUser)
-  const topCreators = monthly ? Object.entries(monthly.byUser)
+  // Top criadores por gasto — calculado dos eventos do mês
+  const creatorMap = new Map<string, { cost: number; scenes: number; assets: number }>()
+  for (const e of monthlyEvents) {
+    const uid = e.userId
+    if (!creatorMap.has(uid)) creatorMap.set(uid, { cost: 0, scenes: 0, assets: 0 })
+    const bucket = creatorMap.get(uid)!
+    if (e.meta.cost != null && e.meta.cost > 0) bucket.cost += e.meta.cost
+    if (e.type === 'scene_generated') bucket.scenes++
+    if (e.type === 'asset_saved') bucket.assets++
+  }
+  const topCreators = Array.from(creatorMap.entries())
     .map(([userId, data]) => {
       const u = users.find(us => us.id === userId)
       return {
@@ -1111,12 +1129,12 @@ function AdminPanel({
         name: u?.name ?? userId,
         email: u?.email ?? '',
         cost: data.cost,
-        scenes: data.counts.scene_generated ?? 0,
-        assets: data.counts.asset_saved ?? 0,
+        scenes: data.scenes,
+        assets: data.assets,
       }
     })
     .sort((a, b) => b.cost - a.cost)
-    .slice(0, 5) : []
+    .slice(0, 5)
 
   // Uso por engine — conta scene_generated por engineId
   const engineUsage = new Map<string, number>()
@@ -1139,7 +1157,7 @@ function AdminPanel({
             <span>Admin Panel</span>
           </div>
           <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-            Mission control da produção · {monthLabel} · v2.1
+            Mission control da produção · {monthLabel} · v2.2
           </div>
         </div>
         <button
@@ -1185,7 +1203,7 @@ function AdminPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KpiCard label="Gasto este mês" value={monthly ? `$${monthly.totalCost.toFixed(2)}` : '—'} sub="vídeos: custo real · resto: estimado" color={C.green} />
+            <KpiCard label="Gasto este mês" value={`$${computedMonthlyCost.toFixed(2)}`} sub="vídeos: custo real · resto: estimado" color={C.green} />
             <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
             <KpiCard label="Cenas (semana)" value={`${scenesThisWeek}`} sub="vídeos gerados" color={C.blue} />
             <KpiCard label="Assets (semana)" value={`${assetsThisWeek}`} sub="novos na biblioteca" color={C.gold} />
@@ -1431,7 +1449,17 @@ function AdminPanel({
               Cenas de vídeo refletem o custo real cobrado pelo Segmind (saldo antes vs. depois da geração).
               Imagens, Scene Director e Image Director são estimativas baseadas nos preços unitários de cada motor.
             </div>
-            {monthly && Object.keys(monthly.byUser).length > 0 ? (
+            {(() => {
+              // Calcula gastos por usuário diretamente dos eventos do mês
+              const spendByUser = new Map<string, { cost: number; counts: Record<string, number> }>()
+              for (const e of monthlyEvents) {
+                if (!spendByUser.has(e.userId)) spendByUser.set(e.userId, { cost: 0, counts: {} })
+                const b = spendByUser.get(e.userId)!
+                if (e.meta.cost != null && e.meta.cost > 0) b.cost += e.meta.cost
+                b.counts[e.type] = (b.counts[e.type] ?? 0) + 1
+              }
+              const spendEntries = Array.from(spendByUser.entries()).sort((a, b) => b[1].cost - a[1].cost)
+              return spendEntries.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '8px 0', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
                   <div>USUÁRIO</div>
@@ -1441,7 +1469,7 @@ function AdminPanel({
                   <div>IMG DIR</div>
                   <div style={{ textAlign: 'right' }}>TOTAL</div>
                 </div>
-                {Object.entries(monthly.byUser).map(([userId, data]) => {
+                {spendEntries.map(([userId, data]) => {
                   const u = users.find(us => us.id === userId)
                   return (
                     <div key={userId} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '8px 0', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
@@ -1457,14 +1485,15 @@ function AdminPanel({
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '12px 0 0', fontSize: 13, fontWeight: 700, borderTop: `2px solid ${C.border}`, marginTop: 6 }}>
                   <div style={{ color: C.text }}>TOTAL</div>
                   <div></div><div></div><div></div><div></div>
-                  <div style={{ color: C.green, fontFamily: 'monospace', textAlign: 'right' }}>${monthly.totalCost.toFixed(2)}</div>
+                  <div style={{ color: C.green, fontFamily: 'monospace', textAlign: 'right' }}>${computedMonthlyCost.toFixed(2)}</div>
                 </div>
               </div>
             ) : (
               <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>
                 Sem gastos registrados ainda este mês.
               </div>
-            )}
+            )
+            })()}
           </div>
         </div>
       )}
