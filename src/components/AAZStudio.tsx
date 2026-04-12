@@ -1505,7 +1505,7 @@ function AdminPanel({
                 <div></div>
               </div>
               {users.map(u => {
-                const userCost = monthly?.byUser[u.id]?.cost ?? 0
+                const userCost = monthlyEvents.filter(e => e.userId === u.id && e.meta.cost != null && e.meta.cost > 0).reduce((s, e) => s + (e.meta.cost ?? 0), 0)
                 const budgetPct = u.monthlyBudgetUsd ? (userCost / u.monthlyBudgetUsd) * 100 : null
                 const lastActive = u.lastActiveAt ? new Date(u.lastActiveAt) : null
                 const lastActiveStr = lastActive ? relativeTime(lastActive) : 'nunca'
@@ -1524,7 +1524,7 @@ function AdminPanel({
                       </span>
                     </div>
                     <div style={{ fontSize: 12, color: C.text, fontFamily: 'monospace' }}>
-                      ~${userCost.toFixed(2)}
+                      ${userCost.toFixed(2)}
                       {budgetPct !== null && (
                         <div style={{ fontSize: 9, color: budgetPct > 80 ? C.red : C.textDim }}>
                           {budgetPct.toFixed(0)}% de ${u.monthlyBudgetUsd}
@@ -1787,6 +1787,8 @@ function AdminPanel({
           users={users}
           events={monthlyEvents}
           monthLabel={monthLabel}
+          showBrl={showBrl}
+          brlRate={brlRate}
           onClose={() => setDetailUserId(null)}
         />
       )}
@@ -1795,15 +1797,18 @@ function AdminPanel({
 }
 
 /* Modal: Detalhe do usuário — extrato completo do mês */
-function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
+function UserDetailModal({ userId, users, events, monthLabel, showBrl, brlRate, onClose }: {
   userId: string
   users: AdminUser[]
   events: ActivityEventView[]
   monthLabel: string
+  showBrl?: boolean
+  brlRate?: number | null
   onClose: () => void
 }) {
+  const brl = (usd: number) => showBrl && brlRate ? ` (≈R$${(usd * brlRate).toFixed(2)})` : ''
   const user = users.find(u => u.id === userId)
-  const userEvents = events.filter(e => e.userId === userId).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+  const userEvents = events.filter(e => e.userId === userId).sort((a, b) => b.timestamp.localeCompare(a.timestamp))
 
   const totalCost = userEvents.filter(e => e.meta.cost != null && e.meta.cost > 0).reduce((s, e) => s + (e.meta.cost ?? 0), 0)
   const scenesCount = userEvents.filter(e => e.type === 'scene_generated').length
@@ -1837,13 +1842,18 @@ function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
           </div>
           <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: C.textDim, fontSize: 22, cursor: 'pointer', padding: 4 }}>x</button>
         </div>
+        {showBrl && brlRate && (
+          <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginBottom: 10, background: `${C.gold}10`, padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.gold}20` }}>
+            Valores em R$ são aproximados · cotação: $1 = R${brlRate.toFixed(2)}
+          </div>
+        )}
 
         {/* Summary KPIs */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
           {([
-            ['Total gasto', `$${totalCost.toFixed(2)}`, C.green],
+            ['Total gasto', `$${totalCost.toFixed(2)}${brl(totalCost)}`, C.green],
             ['Cenas', `${scenesCount}`, C.blue],
-            ['Custo médio/cena', scenesCount > 0 ? `$${(totalCost / scenesCount).toFixed(2)}` : '—', C.purple],
+            ['Custo médio/cena', scenesCount > 0 ? `$${(totalCost / scenesCount).toFixed(2)}${brl(totalCost / scenesCount)}` : '—', C.purple],
             ['Director', `${directorCount}`, C.gold],
           ] as [string, string, string][]).map(([lbl, val, col]) => (
             <div key={lbl} style={{ background: C.surface, border: `1px solid ${col}40`, borderRadius: 10, padding: 14 }}>
@@ -1887,7 +1897,7 @@ function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
                             ) : (
                               <span style={{ fontSize: 8, color: C.textDim, fontStyle: 'italic' }}>est.</span>
                             )}
-                            <span style={{ color: C.green, fontFamily: 'monospace', fontWeight: 600, fontSize: 11 }}>${(ev.meta.cost ?? 0).toFixed(3)}</span>
+                            <span style={{ color: C.green, fontFamily: 'monospace', fontWeight: 600, fontSize: 11 }}>${(ev.meta.cost ?? 0).toFixed(3)}{brl(ev.meta.cost ?? 0)}</span>
                           </>
                         )}
                       </div>
@@ -1899,7 +1909,7 @@ function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
               <div style={{ display: 'grid', gridTemplateColumns: '140px 28px 1fr auto', gap: 8, padding: '12px 14px', borderTop: `2px solid ${C.border}`, background: C.card }}>
                 <div></div><div></div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>TOTAL</div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: C.green, fontFamily: 'monospace' }}>${totalCost.toFixed(2)}</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.green, fontFamily: 'monospace' }}>${totalCost.toFixed(2)}{brl(totalCost)}</div>
               </div>
             </div>
           )}
@@ -1916,7 +1926,7 @@ function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
                   <div key={id}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
                       <span style={{ color: C.text, fontWeight: 600 }}>{id}</span>
-                      <span style={{ color: C.green, fontFamily: 'monospace', fontWeight: 600 }}>${cost.toFixed(2)}</span>
+                      <span style={{ color: C.green, fontFamily: 'monospace', fontWeight: 600 }}>${cost.toFixed(2)}{brl(cost)}</span>
                     </div>
                     <div style={{ height: 6, background: C.card, borderRadius: 3, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${pct}%`, background: C.purple, borderRadius: 3, transition: 'width 0.3s' }} />
