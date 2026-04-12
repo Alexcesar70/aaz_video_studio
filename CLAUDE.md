@@ -1,61 +1,101 @@
 # AAZ STUDIO — BRIEFING PARA CLAUDE CODE
 
+**REGRA: sempre atualize este arquivo ao final de cada implementação.**
+
 Você está trabalhando no **AAZ Studio**, um app Next.js 14 interno de produção
 de cenas para o projeto de animação cristã infantil **AAZ com Jesus**.
 Desenvolvedor: **Alexandre** (solo).
 
 ---
 
-## O QUE JÁ EXISTE (Fase 1 — completa)
+## STATUS ATUAL DAS FASES
 
-Estrutura Next.js 14 com App Router + TypeScript, já com:
+### Fase 1 — Scaffolding + Auth (COMPLETA)
 
 - `src/middleware.ts` — auth JWT em todas as rotas (cookie `aaz_session`)
 - `src/app/login/page.tsx` — tela de login com visual do projeto
 - `src/app/studio/page.tsx` — rota protegida principal
-- `src/components/AAZStudio.tsx` — UI completa ('use client'), todas as chamadas
-  já apontam para `/api/*` (sem CORS, sem key exposta no browser)
-- `src/app/api/auth/login/route.ts` — POST → verifica SITE_PASSWORD → cookie JWT 7d
+- `src/components/AAZStudio.tsx` — UI completa ('use client')
+- `src/app/api/auth/login/route.ts` — POST → verifica credenciais → cookie JWT 7d
 - `src/app/api/auth/logout/route.ts` — POST → apaga cookie
-- `src/app/api/generate/route.ts` — **STUB** proxy Segmind vídeo (implementar)
-- `src/app/api/generate-sheet/route.ts` — **STUB** proxy Segmind sheet (implementar)
-- `src/app/api/scene-director/route.ts` — **STUB** Claude trilíngue (implementar)
-- `vercel.json` — timeouts 120s para rotas Segmind
-- `.env.local` — variáveis configuradas
+- `src/app/api/auth/me/route.ts` — GET → retorna user logado
+- `vercel.json` — timeouts 300s para rotas Segmind
+
+### Fase 2 — API Routes Segmind (COMPLETA)
+
+- `/api/generate/route.ts` — proxy multi-engine Segmind para vídeo
+  - Suporta 6 engines: Seedance 2.0, Seedance 2.0 Fast, Wan 2.7 R2V, Kling 2.5 Turbo, Veo 3.1 Lite, Veo 3.1
+  - Omni Reference (até 9 refs), first/last frames, áudio
+  - Upload permanente do vídeo ao Vercel Blob
+  - Budget check antes de chamar o Segmind (bloqueia se excedeu)
+  - **Custo real**: captura saldo Segmind antes/depois via `getSegmindCredits()` (`src/lib/segmind.ts`)
+  - Fallback automático para estimativa se o endpoint de créditos falhar
+  - Resposta inclui: `costUsd`, `costSource` ('real'|'estimated'), `estimatedCostUsd`, `realCostUsd`
+- `/api/generate-sheet/route.ts` — proxy Consistent Character AI Neolemon V3
+- `/api/generate-image/route.ts` — proxy multi-engine para imagens (Atelier)
+- `src/lib/videoEngines.ts` — registro de 6 engines de vídeo com preços
+- `src/lib/imageEngines.ts` — registro de engines de imagem com preços
+- `src/lib/segmind.ts` — helper `getSegmindCredits(apiKey)` para saldo real
+
+### Fase 3 — Vercel KV / Biblioteca (COMPLETA)
+
+- `/api/library/route.ts` — GET/POST character sheets
+- `/api/library/[id]/route.ts` — GET/DELETE individual
+- `/api/assets/route.ts` — CRUD de assets (personagens, cenários, itens)
+- `/api/scenes/route.ts` — CRUD de cenas
+- `/api/projects/route.ts` — CRUD de projetos
+- `/api/episodes/route.ts` — CRUD de episódios + delivery workflow
+- `/api/scenarios/route.ts` — CRUD de cenários
+- `src/lib/redis.ts` — cliente Redis/KV compartilhado
+- `src/lib/assets.ts` — operações de assets no KV
+
+### Fase 4 — Scene Director + Image Director (COMPLETA)
+
+- `/api/scene-director/route.ts` — Claude API trilíngue (PT-BR + ES + EN)
+  - System prompt com regras do universo AAZ
+  - Modelo: `claude-sonnet-4-20250514`
+- `/api/image-director/route.ts` — Claude API para refinar prompts de imagem
+- `src/lib/sceneDirectorSystem.ts` — system prompt do Scene Director
+- `src/lib/imageDirectorSystem.ts` — system prompt do Image Director
+- `src/lib/moods.ts` — 6 presets de mood/tom visual
+
+### Fase 5 — Deploy Vercel (COMPLETA)
+
+- Deploy automático via push no branch `main`
+- Env vars configuradas no painel Vercel
+- Vercel KV conectado
+- Vercel Blob para vídeos e imagens
+
+### Funcionalidades adicionais implementadas
+
+- **Auth multi-user**: login por email/senha, roles admin/creator
+- **Activity tracking**: stream de eventos no Redis (`src/lib/activity.ts`)
+  - Eventos: login, scene_generated, image_generated, asset_saved, etc.
+  - Agregados diários por user (`aaz:daily:{YYYY-MM-DD}:{userId}`)
+- **Admin Panel** (aba Admin no AAZStudio.tsx):
+  - Dashboard: KPIs (gasto mês, criadores ativos, cenas/semana, assets/semana)
+  - Top criadores por gasto + motores mais usados
+  - Feed de atividade recente com badge REAL/est. por evento
+  - Gestão de usuários (criar, editar budget, roles)
+  - Fila de revisão de episódios (delivery workflow)
+  - Aba Gastos detalhados por usuário/mês
+- **Budget caps**: limite mensal por creator, hard block no backend, barra no header
+- **Episode delivery**: upload MP4 final + revisão admin (aprovar/pedir ajustes)
+- **Atelier**: criação de assets visuais (personagens, cenários, itens)
+- **Chain contextual**: continuidade semântica entre cenas
+- **Custo real de vídeo**: saldo Segmind antes/depois por geração
+  - Campo `costSource` nos eventos de atividade ('real' ou 'estimated')
+  - Painel admin exibe badge REAL (verde) ou est. (cinza) por evento
+  - Sistema de budget/relatórios usa custo real quando disponível
 
 ---
 
-## FASES PENDENTES
+## PENDENTE / MELHORIAS FUTURAS
 
-### Fase 2 — API Routes server-side
-Implementar os dois proxies Segmind. Os stubs já existem com o schema correto.
-
-**`/api/generate/route.ts`** — já tem o fetch para o Segmind implementado.
-Verificar: timeout, retry em 429, pass-through do blob de vídeo.
-
-**`/api/generate-sheet/route.ts`** — já tem o fetch implementado.
-Verificar: schema exato do endpoint `seedance-2.0-character`.
-
-### Fase 3 — Vercel KV
-Migrar a biblioteca de character sheets do `localStorage` para Vercel KV.
-- Chave: `aaz:char:{character_id}`
-- Compartilhada entre sessões (Alexandre acessa de qualquer máquina)
-- Novo endpoint: `GET /api/library` e `DELETE /api/library/[id]`
-- O componente `AAZStudio.tsx` carrega a biblioteca via fetch na montagem
-
-### Fase 4 — Scene Director
-Implementar `/api/scene-director/route.ts` com a Claude API.
-- System prompt: o SKILL.md completo (ver seção abaixo)
-- Modelo: `claude-sonnet-4-20250514`, `max_tokens: 4096`
-- Retorna `[{lang: "pt-br", prompt}, {lang: "es", prompt}, {lang: "en", prompt}]`
-- Nova aba "🎭 Scene Director" no AAZStudio.tsx:
-  campo de texto livre + personagens selecionados → gera → injeta nas 3 abas de prompt
-
-### Fase 5 — Deploy Vercel
-- Push para GitHub → import no painel Vercel
-- Configurar env vars (ver lista abaixo)
-- Conectar Vercel KV (Storage tab)
-- Verificar timeouts no `vercel.json`
+- Custo real para **imagens** (Segmind não retorna custo no response — mesma abordagem de saldo antes/depois)
+- Custo real para **Claude** (ler `usage.input_tokens` + `usage.output_tokens` da resposta da API)
+- Reconciliação mensal (campo no admin para inserir total cobrado pelo Segmind)
+- Atualizar preços hardcoded em `videoEngines.ts` e `imageEngines.ts` quando Segmind mudar
 
 ---
 
