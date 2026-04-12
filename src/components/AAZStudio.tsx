@@ -1581,6 +1581,155 @@ function AdminPanel({
           onClose={() => setNewUserCreds(null)}
         />
       )}
+
+      {/* Modal: Detalhe do usuário */}
+      {detailUserId && (
+        <UserDetailModal
+          userId={detailUserId}
+          users={users}
+          events={monthlyEvents}
+          monthLabel={monthLabel}
+          onClose={() => setDetailUserId(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/* Modal: Detalhe do usuário — extrato completo do mês */
+function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
+  userId: string
+  users: AdminUser[]
+  events: ActivityEventView[]
+  monthLabel: string
+  onClose: () => void
+}) {
+  const user = users.find(u => u.id === userId)
+  const userEvents = events.filter(e => e.userId === userId).sort((a, b) => a.timestamp.localeCompare(b.timestamp))
+
+  const totalCost = userEvents.filter(e => e.meta.cost != null && e.meta.cost > 0).reduce((s, e) => s + (e.meta.cost ?? 0), 0)
+  const scenesCount = userEvents.filter(e => e.type === 'scene_generated').length
+  const imagesCount = userEvents.filter(e => e.type === 'image_generated').length
+  const directorCount = userEvents.filter(e => e.type === 'scene_director_called' || e.type === 'image_director_called').length
+
+  // Engine breakdown
+  const engineCosts = new Map<string, number>()
+  for (const e of userEvents) {
+    if (e.meta.engineId && e.meta.cost != null && e.meta.cost > 0) {
+      engineCosts.set(e.meta.engineId, (engineCosts.get(e.meta.engineId) ?? 0) + (e.meta.cost ?? 0))
+    }
+  }
+  const engineList = Array.from(engineCosts.entries()).sort((a, b) => b[1] - a[1])
+  const maxEngineCost = engineList.length > 0 ? engineList[0][1] : 1
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '92vh', overflow: 'auto', padding: 26 }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.purple, letterSpacing: '0.5px' }}>EXTRATO DO USUÁRIO</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginTop: 2 }}>
+              {user?.name ?? userId}
+            </div>
+            <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>
+              {user?.email ?? ''} · <span style={{ color: user?.role === 'admin' ? C.gold : C.purple, fontWeight: 600 }}>{user?.role === 'admin' ? 'Admin' : 'Creator'}</span> · {monthLabel}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: C.textDim, fontSize: 22, cursor: 'pointer', padding: 4 }}>x</button>
+        </div>
+
+        {/* Summary KPIs */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+          {([
+            ['Total gasto', `$${totalCost.toFixed(2)}`, C.green],
+            ['Cenas', `${scenesCount}`, C.blue],
+            ['Imagens', `${imagesCount}`, C.purple],
+            ['Director', `${directorCount}`, C.gold],
+          ] as [string, string, string][]).map(([lbl, val, col]) => (
+            <div key={lbl} style={{ background: C.surface, border: `1px solid ${col}40`, borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 4 }}>{lbl.toUpperCase()}</div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: col, fontFamily: 'monospace' }}>{val}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Extrato */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>Extrato</div>
+          {userEvents.length === 0 ? (
+            <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '20px 0' }}>Nenhum evento neste mês.</div>
+          ) : (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 28px 1fr auto', gap: 8, padding: '8px 14px', background: C.card, fontSize: 9, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>
+                <div>DATA/HORA</div>
+                <div></div>
+                <div>DESCRIÇÃO</div>
+                <div style={{ textAlign: 'right' }}>CUSTO</div>
+              </div>
+              <div style={{ maxHeight: 320, overflowY: 'auto' }}>
+                {userEvents.map(ev => {
+                  const dt = new Date(ev.timestamp)
+                  const dateStr = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                  const icon = activityIcon(ev.type)
+                  const desc = activityDescription(ev)
+                  const costSource = ev.meta.extra?.costSource
+                  const hasCost = ev.meta.cost != null && ev.meta.cost > 0
+                  return (
+                    <div key={ev.id} style={{ display: 'grid', gridTemplateColumns: '140px 28px 1fr auto', gap: 8, padding: '8px 14px', borderTop: `1px solid ${C.border}`, fontSize: 12, alignItems: 'center' }}>
+                      <div style={{ color: C.textDim, fontSize: 11, fontFamily: 'monospace' }}>{dateStr}</div>
+                      <div style={{ fontSize: 14 }}>{icon}</div>
+                      <div style={{ color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{desc}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end' }}>
+                        {hasCost && (
+                          <>
+                            {costSource === 'real' ? (
+                              <span style={{ fontSize: 8, fontWeight: 700, color: C.green, background: `${C.green}20`, border: `1px solid ${C.green}50`, borderRadius: 3, padding: '0px 4px', letterSpacing: '0.3px' }}>REAL</span>
+                            ) : (
+                              <span style={{ fontSize: 8, color: C.textDim, fontStyle: 'italic' }}>est.</span>
+                            )}
+                            <span style={{ color: C.green, fontFamily: 'monospace', fontWeight: 600, fontSize: 11 }}>${(ev.meta.cost ?? 0).toFixed(3)}</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Total row */}
+              <div style={{ display: 'grid', gridTemplateColumns: '140px 28px 1fr auto', gap: 8, padding: '12px 14px', borderTop: `2px solid ${C.border}`, background: C.card }}>
+                <div></div><div></div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>TOTAL</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.green, fontFamily: 'monospace' }}>${totalCost.toFixed(2)}</div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Engine breakdown */}
+        {engineList.length > 0 && (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>Custo por motor</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {engineList.map(([id, cost]) => {
+                const pct = (cost / maxEngineCost) * 100
+                return (
+                  <div key={id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 3 }}>
+                      <span style={{ color: C.text, fontWeight: 600 }}>{id}</span>
+                      <span style={{ color: C.green, fontFamily: 'monospace', fontWeight: 600 }}>${cost.toFixed(2)}</span>
+                    </div>
+                    <div style={{ height: 6, background: C.card, borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: C.purple, borderRadius: 3, transition: 'width 0.3s' }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -1597,7 +1746,7 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
 }
 
 /* Linha de atividade no feed do dashboard */
-function ActivityRow({ event }: { event: ActivityEventView }) {
+function ActivityRow({ event, onClickUser }: { event: ActivityEventView; onClickUser?: () => void }) {
   const icon = activityIcon(event.type)
   const desc = activityDescription(event)
   const when = relativeTime(new Date(event.timestamp))
@@ -1608,7 +1757,7 @@ function ActivityRow({ event }: { event: ActivityEventView }) {
       <span style={{ fontSize: 16 }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          <span style={{ fontWeight: 600 }}>{event.userName ?? event.userId}</span>
+          <span onClick={onClickUser} style={{ fontWeight: 600, ...(onClickUser ? { color: C.blue, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: `${C.blue}40`, textUnderlineOffset: 2 } : {}) }}>{event.userName ?? event.userId}</span>
           <span style={{ color: C.textDim }}> · {desc}</span>
         </div>
       </div>
