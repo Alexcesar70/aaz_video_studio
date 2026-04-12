@@ -30,17 +30,27 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
   if (!data) return <div style={{ color: C.textDim }}>Carregando dashboard...</div>
 
   const bal = data.segmindBalance ?? 0
-  const revenue = data.totalRevenue ?? 0
+  const creditsSold = data.totalRevenue ?? 0
 
-  // Calcula custos reais a partir dos eventos (mais confiável que wallet totals)
+  // Calcula receita DE USO e custos a partir dos eventos
   const allEvents = data.recentEvents ?? []
-  const segmindCost = allEvents.reduce((s: number, e: D) => {
+  const costEvents = allEvents.filter((e: D) => e.meta?.cost > 0)
+
+  // Receita de uso = soma do que foi cobrado dos clientes por geração
+  const revenueFromUsage = costEvents.reduce((s: number, e: D) => {
+    const hasNew = e.meta?.extra?.segmindCostUsd != null || e.meta?.extra?.claudeCostUsd != null
+    return s + (hasNew ? (e.meta?.cost ?? 0) : (e.meta?.cost ?? 0) * 1.4)
+  }, 0)
+
+  // Custos reais das APIs
+  const segmindCost = costEvents.reduce((s: number, e: D) => {
     return s + (e.meta?.extra?.segmindCostUsd ?? (e.meta?.extra?.claudeCostUsd == null && e.meta?.cost ? e.meta.cost : 0))
   }, 0)
-  const claudeCost = allEvents.reduce((s: number, e: D) => s + (e.meta?.extra?.claudeCostUsd ?? 0), 0)
+  const claudeCost = costEvents.reduce((s: number, e: D) => s + (e.meta?.extra?.claudeCostUsd ?? 0), 0)
   const totalCosts = segmindCost + claudeCost
-  const grossProfit = revenue - totalCosts
-  const profitPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0
+
+  // Lucro bruto = receita de uso - custos
+  const grossProfit = revenueFromUsage - totalCosts
   const dailySpend = totalCosts > 0 ? totalCosts / Math.max(new Date().getDate(), 1) : 0
   const daysLeft = dailySpend > 0 ? Math.floor(bal / dailySpend) : 999
 
@@ -51,8 +61,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
   if ((data.inactiveOrgs ?? 0) > 0) alerts.push({ level: 'yellow', msg: `${data.inactiveOrgs} organização(ões) inativa(s) há >7 dias` })
   if (grossProfit < 0) alerts.push({ level: 'red', msg: `Prejuízo acumulado: $${Math.abs(grossProfit).toFixed(2)} — custos maiores que receita` })
 
-  // Tabela L/P a partir dos eventos recentes
-  const costEvents = (data.recentEvents ?? []).filter((e: D) => e.meta?.cost > 0)
+  // Tabela L/P (reutiliza costEvents de cima)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -72,7 +81,7 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
       {/* Linha 1: Saúde financeira */}
       <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>SAÚDE FINANCEIRA</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <KPI label="Receita bruta" value={`$${revenue.toFixed(2)}`} sub="créditos vendidos" color={C.green} onClick={() => onNavigate('revenue')} />
+        <KPI label="Receita de uso" value={`$${revenueFromUsage.toFixed(2)}`} sub={`créditos vendidos: $${creditsSold.toFixed(2)}`} color={C.green} onClick={() => onNavigate('revenue')} />
         <KPI label="Custos totais" value={`$${totalCosts.toFixed(2)}`} sub={`Segmind: $${segmindCost.toFixed(2)} · Claude: $${claudeCost.toFixed(2)}`} color={C.blue} onClick={() => onNavigate('costs')} />
         <KPI label="Lucro bruto" value={`$${grossProfit.toFixed(2)}`} color={grossProfit >= 0 ? C.green : C.red} onClick={() => onNavigate('profit')} />
         <KPI label="Saldo Segmind" value={`$${bal.toFixed(2)}`} sub={daysLeft < 999 ? `~${daysLeft} dias restantes` : 'sem gasto ainda'} color={bal < 50 ? C.red : C.green} />
