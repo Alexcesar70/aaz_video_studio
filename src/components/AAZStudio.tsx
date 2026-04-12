@@ -1056,6 +1056,7 @@ function AdminPanel({
   const [newUserCreds, setNewUserCreds] = useState<{ email: string; name: string; password: string } | null>(null)
   const [segmindBalance, setSegmindBalance] = useState<number | null>(null)
   const [allScenes, setAllScenes] = useState<{ id: string; episodeId: string | null; cost: string; duration: number; createdBy?: string; createdAt: string }[]>([])
+  const [allEpisodes, setAllEpisodes] = useState<Episode[]>([])
 
   // Month/year selectors + user detail modal
   const now = new Date()
@@ -1111,6 +1112,7 @@ function AdminPanel({
       }
       if (epsRes.ok) {
         const eps = await epsRes.json() as Episode[]
+        setAllEpisodes(eps)
         setDeliveryEpisodes(eps.filter(e => e.finalVideoUrl))
       }
       if (scenesRes && scenesRes.ok) {
@@ -1210,8 +1212,8 @@ function AdminPanel({
   for (const s of allScenes) {
     if (!s.episodeId) continue
     if (!episodeCosts.has(s.episodeId)) {
-      const ep = deliveryEpisodes.find(e => e.id === s.episodeId)
-      episodeCosts.set(s.episodeId, { name: ep?.name ?? s.episodeId, sceneCount: 0, totalCost: 0 })
+      const ep = allEpisodes.find(e => e.id === s.episodeId)
+      episodeCosts.set(s.episodeId, { name: ep?.name ?? '(sem nome)', sceneCount: 0, totalCost: 0 })
     }
     const bucket = episodeCosts.get(s.episodeId)!
     bucket.sceneCount++
@@ -1637,8 +1639,11 @@ function AdminPanel({
           {/* Custo por Episódio */}
           {episodeCostList.length > 0 && (
             <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4 }}>
                 Custo por episódio
+              </div>
+              <div style={{ fontSize: 10, color: C.textDim, marginBottom: 10, fontStyle: 'italic' }}>
+                Apenas cenas de vídeo salvas na biblioteca. O total do mês acima inclui também imagens, Scene Director e Image Director.
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, padding: '6px 0', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
