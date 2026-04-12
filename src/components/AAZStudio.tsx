@@ -1506,7 +1506,7 @@ function AdminPanel({
                       <div style={{ width: 24, height: 24, borderRadius: '50%', background: u.role === 'admin' ? C.gold : C.purple, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
                         {u.name.charAt(0).toUpperCase()}
                       </div>
-                      <span style={{ color: C.text, fontWeight: 600 }}>{u.name}</span>
+                      <span onClick={() => setDetailUserId(u.id)} style={{ color: C.blue, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: `${C.blue}40`, textUnderlineOffset: 2 }}>{u.name}</span>
                     </div>
                     <div style={{ color: C.textDim, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{u.email}</div>
                     <div>
