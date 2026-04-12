@@ -10,6 +10,7 @@ import {
 import { getAuthUser } from '@/lib/auth'
 import { emitEvent } from '@/lib/activity'
 import { checkBudget } from '@/lib/budget'
+import { getSegmindCredits } from '@/lib/segmind'
 
 /**
  * POST /api/generate
@@ -94,6 +95,9 @@ export async function POST(request: NextRequest) {
       `mode=${body.mode} refs=${body.reference_images?.length ?? 0}`
     )
 
+    // ── Captura saldo antes — para calcular custo real após a geração ──
+    const creditsBefore = await getSegmindCredits(apiKey)
+
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
 
@@ -152,10 +156,25 @@ export async function POST(request: NextRequest) {
 
     console.log(`[/api/generate] Vídeo salvo no Blob: ${blob.url}`)
 
+    // ── Captura saldo depois — calcula custo real da geração ──
+    const creditsAfter = await getSegmindCredits(apiKey)
+    const estimatedCostUsd = (body.duration ?? 0) * engine.pricePerSecond
+    const realCostUsd =
+      creditsBefore !== null && creditsAfter !== null
+        ? Math.max(0, creditsBefore - creditsAfter)
+        : null
+
+    const costUsd = realCostUsd ?? estimatedCostUsd
+    const costSource = realCostUsd !== null ? 'real' : 'estimated'
+
+    console.log(
+      `[/api/generate] Custo: $${costUsd.toFixed(4)} (${costSource})` +
+      ` | before=${creditsBefore} after=${creditsAfter}`
+    )
+
     // Activity event — fire and forget, não bloqueia
     const authUser = getAuthUser(request)
     if (authUser) {
-      const estimatedCost = (body.duration ?? 0) * engine.pricePerSecond
       emitEvent({
         userId: authUser.id,
         userName: authUser.name,
@@ -163,9 +182,14 @@ export async function POST(request: NextRequest) {
         userRole: authUser.role,
         type: 'scene_generated',
         meta: {
-          cost: estimatedCost,
+          cost: costUsd,
           engineId: engine.id,
           duration: body.duration,
+          extra: {
+            costSource,
+            estimatedCostUsd,
+            realCostUsd,
+          },
         },
       }).catch(() => {})
     }
@@ -175,6 +199,10 @@ export async function POST(request: NextRequest) {
       pathname: blob.pathname,
       sizeMB: videoSizeMB,
       engineId: engine.id,
+      costUsd,
+      costSource,
+      estimatedCostUsd,
+      realCostUsd,
     })
 
   } catch (err) {
