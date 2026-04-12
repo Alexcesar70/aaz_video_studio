@@ -4011,8 +4011,24 @@ export function AAZStudio() {
       if (workingRefImgs.length) body.reference_images = workingRefImgs.map(r => r.url)
       if (refVids.length) body.reference_videos = refVids.map(r => r.url)
       if (refAuds.length) body.reference_audios = refAuds.map(r => r.url)
+      // Garante que @VideoN e @AudioN estejam no prompt (Seedance exige menção)
+      let p = body.prompt as string
+      refVids.forEach((_, i) => {
+        const tag = `@Video${i + 1}`
+        if (!p.includes(tag) && !p.toLowerCase().includes(tag.toLowerCase())) {
+          p = `${p} Referencing ${tag} for motion and scene continuity.`
+        }
+      })
+      refAuds.forEach((_, i) => {
+        const tag = `@Audio${i + 1}`
+        if (!p.includes(tag) && !p.toLowerCase().includes(tag.toLowerCase())) {
+          p = `${p} Use ${tag} for audio reference.`
+        }
+      })
+      body.prompt = p
     }
-    if (chain && lastResult) body.first_frame_url = lastResult
+    // Chain com first_frame_url SOMENTE se NÃO estiver em omni_reference
+    if (chain && lastResult && mode !== 'omni_reference') body.first_frame_url = lastResult
 
     try {
       const res = await fetch('/api/generate', {
