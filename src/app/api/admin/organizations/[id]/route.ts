@@ -7,7 +7,7 @@ import {
   reactivateOrganization,
 } from '@/lib/organizations'
 import { getWallet, addCredits, getTransactions } from '@/lib/wallet'
-import { getUsersByOrganization } from '@/lib/users'
+import { getUsersByOrganization, listUsers, updateUser } from '@/lib/users'
 import { getPlanById } from '@/lib/plans'
 import { queryEvents } from '@/lib/activity'
 
@@ -25,6 +25,16 @@ export async function GET(
     const org = await getOrgById(params.id)
     if (!org) {
       return NextResponse.json({ error: 'Organização não encontrada.' }, { status: 404 })
+    }
+
+    // Migração: associa users órfãos (sem org) que foram criados por membros desta org
+    const allUsers = await listUsers()
+    const orgMembers = allUsers.filter(u => u.organizationId === org.id)
+    const orgMemberIds = new Set(orgMembers.map(u => u.id))
+    const orphans = allUsers.filter(u => !u.organizationId && u.createdBy && orgMemberIds.has(u.createdBy))
+    for (const orphan of orphans) {
+      await updateUser(orphan.id, { organizationId: org.id })
+      console.log(`[admin/org] User ${orphan.id} associado à org ${org.id} (criado por ${orphan.createdBy})`)
     }
 
     const [wallet, members, plan] = await Promise.all([
