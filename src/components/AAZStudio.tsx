@@ -1124,6 +1124,7 @@ function AdminPanel({
   const [segmindBalance, setSegmindBalance] = useState<number | null>(null)
   const [allScenes, setAllScenes] = useState<{ id: string; episodeId: string | null; cost: string; duration: number; createdBy?: string; createdAt: string }[]>([])
   const [allEpisodes, setAllEpisodes] = useState<Episode[]>([])
+  const [orgWallet, setOrgWallet] = useState<{ balance: number; totalTopUps: number; totalSpent: number } | null>(null)
 
   // Month/year selectors + user detail modal
   const now = new Date()
@@ -1190,6 +1191,14 @@ function AdminPanel({
         const bd = await balanceRes.json()
         setSegmindBalance(bd.balance ?? null)
       }
+      // Wallet da org (para Team Leader)
+      try {
+        const walletRes = await fetch('/api/me/wallet')
+        if (walletRes.ok) {
+          const wd = await walletRes.json()
+          if (wd.balance != null) setOrgWallet({ balance: wd.balance, totalTopUps: wd.totalTopUps ?? 0, totalSpent: wd.totalSpent ?? 0 })
+        }
+      } catch {}
     } catch (err) {
       console.error('[admin] load failed', err)
     } finally {
@@ -1365,10 +1374,10 @@ function AdminPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* KPIs — linha 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            <KpiCard label="Saldo disponível" value={orgWallet ? `$${orgWallet.balance.toFixed(2)}` : '—'} sub={orgWallet ? `recebido: $${orgWallet.totalTopUps.toFixed(2)}` : 'sem wallet'} color={orgWallet && orgWallet.balance < 5 ? C.red : C.green} />
             <KpiCard label="Gasto este mês" value={`$${computedMonthlyCost.toFixed(2)}${showBrl && brlRate ? ` (~R$${(computedMonthlyCost * brlRate).toFixed(2)})` : ''}`} sub={isCurrentMonth ? `projeção: ~$${projectedCost.toFixed(2)}` : monthLabel} color={C.green} />
-            <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
             <KpiCard label="Custo médio/cena" value={`$${avgCostPerScene.toFixed(2)}`} sub={`${sceneEvents.length} cenas no mês`} color={C.blue} />
-            <KpiCard label="Gerações hoje" value={`${monthlyEvents.filter(e => e.type === 'scene_generated' && e.timestamp.slice(0, 10) === new Date().toISOString().slice(0, 10)).length}`} sub="cenas de vídeo" color={C.gold} />
+            <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
           </div>
           {/* KPIs — linha 2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
@@ -1624,10 +1633,12 @@ function AdminPanel({
           {/* Monthly history cards — últimos 6 meses (mais antigo à esquerda) */}
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
             {(() => {
-              // Gera 6 meses terminando no mês selecionado, ordem cronológica (antigo→recente)
+              // Gera meses terminando no mês selecionado, ordem cronológica (antigo→recente)
+              // Não mostra antes de Janeiro 2026
               const cards: { value: string; label: string }[] = []
               for (let i = 5; i >= 0; i--) {
                 const d = new Date(selectedYear, selectedMonthNum - 1 - i, 1)
+                if (d.getFullYear() < 2026) continue
                 cards.push({
                   value: d.toISOString().slice(0, 7),
                   label: d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
@@ -1657,12 +1668,18 @@ function AdminPanel({
           </div>
 
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+            {orgWallet && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+                <KpiCard label="Saldo atual" value={`$${orgWallet.balance.toFixed(2)}`} color={orgWallet.balance < 5 ? C.red : C.green} />
+                <KpiCard label="Total recebido" value={`$${orgWallet.totalTopUps.toFixed(2)}`} color={C.blue} />
+                <KpiCard label="Total gasto" value={`$${orgWallet.totalSpent.toFixed(2)}`} color={C.purple} />
+              </div>
+            )}
             <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>
-              {monthLabel}
+              Detalhamento por usuário · {monthLabel}
             </div>
             <div style={{ fontSize: 11, color: C.textDim, marginBottom: 12, fontStyle: 'italic' }}>
-              Cenas de vídeo refletem o custo real cobrado pelo Segmind (saldo antes vs. depois da geração).
-              Imagens, Scene Director e Image Director são estimativas baseadas nos preços unitários de cada motor.
+              Valores descontados automaticamente do saldo da organização a cada geração.
             </div>
             {(() => {
               const spendByUser = new Map<string, { cost: number; counts: Record<string, number> }>()
