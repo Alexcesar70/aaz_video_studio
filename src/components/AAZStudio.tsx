@@ -4248,6 +4248,23 @@ export function AAZStudio() {
             R$
           </button>
 
+          {/* Link para Super Admin — só para super_admin */}
+          {currentUser?.role === 'super_admin' && (
+            <a
+              href="/admin"
+              title="Painel da Plataforma"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 5,
+                background: `${C.gold}15`, border: `1px solid ${C.gold}40`,
+                borderRadius: 14, padding: '4px 12px', textDecoration: 'none',
+                fontSize: 11, fontWeight: 700, color: C.gold,
+                transition: 'all 0.15s',
+              }}
+            >
+              Painel
+            </a>
+          )}
+
           {currentUser && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px 4px 6px' }}>
               <div style={{ width: 22, height: 22, borderRadius: '50%', background: isAdminUser ? C.gold : C.purple, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
