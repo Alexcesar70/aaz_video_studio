@@ -859,7 +859,7 @@ function QuickCreateAssetModal({
             </div>
 
             <div style={{ fontSize: 11, color: C.textDim, textAlign: 'right', fontStyle: 'italic' }}>
-              Preço estimado: ~${totalCost}
+              Custo: ${totalCost}
             </div>
 
             <button
@@ -4065,7 +4065,7 @@ export function AAZStudio() {
       setSceneAssets(p => [...p, scene])
       fetch('/api/scenes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scene) }).catch(() => {})
     } catch (err: unknown) {
-      setStatus('error'); setStatusMsg(err instanceof Error ? err.message : 'Erro Segmind.')
+      setStatus('error'); setStatusMsg(err instanceof Error ? err.message : 'Erro ao gerar vídeo.')
     } finally {
       setGenerating(false)
     }
@@ -5198,10 +5198,10 @@ export function AAZStudio() {
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · ${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>~${cost}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${cost}</div>
               </div>
               <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', letterSpacing: '0.3px' }}>
-                Preço estimado · {engine.name} · o valor real cobrado pelo Segmind pode variar
+                {engine.name} · será descontado do saldo
               </div>
             </div>
 
@@ -5475,9 +5475,9 @@ export function AAZStudio() {
                 <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ fontSize: 13, color: C.textDim }}>{atVariations} × ${cp(atEngine.id, atEngine.pricePerImage).toFixed(3)}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>~${atTotalCost}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${atTotalCost}</div>
                   </div>
-                  <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginTop: 4 }}>Preço estimado · {atEngine.name}</div>
+                  <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginTop: 4 }}>{atEngine.name} · será descontado do saldo</div>
                 </div>
 
                 <button
