@@ -995,6 +995,53 @@ function BudgetPill({ usedUsd, capUsd, percentageUsed }: { usedUsd: number; capU
   )
 }
 
+/* Wallet pill — mostra saldo da wallet da org no header */
+type WalletAlertLevel = 'ok' | 'warning' | 'critical' | 'danger' | 'empty'
+interface WalletInfo { balance: number; totalTopUps: number; totalSpent: number; alertLevel: WalletAlertLevel; walletId: string }
+function WalletPill({ wallet }: { wallet: WalletInfo }) {
+  const { balance, totalTopUps, alertLevel } = wallet
+  const color =
+    alertLevel === 'empty' ? C.red
+    : alertLevel === 'danger' ? C.red
+    : alertLevel === 'critical' ? '#F59E0B'
+    : alertLevel === 'warning' ? C.gold
+    : C.green
+  const label =
+    alertLevel === 'empty' ? 'SEM SALDO'
+    : alertLevel === 'danger' ? 'SALDO CRITICO'
+    : alertLevel === 'critical' ? 'SALDO CRITICO'
+    : alertLevel === 'warning' ? 'SALDO BAIXO'
+    : 'SALDO'
+  const pct = totalTopUps > 0 ? Math.min((balance / totalTopUps) * 100, 100) : 100
+  const isFlashing = alertLevel === 'empty'
+  return (
+    <div
+      title={`Saldo: $${balance.toFixed(2)} | Total investido: $${totalTopUps.toFixed(2)} | Gasto total: $${wallet.totalSpent.toFixed(2)}`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: `${color}15`,
+        border: `1px solid ${color}50`,
+        borderRadius: 20,
+        padding: '4px 12px',
+        fontSize: 11,
+        fontFamily: 'inherit',
+        animation: isFlashing ? 'walletFlash 1s ease-in-out infinite' : undefined,
+      }}
+    >
+      <span style={{ color, fontWeight: 700, letterSpacing: '0.3px', fontSize: 9 }}>{label}</span>
+      <div style={{ width: 50, height: 5, background: C.card, borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ color, fontFamily: 'monospace', fontWeight: 700 }}>
+        ${balance.toFixed(2)}
+      </span>
+      {isFlashing && <style>{`@keyframes walletFlash { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }`}</style>}
+    </div>
+  )
+}
+
 /* ═══════════════════════════════════════════════════════════════
    AdminPanel — aba 👑 Admin visível só pra role=admin.
    4 sub-abas: Dashboard, Usuários, Revisão, Gastos.
@@ -2358,6 +2405,21 @@ export function AAZStudio() {
   }, [currentUser])
   useEffect(() => { loadMyBudget() }, [loadMyBudget])
 
+  // Carrega wallet da org do usuário
+  const [myWallet, setMyWallet] = useState<WalletInfo | null>(null)
+  const loadMyWallet = useCallback(async () => {
+    if (!currentUser) return
+    try {
+      const res = await fetch('/api/me/wallet')
+      if (res.ok) {
+        const data = await res.json()
+        if (data.wallet === null) { setMyWallet(null); return }
+        setMyWallet(data as WalletInfo)
+      }
+    } catch { /* silent */ }
+  }, [currentUser])
+  useEffect(() => { loadMyWallet() }, [loadMyWallet])
+
   /* ═══════════ ATELIER — geração de assets de imagem ═══════════ */
   const [atAssets, setAtAssets] = useState<Asset[]>([])
   const [atDrafts, setAtDrafts] = useState<Asset[]>([])
@@ -3720,6 +3782,7 @@ export function AAZStudio() {
       const url = data.videoUrl
       setResultUrl(url); setLastResult(url); setStatus('success'); setStatusMsg('Vídeo gerado!')
       loadMyBudget() // atualiza barra de budget no header
+      loadMyWallet() // atualiza saldo da wallet no header
       const now = Date.now()
       setHistory(p => [{
         id: now,
@@ -3831,6 +3894,8 @@ export function AAZStudio() {
       const data = await res.json() as { imageUrls: string[]; errors?: string[] }
       setAtResults(data.imageUrls ?? [])
       setAtStatus(`${data.imageUrls?.length ?? 0}/${atVariations} variações geradas. Selecione quais salvar.`)
+      loadMyBudget() // atualiza budget no header
+      loadMyWallet() // atualiza saldo da wallet no header
 
       // Salva todas como drafts imediatamente (caminho seguro — o usuário
       // promove depois as que quiser). Drafts expiram em 30 dias.
@@ -3941,6 +4006,10 @@ export function AAZStudio() {
           {/* Budget pill pra creators com cap mensal */}
           {myBudget && myBudget.capUsd !== undefined && (
             <BudgetPill usedUsd={myBudget.usedUsd} capUsd={myBudget.capUsd} percentageUsed={myBudget.percentageUsed ?? 0} />
+          )}
+          {/* Wallet pill — saldo da org */}
+          {myWallet && (
+            <WalletPill wallet={myWallet} />
           )}
 
           {currentUser && (
@@ -5682,6 +5751,8 @@ export function AAZStudio() {
           onClose={() => setQuickCreate(null)}
           uploadBlob={toBlobUrl}
           onDone={(asset) => {
+            // Refresh wallet/budget after generation
+            loadMyBudget(); loadMyWallet()
             // Injeta na cena atual
             if (mode !== 'omni_reference') setMode('omni_reference')
             setRefImgs(p => {

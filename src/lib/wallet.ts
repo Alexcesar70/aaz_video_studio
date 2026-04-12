@@ -446,6 +446,44 @@ export async function transferCredits(
  * Consulta transações de uma wallet com filtros opcionais.
  * Retorna em ordem cronológica reversa (mais recente primeiro).
  */
+/**
+ * Verifica se a wallet da organização do usuário tem saldo suficiente.
+ * Usuários legados (sem organizationId) são liberados automaticamente (skip).
+ *
+ * @returns { allowed, walletId, balance, reason? }
+ */
+export async function checkWalletBalance(
+  userId: string,
+  organizationId: string | undefined,
+  estimatedCost: number
+): Promise<{ allowed: boolean; walletId: string | null; balance: number; reason?: string }> {
+  // Legacy users without org — skip wallet check entirely
+  if (!organizationId) {
+    return { allowed: true, walletId: null, balance: 0 }
+  }
+
+  const wallet = await getWalletByOwner(organizationId, 'organization')
+  if (!wallet) {
+    // Org exists but no wallet yet — allow (bootstrap edge case)
+    return { allowed: true, walletId: null, balance: 0 }
+  }
+
+  if (wallet.balanceUsd < estimatedCost) {
+    return {
+      allowed: false,
+      walletId: wallet.id,
+      balance: wallet.balanceUsd,
+      reason: `Saldo insuficiente na wallet da organização. Saldo: $${wallet.balanceUsd.toFixed(2)}, custo estimado: $${estimatedCost.toFixed(4)}. Peça ao admin para adicionar créditos.`,
+    }
+  }
+
+  return {
+    allowed: true,
+    walletId: wallet.id,
+    balance: wallet.balanceUsd,
+  }
+}
+
 export async function getTransactions(
   walletId: string,
   options: {

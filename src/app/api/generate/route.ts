@@ -12,6 +12,7 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkBudget } from '@/lib/budget'
 import { getSegmindCredits } from '@/lib/segmind'
+import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 
 /**
  * POST /api/generate
@@ -80,6 +81,23 @@ export async function POST(request: NextRequest) {
             },
           },
           { status: 402 } // Payment Required (usado pra budget exceeded)
+        )
+      }
+    }
+
+    // ── Wallet balance check — bloqueia se org sem saldo ──
+    let walletId: string | null = null
+    if (preAuthUser) {
+      const estimatedCost = (body.duration ?? 0) * engine.pricePerSecond
+      const walletCheck = await checkWalletBalance(preAuthUser.id, preAuthUser.organizationId, estimatedCost)
+      walletId = walletCheck.walletId
+      if (!walletCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: walletCheck.reason,
+            wallet: { balance: walletCheck.balance, walletId: walletCheck.walletId },
+          },
+          { status: 402 }
         )
       }
     }
@@ -178,6 +196,24 @@ export async function POST(request: NextRequest) {
       ` | before=${creditsBefore} after=${creditsAfter}`
     )
 
+    // ── Wallet deduction — must complete before response ──
+    let walletDeducted = false
+    if (walletId && costUsd > 0) {
+      try {
+        const txn = await spendCredits(walletId, costUsd, `Video generation (${engine.name}, ${body.duration}s)`, {
+          generationType: 'video',
+          engineId: engine.id,
+          userId: preAuthUser?.id,
+        })
+        walletDeducted = txn !== null
+        if (!walletDeducted) {
+          console.warn(`[/api/generate] Wallet deduction failed — insufficient balance (walletId=${walletId}, cost=${costUsd})`)
+        }
+      } catch (walletErr) {
+        console.error('[/api/generate] Wallet deduction error:', walletErr)
+      }
+    }
+
     // Activity event — fire and forget, não bloqueia
     const authUser = getAuthUser(request)
     if (authUser) {
@@ -196,6 +232,7 @@ export async function POST(request: NextRequest) {
             costSource,
             estimatedCostUsd,
             realCostUsd,
+            walletDeducted,
           },
         },
       }).catch(() => {})

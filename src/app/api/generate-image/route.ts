@@ -11,6 +11,7 @@ import { getAuthUser } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkBudget } from '@/lib/budget'
+import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 
 /**
  * POST /api/generate-image
@@ -96,6 +97,23 @@ export async function POST(request: NextRequest) {
               capUsd: budget.capUsd,
               percentageUsed: budget.percentageUsed,
             },
+          },
+          { status: 402 }
+        )
+      }
+    }
+
+    // ── Wallet balance check — bloqueia se org sem saldo ──
+    let walletId: string | null = null
+    if (preAuthUser) {
+      const estimatedCost = n * engine.pricePerImage
+      const walletCheck = await checkWalletBalance(preAuthUser.id, preAuthUser.organizationId, estimatedCost)
+      walletId = walletCheck.walletId
+      if (!walletCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: walletCheck.reason,
+            wallet: { balance: walletCheck.balance, walletId: walletCheck.walletId },
           },
           { status: 402 }
         )
@@ -218,10 +236,28 @@ export async function POST(request: NextRequest) {
       `errors=${errors.length}`
     )
 
+    // ── Wallet deduction — must complete before response ──
+    const actualCost = imageUrls.length * engine.pricePerImage
+    let walletDeducted = false
+    if (walletId && actualCost > 0) {
+      try {
+        const txn = await spendCredits(walletId, actualCost, `Image generation (${engine.name}, ${imageUrls.length} images)`, {
+          generationType: 'image',
+          engineId: engine.id,
+          userId: preAuthUser?.id,
+        })
+        walletDeducted = txn !== null
+        if (!walletDeducted) {
+          console.warn(`[/api/generate-image] Wallet deduction failed — insufficient balance (walletId=${walletId}, cost=${actualCost})`)
+        }
+      } catch (walletErr) {
+        console.error('[/api/generate-image] Wallet deduction error:', walletErr)
+      }
+    }
+
     // Activity event — custo estimado baseado em imagens OK
     const authUser = getAuthUser(request)
     if (authUser) {
-      const estimatedCost = imageUrls.length * engine.pricePerImage
       emitEvent({
         userId: authUser.id,
         userName: authUser.name,
@@ -230,9 +266,10 @@ export async function POST(request: NextRequest) {
         organizationId: authUser.organizationId,
         type: 'image_generated',
         meta: {
-          cost: estimatedCost,
+          cost: actualCost,
           engineId: engine.id,
           variations: imageUrls.length,
+          extra: { walletDeducted },
         },
       }).catch(() => {})
     }

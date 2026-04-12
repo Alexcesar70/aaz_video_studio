@@ -4,6 +4,7 @@ import type { AssetType } from '@/lib/assets'
 import { getAuthUser } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
+import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 
 /**
  * POST /api/image-director
@@ -44,6 +45,23 @@ export async function POST(request: NextRequest) {
     const earlyAuth = getAuthUser(request)
     if (earlyAuth && !hasPermission(earlyAuth.permissions, earlyAuth.role, PERMISSIONS.USE_IMAGE_DIRECTOR)) {
       return NextResponse.json({ error: 'Sem permissão para usar o Image Director.' }, { status: 403 })
+    }
+
+    // ── Wallet balance check — estimated cost for Claude call ──
+    let walletId: string | null = null
+    if (earlyAuth) {
+      const estimatedCost = 0.005 // ~$0.005 per Image Director call
+      const walletCheck = await checkWalletBalance(earlyAuth.id, earlyAuth.organizationId, estimatedCost)
+      walletId = walletCheck.walletId
+      if (!walletCheck.allowed) {
+        return NextResponse.json(
+          {
+            error: walletCheck.reason,
+            wallet: { balance: walletCheck.balance, walletId: walletCheck.walletId },
+          },
+          { status: 402 }
+        )
+      }
     }
 
     const body = await request.json() as {
@@ -150,6 +168,20 @@ export async function POST(request: NextRequest) {
     const costSource = (inputTokens > 0 || outputTokens > 0) ? 'real' : 'estimated'
     const cost = costSource === 'real' ? realCost : 0.005
 
+    // ── Wallet deduction — must complete before response ──
+    let walletDeducted = false
+    if (walletId && cost > 0) {
+      try {
+        const txn = await spendCredits(walletId, cost, `Image Director call (${body.type})`, {
+          generationType: 'image_director',
+          userId: earlyAuth?.id,
+        })
+        walletDeducted = txn !== null
+      } catch (walletErr) {
+        console.error('[/api/image-director] Wallet deduction error:', walletErr)
+      }
+    }
+
     const authUser = getAuthUser(request)
     if (authUser) {
       emitEvent({
@@ -168,6 +200,7 @@ export async function POST(request: NextRequest) {
             realCostUsd: costSource === 'real' ? realCost : null,
             inputTokens,
             outputTokens,
+            walletDeducted,
           },
         },
       }).catch(() => {})
