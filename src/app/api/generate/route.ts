@@ -9,6 +9,7 @@ import {
 } from '@/lib/videoEngines'
 import { getAuthUser } from '@/lib/auth'
 import { emitEvent } from '@/lib/activity'
+import { checkBudget } from '@/lib/budget'
 
 /**
  * POST /api/generate
@@ -55,6 +56,26 @@ export async function POST(request: NextRequest) {
     // Resolve engine — default se não vier id válido
     const engineId = body.engineId ?? DEFAULT_ENGINE_ID
     const engine = VIDEO_ENGINES.find(e => e.id === engineId) ?? getEngine(DEFAULT_ENGINE_ID)
+
+    // ── Budget check — bloqueia antes de gastar se user atingiu cap ──
+    const preAuthUser = getAuthUser(request)
+    if (preAuthUser) {
+      const estimatedCost = (body.duration ?? 0) * engine.pricePerSecond
+      const budget = await checkBudget(preAuthUser.id, estimatedCost)
+      if (!budget.allowed) {
+        return NextResponse.json(
+          {
+            error: budget.reason,
+            budget: {
+              usedUsd: budget.usedUsd,
+              capUsd: budget.capUsd,
+              percentageUsed: budget.percentageUsed,
+            },
+          },
+          { status: 402 } // Payment Required (usado pra budget exceeded)
+        )
+      }
+    }
 
     // Override opcional por env var — só aplica ao Seedance 2.0 default
     // (permite trocar o endpoint do Seedance sem mexer no código)

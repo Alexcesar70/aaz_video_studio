@@ -951,9 +951,42 @@ function AtelierDraftsView({ type, drafts, onPromote, onDelete }: {
   )
 }
 
+/* Budget pill — mostra % usado do cap mensal do creator no header */
+function BudgetPill({ usedUsd, capUsd, percentageUsed }: { usedUsd: number; capUsd: number; percentageUsed: number }) {
+  const pct = Math.min(percentageUsed, 100)
+  const exceeded = percentageUsed >= 100
+  const warning = percentageUsed >= 80
+  const color = exceeded ? C.red : warning ? C.gold : C.green
+  const label = exceeded ? 'BUDGET EXCEDIDO' : warning ? 'BUDGET' : 'BUDGET'
+  return (
+    <div
+      title={`Você usou ~$${usedUsd.toFixed(2)} de $${capUsd.toFixed(2)} este mês (${percentageUsed.toFixed(0)}%)`}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        background: `${color}15`,
+        border: `1px solid ${color}50`,
+        borderRadius: 20,
+        padding: '4px 12px',
+        fontSize: 11,
+        fontFamily: 'inherit',
+      }}
+    >
+      <span style={{ color, fontWeight: 700, letterSpacing: '0.3px', fontSize: 9 }}>{label}</span>
+      <div style={{ width: 50, height: 5, background: C.card, borderRadius: 3, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: color, transition: 'width 0.3s' }} />
+      </div>
+      <span style={{ color, fontFamily: 'monospace', fontWeight: 700 }}>
+        ${usedUsd.toFixed(0)}/${capUsd}
+      </span>
+    </div>
+  )
+}
+
 /* ═══════════════════════════════════════════════════════════════
    AdminPanel — aba 👑 Admin visível só pra role=admin.
-   3 sub-abas: Dashboard, Usuários, Gastos.
+   4 sub-abas: Dashboard, Usuários, Revisão, Gastos.
    Declarado fora do AAZStudio pra não re-criar a cada render.
 ═══════════════════════════════════════════════════════════════ */
 
@@ -1872,6 +1905,7 @@ export function AAZStudio() {
 
   /* Sessão atual (quem tá logado) — admin vê aba extra */
   const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: 'admin' | 'creator' } | null>(null)
+  const [myBudget, setMyBudget] = useState<{ usedUsd: number; capUsd?: number; percentageUsed?: number } | null>(null)
   useEffect(() => {
     fetch('/api/auth/me')
       .then(r => r.ok ? r.json() : Promise.reject())
@@ -1879,6 +1913,16 @@ export function AAZStudio() {
       .catch(() => {})
   }, [])
   const isAdminUser = currentUser?.role === 'admin'
+
+  // Carrega budget do creator (admin não tem cap)
+  const loadMyBudget = useCallback(async () => {
+    if (!currentUser || currentUser.role === 'admin') return
+    try {
+      const res = await fetch('/api/me/budget')
+      if (res.ok) setMyBudget(await res.json())
+    } catch { /* silent */ }
+  }, [currentUser])
+  useEffect(() => { loadMyBudget() }, [loadMyBudget])
 
   /* ═══════════ ATELIER — geração de assets de imagem ═══════════ */
   const [atAssets, setAtAssets] = useState<Asset[]>([])
@@ -3241,6 +3285,7 @@ export function AAZStudio() {
       if (!data.videoUrl) throw new Error('Servidor não retornou videoUrl. Resposta: ' + JSON.stringify(data))
       const url = data.videoUrl
       setResultUrl(url); setLastResult(url); setStatus('success'); setStatusMsg('Vídeo gerado!')
+      loadMyBudget() // atualiza barra de budget no header
       const now = Date.now()
       setHistory(p => [{
         id: now,
@@ -3459,6 +3504,11 @@ export function AAZStudio() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <Pill color={C.green}>~${engine.pricePerSecond}/s</Pill>
           <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
+          {/* Budget pill pra creators com cap mensal */}
+          {myBudget && myBudget.capUsd !== undefined && (
+            <BudgetPill usedUsd={myBudget.usedUsd} capUsd={myBudget.capUsd} percentageUsed={myBudget.percentageUsed ?? 0} />
+          )}
+
           {currentUser && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px 4px 6px' }}>
               <div style={{ width: 22, height: 22, borderRadius: '50%', background: isAdminUser ? C.gold : C.purple, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>

@@ -9,6 +9,7 @@ import {
 } from '@/lib/imageEngines'
 import { getAuthUser } from '@/lib/auth'
 import { emitEvent } from '@/lib/activity'
+import { checkBudget } from '@/lib/budget'
 
 /**
  * POST /api/generate-image
@@ -74,6 +75,26 @@ export async function POST(request: NextRequest) {
       Math.max(body.num_outputs ?? DEFAULT_VARIATIONS, 1),
       MAX_VARIATIONS
     )
+
+    // ── Budget check — bloqueia antes de gastar se user atingiu cap ──
+    const preAuthUser = getAuthUser(request)
+    if (preAuthUser) {
+      const estimatedCost = n * engine.pricePerImage
+      const budget = await checkBudget(preAuthUser.id, estimatedCost)
+      if (!budget.allowed) {
+        return NextResponse.json(
+          {
+            error: budget.reason,
+            budget: {
+              usedUsd: budget.usedUsd,
+              capUsd: budget.capUsd,
+              percentageUsed: budget.percentageUsed,
+            },
+          },
+          { status: 402 }
+        )
+      }
+    }
 
     // Gera N chamadas paralelas, cada uma com seed diferente
     const baseSeed = body.seed ?? Math.floor(Math.random() * 1_000_000)
