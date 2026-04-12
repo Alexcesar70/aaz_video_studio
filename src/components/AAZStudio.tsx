@@ -5283,6 +5283,15 @@ export function AAZStudio() {
             </div>
           </div>
 
+          {/* Character Sheet Generator */}
+          <div style={{ background: `${C.purple}10`, border: `1px solid ${C.purple}30`, borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Character Sheet Generator</div>
+              <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>Crie um sheet completo (6 vistas: frontal, perfil, costas...) para manter consistência nas cenas.</div>
+            </div>
+            <button onClick={() => setShowSheetWizard(true)} style={{ background: C.purple, border: 'none', borderRadius: 8, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar Sheet</button>
+          </div>
+
           {/* Seletor de tipo — ação primária, bem destacado */}
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.8px', marginBottom: 10 }}>
@@ -5681,54 +5690,12 @@ export function AAZStudio() {
 
           {/* ═══ PERSONAGENS ═══ */}
           {libTab === 'chars' && (<>
-            {/* Character Sheet Generator */}
-            <div style={{ background: `${C.purple}10`, border: `1px solid ${C.purple}30`, borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Character Sheet Generator</div>
-                <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>Crie um sheet completo (6 vistas) para manter consistência nas cenas.</div>
-              </div>
-              <button onClick={() => setShowSheetWizard(true)} style={{ background: C.purple, border: 'none', borderRadius: 8, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar Sheet</button>
-            </div>
-            {/* Upload de referências */}
-            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px' }}>
-              <Label>Adicionar Referências de Personagem</Label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Personagem</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 6 }}>
-                    {CHARACTERS.map(char => (
-                      <button key={char.id} onClick={() => { setSheetChar(char); setSheetPhotos([]) }} style={{ background: sheetChar?.id === char.id ? `${char.color}20` : C.surface, border: `1px solid ${sheetChar?.id === char.id ? char.color : C.border}`, borderRadius: 8, padding: '8px 4px', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-                        <span style={{ fontSize: 20 }}>{char.emoji}</span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: sheetChar?.id === char.id ? char.color : C.textDim }}>{char.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Imagens de referência ({sheetPhotos.length}/5)</div>
-                  {sheetPhotos.length > 0 && (
-                    <div style={{ display: 'flex', gap: 7, marginBottom: 10, flexWrap: 'wrap' }}>
-                      {sheetPhotos.map((p, i) => (
-                        <div key={i} style={{ position: 'relative' }}>
-                          <img src={p.url} alt={p.name} style={{ width: 70, height: 70, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />
-                          <button onClick={() => setSheetPhotos(prev => prev.filter((_, j) => j !== i))} style={{ position: 'absolute', top: -4, right: -4, background: C.red, color: '#fff', border: 'none', borderRadius: '50%', width: 16, height: 16, cursor: 'pointer', fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <div onClick={() => { const i = document.createElement('input'); i.type = 'file'; i.accept = 'image/*'; i.multiple = true; i.onchange = (e) => addSheetPhoto(e as unknown as React.ChangeEvent<HTMLInputElement>); i.click() }} style={{ border: `1px dashed ${C.border}`, borderRadius: 10, padding: '14px', textAlign: 'center', color: C.textDim, fontSize: 13, cursor: 'pointer' }}>Upload imagens</div>
-                </div>
-              </div>
-              <div style={{ marginTop: 16 }}>
-                <button onClick={saveCharRefs} disabled={!sheetChar || !sheetPhotos.length} style={{ background: sheetChar && sheetPhotos.length ? C.purple : C.card, border: `1px solid ${sheetChar && sheetPhotos.length ? C.purple : C.border}`, borderRadius: 10, padding: '12px 24px', cursor: sheetChar && sheetPhotos.length ? 'pointer' : 'default', color: sheetChar && sheetPhotos.length ? '#fff' : C.textDim, fontSize: 14, fontWeight: 700, fontFamily: 'inherit' }}>
-                  Salvar Referências
-                </button>
-              </div>
-            </div>
 
             {/* Grid de personagens salvos */}
             {Object.keys(library).length === 0
-              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>Nenhum personagem salvo. Suba imagens de referência acima.</div>
+              ? <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '40px', textAlign: 'center', color: C.textDim, fontSize: 14 }}>
+                  Nenhum personagem salvo ainda. Vá ao <button onClick={() => setTab('atelier')} style={{ background: 'transparent', border: 'none', color: C.purple, textDecoration: 'underline', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, padding: 0 }}>Atelier</button> e crie um Character Sheet.
+                </div>
               : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
                   {Object.values(library).map(entry => {
