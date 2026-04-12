@@ -31,9 +31,14 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
 
   const bal = data.segmindBalance ?? 0
   const revenue = data.totalRevenue ?? 0
-  const totalCosts = data.totalSpend ?? 0
-  const segmindCost = data.segmindCost ?? totalCosts
-  const claudeCost = data.claudeCost ?? 0
+
+  // Calcula custos reais a partir dos eventos (mais confiável que wallet totals)
+  const allEvents = data.recentEvents ?? []
+  const segmindCost = allEvents.reduce((s: number, e: D) => {
+    return s + (e.meta?.extra?.segmindCostUsd ?? (e.meta?.extra?.claudeCostUsd == null && e.meta?.cost ? e.meta.cost : 0))
+  }, 0)
+  const claudeCost = allEvents.reduce((s: number, e: D) => s + (e.meta?.extra?.claudeCostUsd ?? 0), 0)
+  const totalCosts = segmindCost + claudeCost
   const grossProfit = revenue - totalCosts
   const profitPct = revenue > 0 ? (grossProfit / revenue) * 100 : 0
   const dailySpend = totalCosts > 0 ? totalCosts / Math.max(new Date().getDate(), 1) : 0
@@ -92,8 +97,15 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
           {costEvents.length === 0
             ? <div style={{ color: C.textDim, padding: 20, textAlign: 'center', fontSize: 12 }}>Sem transações ainda.</div>
             : costEvents.slice(0, 30).map((e: D) => {
-              const sale = e.meta?.cost ?? 0
-              const apiCost = e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? 0
+              const hasNewFormat = e.meta?.extra?.segmindCostUsd != null || e.meta?.extra?.claudeCostUsd != null
+              // Novo formato: meta.cost = preço cliente, extra = custo real API
+              // Antigo formato: meta.cost = custo real API, sem extra
+              const apiCost = hasNewFormat
+                ? (e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? 0)
+                : (e.meta?.cost ?? 0) // evento antigo: meta.cost ERA o custo
+              const sale = hasNewFormat
+                ? (e.meta?.cost ?? 0) // evento novo: meta.cost = preço cliente
+                : apiCost * 1.4 // evento antigo: estima venda com margem default
               const profit = sale - apiCost
               const dt = new Date(e.timestamp)
               return (
@@ -109,8 +121,14 @@ function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
           }
         </div>
         {costEvents.length > 0 && (() => {
-          const totSale = costEvents.reduce((s: number, e: D) => s + (e.meta?.cost ?? 0), 0)
-          const totCost = costEvents.reduce((s: number, e: D) => s + (e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? 0), 0)
+          const totSale = costEvents.reduce((s: number, e: D) => {
+            const hasNew = e.meta?.extra?.segmindCostUsd != null || e.meta?.extra?.claudeCostUsd != null
+            return s + (hasNew ? (e.meta?.cost ?? 0) : (e.meta?.cost ?? 0) * 1.4)
+          }, 0)
+          const totCost = costEvents.reduce((s: number, e: D) => {
+            const hasNew = e.meta?.extra?.segmindCostUsd != null || e.meta?.extra?.claudeCostUsd != null
+            return s + (hasNew ? (e.meta?.extra?.segmindCostUsd ?? e.meta?.extra?.claudeCostUsd ?? 0) : (e.meta?.cost ?? 0))
+          }, 0)
           const totProfit = totSale - totCost
           return (
             <div style={{ display: 'grid', gridTemplateColumns: '140px 2fr 1fr 1fr 1fr', gap: 8, padding: '12px 16px', borderTop: `2px solid ${C.border}`, background: C.card, fontSize: 13, fontWeight: 700 }}>
