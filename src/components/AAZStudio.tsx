@@ -1055,25 +1055,30 @@ function AdminPanel({
   const [inviteOpen, setInviteOpen] = useState(false)
   const [newUserCreds, setNewUserCreds] = useState<{ email: string; name: string; password: string } | null>(null)
 
-  // Month selector + user detail modal
+  // Month/year selectors + user detail modal
   const now = new Date()
   const currentMonthStr = now.toISOString().slice(0, 7) // "2026-04"
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr)
   const [detailUserId, setDetailUserId] = useState<string | null>(null)
 
-  // Generate last 6 months options
-  const monthOptions = useMemo(() => {
-    const opts: { value: string; label: string }[] = []
-    for (let i = 0; i < 6; i++) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      opts.push({
-        value: d.toISOString().slice(0, 7),
-        label: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
-      })
-    }
-    return opts
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMonthStr])
+  // Available years (from 2025 to current+1) and months
+  const currentYear = now.getFullYear()
+  const yearOptions = useMemo(() => {
+    const years: number[] = []
+    for (let y = 2025; y <= currentYear + 1; y++) years.push(y)
+    return years
+  }, [currentYear])
+  const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+
+  const selectedYear = parseInt(selectedMonth.slice(0, 4))
+  const selectedMonthNum = parseInt(selectedMonth.slice(5, 7)) // 1-12
+
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  const handleMonthYearChange = (month: number, year: number) => {
+    const ym = `${year}-${String(month).padStart(2, '0')}`
+    setSelectedMonth(ym)
+    loadAll(ym)
+  }
 
   const loadAll = useCallback(async (month?: string) => {
     const m = month ?? selectedMonth
@@ -1183,17 +1188,26 @@ function AdminPanel({
             <span>Admin Panel</span>
           </div>
           <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-            Mission control da produção · v3.0
+            Mission control da produção · v3.1
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <select
-            value={selectedMonth}
-            onChange={e => { setSelectedMonth(e.target.value); loadAll(e.target.value) }}
+            value={selectedMonthNum}
+            onChange={e => handleMonthYearChange(parseInt(e.target.value), selectedYear)}
             style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
           >
-            {monthOptions.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+            {monthNames.map((name, i) => (
+              <option key={i + 1} value={i + 1}>{name}</option>
+            ))}
+          </select>
+          <select
+            value={selectedYear}
+            onChange={e => handleMonthYearChange(selectedMonthNum, parseInt(e.target.value))}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
+          >
+            {yearOptions.map(y => (
+              <option key={y} value={y}>{y}</option>
             ))}
           </select>
           <button
@@ -1482,28 +1496,39 @@ function AdminPanel({
             Gastos detalhados
           </div>
 
-          {/* Monthly history cards */}
+          {/* Monthly history cards — últimos 6 meses (mais antigo à esquerda) */}
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
-            {monthOptions.map(o => {
-              const isSelected = o.value === selectedMonth
-              const mCost = events.filter(e => e.timestamp.slice(0, 7) === o.value && e.meta.cost != null && e.meta.cost > 0).reduce((s, e) => s + (e.meta.cost ?? 0), 0)
-              const displayCost = isSelected ? computedMonthlyCost : mCost
-              return (
-                <div
-                  key={o.value}
-                  onClick={() => { setSelectedMonth(o.value); loadAll(o.value) }}
-                  style={{
-                    minWidth: 120, padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
-                    background: isSelected ? C.surface : C.card,
-                    border: `1px solid ${isSelected ? C.gold : C.border}`,
-                    transition: 'all 0.15s',
-                  }}
-                >
-                  <div style={{ fontSize: 11, fontWeight: 700, color: isSelected ? C.gold : C.textDim, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>{o.label}</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: isSelected ? C.green : C.text, fontFamily: 'monospace', marginTop: 4 }}>${displayCost.toFixed(2)}</div>
-                </div>
-              )
-            })}
+            {(() => {
+              // Gera 6 meses terminando no mês selecionado, ordem cronológica (antigo→recente)
+              const cards: { value: string; label: string }[] = []
+              for (let i = 5; i >= 0; i--) {
+                const d = new Date(selectedYear, selectedMonthNum - 1 - i, 1)
+                cards.push({
+                  value: d.toISOString().slice(0, 7),
+                  label: d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }),
+                })
+              }
+              return cards.map(o => {
+                const isSelected = o.value === selectedMonth
+                return (
+                  <div
+                    key={o.value}
+                    onClick={() => { setSelectedMonth(o.value); loadAll(o.value) }}
+                    style={{
+                      minWidth: 110, padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                      background: isSelected ? C.surface : C.card,
+                      border: `1px solid ${isSelected ? C.gold : C.border}`,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: 700, color: isSelected ? C.gold : C.textDim, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>{o.label}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: isSelected ? C.green : C.textDim, fontFamily: 'monospace', marginTop: 4 }}>
+                      {isSelected ? `$${computedMonthlyCost.toFixed(2)}` : '—'}
+                    </div>
+                  </div>
+                )
+              })
+            })()}
           </div>
 
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
