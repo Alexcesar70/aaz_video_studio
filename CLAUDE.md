@@ -145,6 +145,35 @@ Desenvolvedor: **Alexandre** (solo).
 - **Admin user management**: `/api/users` POST e `/api/users/[id]` PATCH aceitam permissions/products
 - **Retrocompat total**: users sem permissions explícitas herdam defaults do role
 
+### Phase 6 — BRL Conversion Toggle + Exportable Statements (COMPLETA)
+
+- `/api/currency/route.ts` — GET retorna cotação USD→BRL atual
+  - Usa `getUsdToBrl()` de `src/lib/currency.ts` (cache Redis 1h, fallback 5.50)
+  - Retorna `{ rate, updatedAt, source }` — endpoint público (sem auth)
+- `/api/me/wallet/transactions/route.ts` — GET transações da wallet do usuário
+  - Query params: `from`, `to` (YYYY-MM-DD), `limit` (default 100, max 1000)
+  - Auth required, retorna transações da wallet da org do usuário
+- `/api/me/wallet/export/route.ts` — GET exporta extrato como CSV
+  - Query params: `from`, `to` (YYYY-MM-DD)
+  - CSV com BOM UTF-8 para compatibilidade Excel
+  - Colunas: Data, Tipo, Descrição, Valor (USD), Saldo (USD)
+  - Content-Disposition attachment para download
+- **BRL toggle no header** (AAZStudio.tsx):
+  - Botão `R$` ao lado do WalletPill — ativa/desativa conversão BRL
+  - Fetch da cotação no primeiro toggle (cacheado em state)
+  - WalletPill mostra saldo em BRL quando ativo
+  - KPI "Gasto este mês" mostra BRL quando ativo
+  - Top criadores mostram custo em BRL quando ativo
+  - Disclaimer "Cotação aproximada" no admin dashboard
+- **WalletExtratoModal** (AAZStudio.tsx):
+  - Acessível ao clicar no WalletPill
+  - Lista transações em ordem cronológica reversa (mais recente primeiro)
+  - Filtro de data (de/até)
+  - Resumo: entradas, saídas, total de transações (com BRL quando ativo)
+  - Cada linha: data, tipo (PT-BR), descrição, valor (verde/vermelho), saldo
+  - Botão "Baixar CSV" para exportar extrato
+  - Fecha com ESC ou click fora (mesmo padrão dos outros modais)
+
 ---
 
 ## PENDENTE / MELHORIAS FUTURAS

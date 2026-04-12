@@ -998,7 +998,7 @@ function BudgetPill({ usedUsd, capUsd, percentageUsed }: { usedUsd: number; capU
 /* Wallet pill — mostra saldo da wallet da org no header */
 type WalletAlertLevel = 'ok' | 'warning' | 'critical' | 'danger' | 'empty'
 interface WalletInfo { balance: number; totalTopUps: number; totalSpent: number; alertLevel: WalletAlertLevel; walletId: string }
-function WalletPill({ wallet }: { wallet: WalletInfo }) {
+function WalletPill({ wallet, showBrl, brlRate, onClick }: { wallet: WalletInfo; showBrl?: boolean; brlRate?: number | null; onClick?: () => void }) {
   const { balance, totalTopUps, alertLevel } = wallet
   const color =
     alertLevel === 'empty' ? C.red
@@ -1014,9 +1014,11 @@ function WalletPill({ wallet }: { wallet: WalletInfo }) {
     : 'SALDO'
   const pct = totalTopUps > 0 ? Math.min((balance / totalTopUps) * 100, 100) : 100
   const isFlashing = alertLevel === 'empty'
+  const brlText = showBrl && brlRate ? ` (~R$${(balance * brlRate).toFixed(2)})` : ''
   return (
     <div
-      title={`Saldo: $${balance.toFixed(2)} | Total investido: $${totalTopUps.toFixed(2)} | Gasto total: $${wallet.totalSpent.toFixed(2)}`}
+      onClick={onClick}
+      title={`Saldo: $${balance.toFixed(2)}${brlText} | Total investido: $${totalTopUps.toFixed(2)} | Gasto total: $${wallet.totalSpent.toFixed(2)} | Clique para ver extrato`}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -1027,6 +1029,7 @@ function WalletPill({ wallet }: { wallet: WalletInfo }) {
         padding: '4px 12px',
         fontSize: 11,
         fontFamily: 'inherit',
+        cursor: onClick ? 'pointer' : undefined,
         animation: isFlashing ? 'walletFlash 1s ease-in-out infinite' : undefined,
       }}
     >
@@ -1035,7 +1038,7 @@ function WalletPill({ wallet }: { wallet: WalletInfo }) {
         <div style={{ height: '100%', width: `${pct}%`, background: color, transition: 'width 0.3s' }} />
       </div>
       <span style={{ color, fontFamily: 'monospace', fontWeight: 700 }}>
-        ${balance.toFixed(2)}
+        ${balance.toFixed(2)}{showBrl && brlRate ? <span style={{ color: C.textDim, fontWeight: 500, fontSize: 10 }}> (~R${(balance * brlRate).toFixed(2)})</span> : null}
       </span>
       {isFlashing && <style>{`@keyframes walletFlash { 0%, 100% { opacity: 1 } 50% { opacity: 0.4 } }`}</style>}
     </div>
@@ -1102,9 +1105,13 @@ interface MonthlyTotals {
 function AdminPanel({
   currentUser,
   onOpenDelivery,
+  showBrl,
+  brlRate,
 }: {
   currentUser: CurrentUser | null
   onOpenDelivery: (ep: Episode) => void
+  showBrl?: boolean
+  brlRate?: number | null
 }) {
   const [subTab, setSubTab] = useState<'dashboard' | 'users' | 'review' | 'spend'>('dashboard')
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -1358,7 +1365,7 @@ function AdminPanel({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* KPIs — linha 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KpiCard label="Gasto este mês" value={`$${computedMonthlyCost.toFixed(2)}`} sub={isCurrentMonth ? `projeção: ~$${projectedCost.toFixed(2)}` : monthLabel} color={C.green} />
+            <KpiCard label="Gasto este mês" value={`$${computedMonthlyCost.toFixed(2)}${showBrl && brlRate ? ` (~R$${(computedMonthlyCost * brlRate).toFixed(2)})` : ''}`} sub={isCurrentMonth ? `projeção: ~$${projectedCost.toFixed(2)}` : monthLabel} color={C.green} />
             <KpiCard label="Saldo Segmind" value={segmindBalance !== null ? `$${segmindBalance.toFixed(2)}` : '—'} sub={segmindBalance !== null && segmindBalance < 10 ? 'SALDO BAIXO' : 'conta ativa'} color={segmindBalance !== null && segmindBalance < 10 ? C.red : C.blue} />
             <KpiCard label="Custo médio/cena" value={`$${avgCostPerScene.toFixed(2)}`} sub={`${sceneEvents.length} cenas no mês`} color={C.purple} />
             <KpiCard label="Aproveitamento" value={`${utilizationRate.toFixed(0)}%`} sub={`${scenesInEpisodes}/${totalSavedScenes} em episódios`} color={utilizationRate >= 60 ? C.green : utilizationRate >= 30 ? C.gold : C.red} />
@@ -1370,6 +1377,13 @@ function AdminPanel({
             <KpiCard label="Assets (semana)" value={`${assetsThisWeek}`} sub="novos na biblioteca" color={C.gold} />
             <KpiCard label="Episódios" value={`${episodeCostList.length}`} sub={`custo total: $${episodeCostList.reduce((s, [, d]) => s + d.totalCost, 0).toFixed(2)}`} color={C.green} />
           </div>
+
+          {/* BRL disclaimer */}
+          {showBrl && brlRate && (
+            <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', textAlign: 'right' }}>
+              Cotacao aproximada: 1 USD = R${brlRate.toFixed(2)}
+            </div>
+          )}
 
           {/* Top criadores + Engines */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
@@ -1393,8 +1407,8 @@ function AdminPanel({
                         <div onClick={() => setDetailUserId(c.id)} style={{ fontSize: 13, fontWeight: 600, color: C.blue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: `${C.blue}40`, textUnderlineOffset: 2 }}>{c.name}</div>
                         <div style={{ fontSize: 10, color: C.textDim }}>{c.scenes} cenas · {c.assets} assets</div>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>
-                        ~${c.cost.toFixed(2)}
+                      <div style={{ fontSize: 13, fontWeight: 700, color: C.green, fontFamily: 'monospace', textAlign: 'right' }}>
+                        ~${c.cost.toFixed(2)}{showBrl && brlRate ? <div style={{ fontSize: 9, color: C.textDim, fontWeight: 500 }}>~R${(c.cost * brlRate).toFixed(2)}</div> : null}
                       </div>
                     </div>
                   ))}
@@ -1893,6 +1907,189 @@ function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
                   </div>
                 )
               })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* Wallet Extrato Modal — extrato de transações para o próprio usuário */
+interface WalletTxn {
+  id: string
+  walletId: string
+  type: string
+  amountUsd: number
+  balanceAfter: number
+  description: string
+  meta: Record<string, unknown>
+  createdAt: string
+}
+
+const TXN_TYPE_LABELS: Record<string, string> = {
+  top_up: 'Recarga',
+  spend: 'Gasto',
+  transfer_in: 'Transf. entrada',
+  transfer_out: 'Transf. saída',
+  refund: 'Reembolso',
+  adjustment: 'Ajuste',
+  monthly_credit: 'Crédito mensal',
+}
+
+function WalletExtratoModal({ showBrl, brlRate, onClose }: {
+  showBrl?: boolean
+  brlRate?: number | null
+  onClose: () => void
+}) {
+  const [transactions, setTransactions] = useState<WalletTxn[]>([])
+  const [loading, setLoading] = useState(false)
+  const today = new Date()
+  const firstOfMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`
+  const todayStr = today.toISOString().slice(0, 10)
+  const [fromDate, setFromDate] = useState(firstOfMonth)
+  const [toDate, setToDate] = useState(todayStr)
+
+  const fetchTransactions = useCallback(async () => {
+    setLoading(true)
+    try {
+      const params = new URLSearchParams()
+      if (fromDate) params.set('from', fromDate)
+      if (toDate) params.set('to', toDate)
+      params.set('limit', '500')
+      const res = await fetch(`/api/me/wallet/transactions?${params.toString()}`)
+      if (res.ok) {
+        const data = await res.json()
+        setTransactions(data.transactions ?? [])
+      }
+    } catch { /* silent */ }
+    finally { setLoading(false) }
+  }, [fromDate, toDate])
+
+  useEffect(() => { fetchTransactions() }, [fetchTransactions])
+
+  const handleExportCsv = () => {
+    const params = new URLSearchParams()
+    if (fromDate) params.set('from', fromDate)
+    if (toDate) params.set('to', toDate)
+    params.set('format', 'csv')
+    window.open(`/api/me/wallet/export?${params.toString()}`, '_blank')
+  }
+
+  const totalIn = transactions.filter(t => t.amountUsd > 0).reduce((s, t) => s + t.amountUsd, 0)
+  const totalOut = transactions.filter(t => t.amountUsd < 0).reduce((s, t) => s + t.amountUsd, 0)
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 720, maxHeight: '92vh', overflow: 'auto', padding: 26 }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.green, letterSpacing: '0.5px' }}>EXTRATO DA WALLET</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginTop: 2 }}>Minhas transacoes</div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: C.textDim, fontSize: 22, cursor: 'pointer', padding: 4 }}>x</button>
+        </div>
+
+        {/* Date filters */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+          <label style={{ fontSize: 12, color: C.textDim }}>De:</label>
+          <input
+            type="date"
+            value={fromDate}
+            onChange={e => setFromDate(e.target.value)}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
+          />
+          <label style={{ fontSize: 12, color: C.textDim }}>Ate:</label>
+          <input
+            type="date"
+            value={toDate}
+            onChange={e => setToDate(e.target.value)}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 10px', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none' }}
+          />
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={handleExportCsv}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: C.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+          >
+            Baixar CSV
+          </button>
+        </div>
+
+        {/* Summary */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+          <div style={{ background: C.surface, border: `1px solid ${C.green}40`, borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 4 }}>ENTRADAS</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.green, fontFamily: 'monospace' }}>+${totalIn.toFixed(2)}</div>
+            {showBrl && brlRate ? <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>~R${(totalIn * brlRate).toFixed(2)}</div> : null}
+          </div>
+          <div style={{ background: C.surface, border: `1px solid ${C.red}40`, borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 4 }}>SAIDAS</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.red, fontFamily: 'monospace' }}>${totalOut.toFixed(2)}</div>
+            {showBrl && brlRate ? <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>~R${(totalOut * brlRate).toFixed(2)}</div> : null}
+          </div>
+          <div style={{ background: C.surface, border: `1px solid ${C.blue}40`, borderRadius: 10, padding: 12 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 4 }}>TRANSACOES</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: C.blue, fontFamily: 'monospace' }}>{transactions.length}</div>
+          </div>
+        </div>
+
+        {showBrl && brlRate && (
+          <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginBottom: 10, textAlign: 'right' }}>
+            Cotacao aproximada: 1 USD = R${brlRate.toFixed(2)}
+          </div>
+        )}
+
+        {/* Transaction list */}
+        {loading ? (
+          <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '30px 0' }}>Carregando...</div>
+        ) : transactions.length === 0 ? (
+          <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: '30px 0' }}>Nenhuma transacao no periodo.</div>
+        ) : (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+            {/* Header row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '110px 100px 1fr 90px 90px', gap: 8, padding: '8px 14px', background: C.card, fontSize: 9, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>
+              <div>DATA</div>
+              <div>TIPO</div>
+              <div>DESCRICAO</div>
+              <div style={{ textAlign: 'right' }}>VALOR</div>
+              <div style={{ textAlign: 'right' }}>SALDO</div>
+            </div>
+            {/* Rows */}
+            <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+              {transactions.map(txn => {
+                const dt = new Date(txn.createdAt)
+                const dateStr = dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) + ' ' + dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                const isPositive = txn.amountUsd > 0
+                const typeLabel = TXN_TYPE_LABELS[txn.type] ?? txn.type
+                return (
+                  <div key={txn.id} style={{ display: 'grid', gridTemplateColumns: '110px 100px 1fr 90px 90px', gap: 8, padding: '8px 14px', borderTop: `1px solid ${C.border}`, fontSize: 12, alignItems: 'center' }}>
+                    <div style={{ color: C.textDim, fontSize: 11, fontFamily: 'monospace' }}>{dateStr}</div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: isPositive ? C.green : C.red }}>
+                      {typeLabel}
+                    </div>
+                    <div style={{ color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 11 }} title={txn.description}>
+                      {txn.description}
+                    </div>
+                    <div style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 600, color: isPositive ? C.green : C.red, fontSize: 11 }}>
+                      {isPositive ? '+' : ''}${txn.amountUsd.toFixed(4)}
+                    </div>
+                    <div style={{ textAlign: 'right', fontFamily: 'monospace', color: C.textDim, fontSize: 11 }}>
+                      ${txn.balanceAfter.toFixed(2)}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            {/* Total row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '110px 100px 1fr 90px 90px', gap: 8, padding: '12px 14px', borderTop: `2px solid ${C.border}`, background: C.card }}>
+              <div></div><div></div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>PERIODO</div>
+              <div style={{ textAlign: 'right', fontSize: 12, fontWeight: 800, color: C.red, fontFamily: 'monospace' }}>${totalOut.toFixed(2)}</div>
+              <div style={{ textAlign: 'right', fontSize: 10, color: C.textDim }}>
+                {transactions.length > 0 ? `$${transactions[0].balanceAfter.toFixed(2)}` : ''}
+              </div>
             </div>
           </div>
         )}
@@ -2419,6 +2616,25 @@ export function AAZStudio() {
     } catch { /* silent */ }
   }, [currentUser])
   useEffect(() => { loadMyWallet() }, [loadMyWallet])
+
+  // BRL conversion toggle
+  const [showBrl, setShowBrl] = useState(false)
+  const [brlRate, setBrlRate] = useState<number | null>(null)
+  const toggleBrl = useCallback(async () => {
+    if (!showBrl && brlRate === null) {
+      try {
+        const res = await fetch('/api/currency')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.rate) setBrlRate(data.rate)
+        }
+      } catch { /* silent */ }
+    }
+    setShowBrl(v => !v)
+  }, [showBrl, brlRate])
+
+  // Wallet extrato modal
+  const [showExtrato, setShowExtrato] = useState(false)
 
   /* ═══════════ ATELIER — geração de assets de imagem ═══════════ */
   const [atAssets, setAtAssets] = useState<Asset[]>([])
@@ -3252,7 +3468,7 @@ export function AAZStudio() {
   const [sequentialPlayer, setSequentialPlayer] = useState<{ scenes: SceneAsset[]; title: string } | null>(null)
 
   useEffect(() => {
-    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal || sequentialPlayer || quickCreate || deliveryModal
+    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal || sequentialPlayer || quickCreate || deliveryModal || showExtrato
     if (!anyModal) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -3264,11 +3480,12 @@ export function AAZStudio() {
         setSequentialPlayer(null)
         setQuickCreate(null)
         setDeliveryModal(null)
+        setShowExtrato(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal, sequentialPlayer, quickCreate, deliveryModal])
+  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal, sequentialPlayer, quickCreate, deliveryModal, showExtrato])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
@@ -4007,10 +4224,29 @@ export function AAZStudio() {
           {myBudget && myBudget.capUsd !== undefined && (
             <BudgetPill usedUsd={myBudget.usedUsd} capUsd={myBudget.capUsd} percentageUsed={myBudget.percentageUsed ?? 0} />
           )}
-          {/* Wallet pill — saldo da org */}
+          {/* Wallet pill — saldo da org (click to open extrato) */}
           {myWallet && (
-            <WalletPill wallet={myWallet} />
+            <WalletPill wallet={myWallet} showBrl={showBrl} brlRate={brlRate} onClick={() => setShowExtrato(true)} />
           )}
+          {/* BRL toggle */}
+          <button
+            onClick={toggleBrl}
+            title={showBrl ? 'Ocultar conversão BRL' : 'Mostrar valores em BRL'}
+            style={{
+              background: showBrl ? `${C.green}20` : 'transparent',
+              border: `1px solid ${showBrl ? C.green + '60' : C.border}`,
+              borderRadius: 14,
+              padding: '3px 10px',
+              cursor: 'pointer',
+              fontSize: 11,
+              fontWeight: 700,
+              color: showBrl ? C.green : C.textDim,
+              fontFamily: 'inherit',
+              transition: 'all 0.15s',
+            }}
+          >
+            R$
+          </button>
 
           {currentUser && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px 4px 6px' }}>
@@ -5309,6 +5545,8 @@ export function AAZStudio() {
         <AdminPanel
           currentUser={currentUser}
           onOpenDelivery={(ep) => setDeliveryModal(ep)}
+          showBrl={showBrl}
+          brlRate={brlRate}
         />
       )}
 
@@ -5740,6 +5978,15 @@ export function AAZStudio() {
             setEpisodes(prev => prev.map(e => e.id === updated.id ? updated : e))
             setDeliveryModal(updated)
           }}
+        />
+      )}
+
+      {/* Wallet Extrato Modal */}
+      {showExtrato && (
+        <WalletExtratoModal
+          showBrl={showBrl}
+          brlRate={brlRate}
+          onClose={() => setShowExtrato(false)}
         />
       )}
 
