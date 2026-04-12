@@ -13,41 +13,123 @@ type View = 'dashboard' | 'orgs' | 'plans' | 'users' | 'financial'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type D = Record<string, any>
 
-function KPI({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
+function KPI({ label, value, sub, color, onClick }: { label: string; value: string; sub?: string; color: string; onClick?: () => void }) {
   return (
-    <div style={{ background: C.surface, border: `1px solid ${color}40`, borderRadius: 12, padding: 16 }}>
+    <div onClick={onClick} style={{ background: C.surface, border: `1px solid ${color}40`, borderRadius: 12, padding: 16, cursor: onClick ? 'pointer' : 'default', transition: 'border-color 0.15s' }}>
       <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 4 }}>{label.toUpperCase()}</div>
       <div style={{ fontSize: 24, fontWeight: 800, color, fontFamily: 'monospace' }}>{value}</div>
       {sub && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{sub}</div>}
+      {onClick && <div style={{ fontSize: 10, color: color, marginTop: 6, opacity: 0.7 }}>Ver detalhes →</div>}
     </div>
   )
 }
 
-function DashboardView() {
+function DashboardView({ onNavigate }: { onNavigate: (v: View) => void }) {
   const [data, setData] = useState<D | null>(null)
   useEffect(() => { fetch('/api/admin/dashboard').then(r => r.json()).then(setData).catch(() => {}) }, [])
   if (!data) return <div style={{ color: C.textDim }}>Carregando dashboard...</div>
-  const bal = data.segmindBalance
+
+  const bal = data.segmindBalance ?? 0
+  const revenue = data.totalRevenue ?? 0
+  const spend = data.totalSpend ?? 0
+  const margin = revenue > 0 ? revenue - spend : 0
+  const marginPct = revenue > 0 ? (margin / revenue) * 100 : 0
+  const costPct = revenue > 0 ? (spend / revenue) * 100 : 0
+  // Projeção: quantos dias o saldo Segmind dura no ritmo atual
+  const dailySpend = spend > 0 ? spend / Math.max(new Date().getDate(), 1) : 0
+  const daysLeft = dailySpend > 0 ? Math.floor(bal / dailySpend) : 999
+
+  // Alertas
+  const alerts: { level: 'red' | 'yellow'; msg: string }[] = []
+  if (bal < 10) alerts.push({ level: 'red', msg: `Saldo Segmind crítico — $${bal.toFixed(2)} restantes (~${daysLeft} dias)` })
+  else if (bal < 50) alerts.push({ level: 'yellow', msg: `Saldo Segmind baixo — $${bal.toFixed(2)} (~${daysLeft} dias)` })
+  if ((data.lowBalanceOrgs ?? 0) > 0) alerts.push({ level: 'yellow', msg: `${data.lowBalanceOrgs} organização(ões) com saldo baixo — oportunidade de recarga` })
+  if ((data.inactiveOrgs ?? 0) > 0) alerts.push({ level: 'yellow', msg: `${data.inactiveOrgs} organização(ões) inativa(s) há >7 dias` })
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Dashboard</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-        <KPI label="Organizações" value={`${data.activeOrgs ?? 0}`} sub={`${data.suspendedOrgs ?? 0} suspensas`} color={C.blue} />
-        <KPI label="Usuários" value={`${data.activeUsers ?? 0}`} sub={`${data.totalUsers ?? 0} total`} color={C.purple} />
-        <KPI label="Receita total" value={`$${(data.totalRevenue ?? 0).toFixed(2)}`} sub="top-ups acumulados" color={C.green} />
-        <KPI label="Saldo Segmind" value={bal != null ? `$${bal.toFixed(2)}` : '—'} sub={bal != null && bal < 10 ? 'SALDO BAIXO' : 'conta ativa'} color={bal != null && bal < 10 ? C.red : C.blue} />
-      </div>
-      {data.topOrgs?.length > 0 && (
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 12 }}>Top organizações por gasto</div>
-          {data.topOrgs.map((o: D) => (
-            <div key={o.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${C.border}80`, fontSize: 13 }}>
-              <span style={{ color: C.text, fontWeight: 600 }}>{o.name}</span>
-              <span style={{ color: C.green, fontFamily: 'monospace' }}>${(o.spend ?? 0).toFixed(2)}</span>
+
+      {/* Alertas */}
+      {alerts.length > 0 && (
+        <div style={{ background: `${C.red}10`, border: `1px solid ${C.red}30`, borderRadius: 12, padding: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.red, marginBottom: 8 }}>ATENÇÃO</div>
+          {alerts.map((a, i) => (
+            <div key={i} style={{ fontSize: 12, color: a.level === 'red' ? C.red : C.gold, padding: '4px 0', display: 'flex', gap: 8 }}>
+              <span>{a.level === 'red' ? '🔴' : '🟡'}</span><span>{a.msg}</span>
             </div>
           ))}
         </div>
       )}
+
+      {/* Linha 1: Saúde financeira */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px' }}>SAÚDE FINANCEIRA</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KPI label="Receita do mês" value={`$${revenue.toFixed(2)}`} sub="créditos vendidos" color={C.green} onClick={() => onNavigate('financial')} />
+        <KPI label="Custo Segmind" value={`$${spend.toFixed(2)}`} sub={`${costPct.toFixed(0)}% da receita`} color={costPct > 70 ? C.red : costPct > 50 ? C.gold : C.blue} onClick={() => onNavigate('financial')} />
+        <KPI label="Margem" value={`$${margin.toFixed(2)}`} sub={`${marginPct.toFixed(0)}% de margem`} color={marginPct >= 50 ? C.green : marginPct >= 30 ? C.gold : C.red} />
+        <KPI label="Saldo Segmind" value={`$${bal.toFixed(2)}`} sub={daysLeft < 999 ? `~${daysLeft} dias restantes` : 'sem gasto ainda'} color={bal < 10 ? C.red : bal < 50 ? C.gold : C.green} />
+      </div>
+
+      {/* Linha 2: Gestão de clientes */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginTop: 4 }}>GESTÃO DE CLIENTES</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KPI label="Orgs ativas" value={`${data.activeOrgs ?? 0}`} sub={`${data.suspendedOrgs ?? 0} suspensas`} color={C.blue} onClick={() => onNavigate('orgs')} />
+        <KPI label="Saldo baixo" value={`${data.lowBalanceOrgs ?? 0}`} sub="precisam recarga" color={(data.lowBalanceOrgs ?? 0) > 0 ? C.gold : C.green} onClick={() => onNavigate('orgs')} />
+        <KPI label="Inativos >7d" value={`${data.inactiveOrgs ?? 0}`} sub="risco de churn" color={(data.inactiveOrgs ?? 0) > 0 ? C.red : C.green} onClick={() => onNavigate('orgs')} />
+        <KPI label="Usuários" value={`${data.activeUsers ?? 0}`} sub={`${data.totalUsers ?? 0} total`} color={C.purple} onClick={() => onNavigate('users')} />
+      </div>
+
+      {/* Linha 3: Operacional */}
+      <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginTop: 4 }}>OPERACIONAL</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+        <KPI label="Gerações hoje" value={`${data.generationsToday ?? 0}`} sub="vídeos + imagens" color={C.blue} />
+        <KPI label="Gerações semana" value={`${data.generationsWeek ?? 0}`} sub={`$${(data.weeklySpend ?? 0).toFixed(2)} gasto`} color={C.purple} />
+        <KPI label="Engine top" value={data.topEngine ?? '—'} sub={`${data.topEnginePercent ?? 0}% das gerações`} color={C.gold} />
+        <KPI label="Planos ativos" value={`${data.activePlans ?? 0}`} sub="configurados" color={C.green} onClick={() => onNavigate('plans')} />
+      </div>
+
+      {/* Top clientes + Atividade (lado a lado) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 4 }}>
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Top clientes · este mês</div>
+            <span onClick={() => onNavigate('orgs')} style={{ fontSize: 10, color: C.blue, cursor: 'pointer' }}>Ver todos →</span>
+          </div>
+          {(data.topOrgs ?? []).length === 0
+            ? <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: 16 }}>Sem dados ainda.</div>
+            : (data.topOrgs ?? []).map((o: D, i: number) => (
+              <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: `1px solid ${C.border}80` }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: i === 0 ? C.gold : C.border, color: i === 0 ? '#000' : C.text, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>{i + 1}</div>
+                <div style={{ flex: 1, fontSize: 13, fontWeight: 600, color: C.text }}>{o.name}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${(o.spend ?? 0).toFixed(2)}</div>
+              </div>
+            ))
+          }
+        </div>
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Atividade recente</div>
+            <span onClick={() => onNavigate('users')} style={{ fontSize: 10, color: C.blue, cursor: 'pointer' }}>Ver todos →</span>
+          </div>
+          {(data.recentEvents ?? []).length === 0
+            ? <div style={{ color: C.textDim, fontSize: 12, textAlign: 'center', padding: 16 }}>Sem atividade ainda.</div>
+            : (data.recentEvents ?? []).slice(0, 8).map((e: D) => (
+              <div key={e.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: `1px solid ${C.border}80`, fontSize: 11 }}>
+                <span style={{ color: C.text }}><span style={{ fontWeight: 600 }}>{e.userName ?? 'User'}</span> <span style={{ color: C.textDim }}>{e.type?.replace(/_/g, ' ')}</span></span>
+                <span style={{ color: C.textDim, fontSize: 10 }}>{e.meta?.cost ? `$${e.meta.cost.toFixed(3)}` : ''}</span>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+
+      {/* Ações rápidas */}
+      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+        <button onClick={() => onNavigate('orgs')} style={{ background: C.gold, border: 'none', borderRadius: 8, padding: '10px 18px', color: '#000', fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>+ Nova Organização</button>
+        <button onClick={() => onNavigate('financial')} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 18px', color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Ver Extrato</button>
+        <button onClick={() => onNavigate('plans')} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 18px', color: C.text, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Gerenciar Planos</button>
+      </div>
     </div>
   )
 }
@@ -448,7 +530,7 @@ export function SuperAdmin() {
 
       {/* Main content */}
       <div style={{ flex: 1, padding: 28, overflowY: 'auto', maxHeight: '100vh' }}>
-        {view === 'dashboard' && <DashboardView />}
+        {view === 'dashboard' && <DashboardView onNavigate={setView} />}
         {view === 'orgs' && <OrgsView />}
         {view === 'plans' && <PlansView />}
         {view === 'users' && <UsersView />}

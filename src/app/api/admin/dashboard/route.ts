@@ -4,6 +4,8 @@ import { listOrganizations } from '@/lib/organizations'
 import { listUsers } from '@/lib/users'
 import { getWallet, getTransactions } from '@/lib/wallet'
 import { queryEvents } from '@/lib/activity'
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type D = Record<string, any>
 import { getSegmindCredits } from '@/lib/segmind'
 import { getUsdToBrl } from '@/lib/currency'
 
@@ -83,7 +85,41 @@ export async function GET(request: NextRequest) {
 
     // Sort by monthly spend descending, take top 5
     orgSpends.sort((a, b) => b.monthlySpend - a.monthlySpend)
-    const topOrgs = orgSpends.slice(0, 5)
+    const topOrgs = orgSpends.slice(0, 5).map(o => ({ id: o.id, name: o.name, spend: o.monthlySpend }))
+
+    // Orgs com saldo baixo (< 20% do totalTopUps ou < $5)
+    const lowBalanceOrgs = orgSpends.filter(o => o.balance < 5 && o.balance >= 0).length
+
+    // Orgs inativas (>7 dias sem atividade)
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const activeOrgIds = new Set(recentEvents.filter(e => e.timestamp >= sevenDaysAgo).map(e => (e as D).organizationId).filter(Boolean))
+    const inactiveOrgs = orgs.filter(o => o.status === 'active' && !activeOrgIds.has(o.id)).length
+
+    // Gerações hoje e semana
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+    const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    const genTypes = ['scene_generated', 'image_generated']
+    const generationsToday = recentEvents.filter(e => genTypes.includes(e.type) && e.timestamp >= todayStart).length
+    const weekEvents = recentEvents.filter(e => genTypes.includes(e.type) && e.timestamp >= weekStart)
+    const generationsWeek = weekEvents.length
+    const weeklySpend = weekEvents.reduce((s, e) => s + (e.meta?.cost ?? 0), 0)
+
+    // Engine top
+    const engineCounts = new Map<string, number>()
+    for (const e of recentEvents) {
+      if (genTypes.includes(e.type) && e.meta?.engineId) {
+        engineCounts.set(e.meta.engineId, (engineCounts.get(e.meta.engineId) ?? 0) + 1)
+      }
+    }
+    const engineList = Array.from(engineCounts.entries()).sort((a, b) => b[1] - a[1])
+    const totalGens = engineList.reduce((s, [, n]) => s + n, 0) || 1
+    const topEngine = engineList.length > 0 ? engineList[0][0] : null
+    const topEnginePercent = engineList.length > 0 ? Math.round((engineList[0][1] / totalGens) * 100) : 0
+
+    // Planos ativos
+    const { listPlans } = await import('@/lib/plans')
+    const plans = await listPlans()
+    const activePlans = plans.filter(p => p.isActive).length
 
     return NextResponse.json({
       totalOrgs: orgs.length,
@@ -93,12 +129,18 @@ export async function GET(request: NextRequest) {
       activeUsers,
       revokedUsers,
       totalRevenue,
-      totalSpent,
+      totalSpend: totalSpent,
       segmindBalance,
-      fxRate: fxRate.rate,
-      fxSource: fxRate.source,
-      topOrgsBySpend: topOrgs,
-      recentActivity: recentEvents,
+      lowBalanceOrgs,
+      inactiveOrgs,
+      generationsToday,
+      generationsWeek,
+      weeklySpend,
+      topEngine,
+      topEnginePercent,
+      activePlans,
+      topOrgs,
+      recentEvents,
     })
   } catch (err) {
     if (err instanceof AuthError) {
