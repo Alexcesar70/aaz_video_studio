@@ -1065,9 +1065,9 @@ function AdminPanel({
   const currentYear = now.getFullYear()
   const yearOptions = useMemo(() => {
     const years: number[] = []
-    for (let y = 2025; y <= currentYear + 1; y++) years.push(y)
+    for (let y = 2026; y <= 2036; y++) years.push(y)
     return years
-  }, [currentYear])
+  }, [])
   const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
   const selectedYear = parseInt(selectedMonth.slice(0, 4))
