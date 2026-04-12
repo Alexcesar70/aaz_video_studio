@@ -32,6 +32,7 @@ export interface EnginePricing {
   type: 'video' | 'image' | 'director'
   unit: 'second' | 'image' | 'call'
   baseCost: number           // custo médio real (Segmind/Anthropic)
+  marginFactor: number       // margem individual desta engine (ex: 1.4)
   clientPrice: number        // baseCost × marginFactor
   sampleCount: number        // quantas amostras no cálculo da média
   updatedAt: string
@@ -109,14 +110,17 @@ export async function getAverageEngineCost(engineId: string): Promise<{ avg: num
   return { avg: sum / nums.length, count: nums.length }
 }
 
-/** Recalcula o preço de todas as engines com a margem dada. */
-async function recalculateAllPrices(marginFactor: number): Promise<void> {
+/** Recalcula o preço de todas as engines. Se newDefaultMargin é dado, aplica como novo default
+ *  para engines que ainda usam a margem global. */
+async function recalculateAllPrices(newDefaultMargin: number): Promise<void> {
   const all = await getAllEnginePricing()
   for (const ep of all) {
     const avg = await getAverageEngineCost(ep.engineId)
     const baseCost = avg.count > 0 ? avg.avg : ep.baseCost
     ep.baseCost = baseCost
-    ep.clientPrice = Math.round(baseCost * marginFactor * 10000) / 10000
+    // Atualiza margem individual para o novo default
+    ep.marginFactor = newDefaultMargin
+    ep.clientPrice = Math.round(baseCost * ep.marginFactor * 10000) / 10000
     ep.sampleCount = avg.count
     ep.updatedAt = new Date().toISOString()
     await setEnginePricing(ep)
@@ -141,24 +145,24 @@ export async function bootstrapPricingTable(): Promise<void> {
   const m = config.marginFactor
 
   const defaults: Omit<EnginePricing, 'clientPrice' | 'sampleCount' | 'updatedAt'>[] = [
-    { engineId: 'seedance-2.0', engineName: 'Seedance 2.0', type: 'video', unit: 'second', baseCost: 0.19 },
-    { engineId: 'seedance-2.0-fast', engineName: 'Seedance 2.0 Fast', type: 'video', unit: 'second', baseCost: 0.10 },
-    { engineId: 'wan-2.7-r2v', engineName: 'Wan 2.7 R2V', type: 'video', unit: 'second', baseCost: 0.12 },
-    { engineId: 'kling-2.5-turbo', engineName: 'Kling 2.5 Turbo', type: 'video', unit: 'second', baseCost: 0.35 },
-    { engineId: 'veo-3.1-lite', engineName: 'Veo 3.1 Lite', type: 'video', unit: 'second', baseCost: 0.30 },
-    { engineId: 'veo-3.1', engineName: 'Veo 3.1', type: 'video', unit: 'second', baseCost: 0.50 },
-    { engineId: 'nano-banana-pro', engineName: 'Nano Banana Pro', type: 'image', unit: 'image', baseCost: 0.04 },
-    { engineId: 'flux-1-dev', engineName: 'Flux 1 Dev', type: 'image', unit: 'image', baseCost: 0.025 },
-    { engineId: 'ideogram-v2', engineName: 'Ideogram V2', type: 'image', unit: 'image', baseCost: 0.08 },
-    { engineId: 'scene-director', engineName: 'Scene Director (Claude)', type: 'director', unit: 'call', baseCost: 0.015 },
-    { engineId: 'image-director', engineName: 'Image Director (Claude)', type: 'director', unit: 'call', baseCost: 0.005 },
+    { engineId: 'seedance-2.0', engineName: 'Seedance 2.0', type: 'video', unit: 'second', baseCost: 0.19, marginFactor: m },
+    { engineId: 'seedance-2.0-fast', engineName: 'Seedance 2.0 Fast', type: 'video', unit: 'second', baseCost: 0.10, marginFactor: m },
+    { engineId: 'wan-2.7-r2v', engineName: 'Wan 2.7 R2V', type: 'video', unit: 'second', baseCost: 0.12, marginFactor: m },
+    { engineId: 'kling-2.5-turbo', engineName: 'Kling 2.5 Turbo', type: 'video', unit: 'second', baseCost: 0.35, marginFactor: m },
+    { engineId: 'veo-3.1-lite', engineName: 'Veo 3.1 Lite', type: 'video', unit: 'second', baseCost: 0.30, marginFactor: m },
+    { engineId: 'veo-3.1', engineName: 'Veo 3.1', type: 'video', unit: 'second', baseCost: 0.50, marginFactor: m },
+    { engineId: 'nano-banana-pro', engineName: 'Nano Banana Pro', type: 'image', unit: 'image', baseCost: 0.04, marginFactor: m },
+    { engineId: 'flux-1-dev', engineName: 'Flux 1 Dev', type: 'image', unit: 'image', baseCost: 0.025, marginFactor: m },
+    { engineId: 'ideogram-v2', engineName: 'Ideogram V2', type: 'image', unit: 'image', baseCost: 0.08, marginFactor: m },
+    { engineId: 'scene-director', engineName: 'Scene Director (Claude)', type: 'director', unit: 'call', baseCost: 0.015, marginFactor: m },
+    { engineId: 'image-director', engineName: 'Image Director (Claude)', type: 'director', unit: 'call', baseCost: 0.005, marginFactor: m },
   ]
 
   const now = new Date().toISOString()
   for (const d of defaults) {
     await setEnginePricing({
       ...d,
-      clientPrice: Math.round(d.baseCost * m * 10000) / 10000,
+      clientPrice: Math.round(d.baseCost * d.marginFactor * 10000) / 10000,
       sampleCount: 0,
       updatedAt: now,
     })

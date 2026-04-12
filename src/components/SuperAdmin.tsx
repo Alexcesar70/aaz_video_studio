@@ -533,11 +533,11 @@ function PricingView() {
     else setMsg('Erro ao atualizar margem')
   }
 
-  const updateBaseCost = async (engineId: string, newCost: string) => {
-    const cost = parseFloat(newCost)
-    if (!cost || cost <= 0) return
-    const r = await fetch('/api/admin/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_engine', engine: { engineId, baseCost: cost } }) })
-    if (r.ok) { load(); setMsg(`Custo base de ${engineId} atualizado`) }
+  const updateEngine = async (engineId: string, field: 'baseCost' | 'marginFactor', value: string) => {
+    const num = parseFloat(value)
+    if (!num || num <= 0) return
+    const r = await fetch('/api/admin/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_engine', engine: { engineId, [field]: num } }) })
+    if (r.ok) { load(); setMsg(`${field === 'baseCost' ? 'Custo base' : 'Margem'} de ${engineId} atualizado`) }
   }
 
   const inputStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', width: 80, textAlign: 'right' as const }
@@ -554,9 +554,9 @@ function PricingView() {
 
       {/* Margem global */}
       <div style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 12, padding: 18 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Fator de margem global</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Aplicar margem a todas as engines</div>
         <div style={{ fontSize: 11, color: C.textDim, marginBottom: 12 }}>
-          Preço do cliente = Custo médio × Fator. Ex: fator 1.4 = 40% de margem.
+          Define a mesma margem para TODAS as engines de uma vez. Depois você pode ajustar individualmente na tabela abaixo.
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input type="number" step="0.1" min="1" max="10" value={newMargin} onChange={e => setNewMargin(e.target.value)} style={{ ...inputStyle, width: 100 }} />
@@ -579,11 +579,17 @@ function PricingView() {
             <div>
               <input
                 type="number" step="0.001" defaultValue={e.baseCost.toFixed(4)}
-                onBlur={ev => { if (ev.target.value !== e.baseCost.toFixed(4)) updateBaseCost(e.engineId, ev.target.value) }}
+                onBlur={ev => { if (ev.target.value !== e.baseCost.toFixed(4)) updateEngine(e.engineId, 'baseCost', ev.target.value) }}
                 style={inputStyle}
               />
             </div>
-            <div style={{ color: C.gold, fontFamily: 'monospace', fontWeight: 700 }}>×{config?.marginFactor ?? 1.4}</div>
+            <div>
+              <input
+                type="number" step="0.1" min="1" defaultValue={(e.marginFactor ?? 1.4).toFixed(1)}
+                onBlur={ev => { if (ev.target.value !== (e.marginFactor ?? 1.4).toFixed(1)) updateEngine(e.engineId, 'marginFactor', ev.target.value) }}
+                style={{ ...inputStyle, width: 60, color: C.gold }}
+              />
+            </div>
             <div style={{ color: C.green, fontFamily: 'monospace', fontWeight: 700 }}>${e.clientPrice.toFixed(4)}</div>
             <div style={{ color: C.textDim, fontSize: 11 }}>{e.sampleCount > 0 ? `${e.sampleCount} calls` : 'inicial'}</div>
           </div>
@@ -591,8 +597,8 @@ function PricingView() {
       </div>
 
       <div style={{ fontSize: 11, color: C.textDim, fontStyle: 'italic' }}>
-        O custo base é atualizado automaticamente a partir da média das últimas 20 chamadas reais por engine.
-        Enquanto não houver chamadas, usa os valores iniciais. Ao alterar a margem, todos os preços são recalculados.
+        Cada engine tem sua própria margem — edite diretamente na coluna MARGEM. O custo base se atualiza
+        automaticamente pela média das últimas 20 chamadas reais. O preço do cliente = custo base × margem.
       </div>
     </div>
   )

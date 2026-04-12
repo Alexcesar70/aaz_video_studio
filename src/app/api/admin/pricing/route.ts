@@ -54,10 +54,13 @@ export async function POST(request: NextRequest) {
       const existing = (await getAllEnginePricing()).find(e => e.engineId === ep.engineId)
       if (!existing) return NextResponse.json({ error: 'Engine não encontrada' }, { status: 404 })
       const config = await getPricingConfig()
+      const newMargin = ep.marginFactor ?? existing.marginFactor ?? config.marginFactor
+      const newBaseCost = ep.baseCost ?? existing.baseCost
       const updated: EnginePricing = {
         ...existing,
-        baseCost: ep.baseCost ?? existing.baseCost,
-        clientPrice: Math.round((ep.baseCost ?? existing.baseCost) * config.marginFactor * 10000) / 10000,
+        baseCost: newBaseCost,
+        marginFactor: newMargin,
+        clientPrice: Math.round(newBaseCost * newMargin * 10000) / 10000,
         engineName: ep.engineName ?? existing.engineName,
         updatedAt: new Date().toISOString(),
       }
