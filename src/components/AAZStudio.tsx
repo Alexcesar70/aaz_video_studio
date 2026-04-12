@@ -57,7 +57,7 @@ const DURATIONS = [4, 5, 8, 10, 12, 15]
 /* ── Types ── */
 interface Character { id: string; name: string; emoji: string; color: string; desc: string }
 interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
-interface LibraryEntry { charId: string; name: string; emoji: string; images: string[]; createdAt: string }
+interface LibraryEntry { charId: string; name: string; emoji: string; images: string[]; createdAt: string; createdBy?: string }
 interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
 interface Project { id: string; name: string; createdAt: string; createdBy?: string; memberIds?: string[] }
 interface Episode { id: string; name: string; projectId?: string | null; createdAt: string; createdBy?: string; finalVideoUrl?: string; finalVideoSizeMB?: number; finalVideoUploadedAt?: string; finalVideoUploadedBy?: string; finalStatus?: 'none' | 'pending_review' | 'approved' | 'needs_changes'; reviewNote?: string; reviewedAt?: string; reviewedBy?: string; creatorNote?: string }
@@ -2997,6 +2997,17 @@ export function AAZStudio() {
     return sceneAssets.filter(s => s.createdBy && s.createdBy !== myId) // team
   }, [sceneAssets, assetOwnerFilter, myId])
 
+  // Library filtrada: no modo "mine", só usa sheets que EU criei para auto-inject
+  const filteredLibrary = useMemo(() => {
+    if (assetOwnerFilter === 'all' || !myId) return library
+    const filtered: Record<string, LibraryEntry> = {}
+    for (const [k, v] of Object.entries(library)) {
+      if (assetOwnerFilter === 'mine' && (v.createdBy === myId || !v.createdBy)) filtered[k] = v
+      else if (assetOwnerFilter === 'team' && v.createdBy && v.createdBy !== myId) filtered[k] = v
+    }
+    return filtered
+  }, [library, assetOwnerFilter, myId])
+
   const filteredAtAssets = useMemo(() => {
     if (assetOwnerFilter === 'all' || !myId) return atAssets
     if (assetOwnerFilter === 'mine') return atAssets.filter(a => a.isOfficial || a.createdBy === myId || !a.createdBy)
@@ -3765,7 +3776,7 @@ export function AAZStudio() {
   }
 
   const addFromLibrary = (charId: string) => {
-    const entry = library[charId]
+    const entry = filteredLibrary[charId] ?? library[charId]
     if (!entry || refImgs.length >= 9) return
     setMode('omni_reference')
     for (const img of entry.images) {
@@ -3836,8 +3847,8 @@ export function AAZStudio() {
       const lead = CHARACTERS.find(c => c.id === charId)
       if (lead) {
         inheritedChars.push(lead)
-        // Injeta refs da library[charId] se houver
-        const entry = library[charId]
+        // Injeta refs da library[charId] se houver (prioriza filtrada)
+        const entry = filteredLibrary[charId] ?? library[charId]
         if (entry?.images?.length) {
           for (const img of entry.images) {
             if (inheritedRefImgs.length >= 9) break
@@ -3985,7 +3996,7 @@ export function AAZStudio() {
     for (const id of Array.from(mentionedInPrompt)) {
       const alreadyHas = workingRefImgs.some(r => r.charId === id)
       if (alreadyHas) continue
-      const entry = library[id]
+      const entry = filteredLibrary[id]
       if (!entry?.images?.length) continue
       const char = CHARACTERS.find(c => c.id === id)!
       addedChars.push(char)
