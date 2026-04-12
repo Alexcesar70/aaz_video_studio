@@ -196,14 +196,11 @@ export async function POST(request: NextRequest) {
         organizationId: authUser.organizationId,
         type: 'image_director_called',
         meta: {
-          cost,
+          cost: clientPricePerCall,
           assetType: body.type,
           extra: {
             costSource,
-            estimatedCostUsd: 0.005,
-            realCostUsd: costSource === 'real' ? realCost : null,
-            inputTokens,
-            outputTokens,
+            claudeCostUsd: cost,
             walletDeducted,
           },
         },

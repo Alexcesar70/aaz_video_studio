@@ -214,14 +214,11 @@ export async function POST(request: NextRequest) {
         organizationId: authUser.organizationId,
         type: 'scene_director_called',
         meta: {
-          cost,
+          cost: clientPricePerCall,
           mood: body.mood,
           extra: {
             costSource,
-            estimatedCostUsd: 0.015,
-            realCostUsd: costSource === 'real' ? realCost : null,
-            inputTokens,
-            outputTokens,
+            claudeCostUsd: cost,
             walletDeducted,
           },
         },

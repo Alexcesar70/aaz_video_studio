@@ -233,13 +233,13 @@ export async function POST(request: NextRequest) {
         organizationId: authUser.organizationId,
         type: 'scene_generated',
         meta: {
-          cost: costUsd,
+          cost: clientChargeUsd,
           engineId: engine.id,
           duration: body.duration,
           extra: {
             costSource,
-            estimatedCostUsd,
-            realCostUsd,
+            segmindCostUsd: costUsd,
+            clientPricePerSec,
             walletDeducted,
           },
         },

@@ -1467,7 +1467,7 @@ function AdminPanel({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 400, overflowY: 'auto' }}>
                 {events.slice(0, 50).map(e => (
-                  <ActivityRow key={e.id} event={e} onClickUser={() => setDetailUserId(e.userId)} />
+                  <ActivityRow key={e.id} event={e} onClickUser={() => setDetailUserId(e.userId)} showBrl={showBrl} brlRate={brlRate} />
                 ))}
               </div>
             )}
@@ -2137,12 +2137,11 @@ function KpiCard({ label, value, sub, color }: { label: string; value: string; s
 }
 
 /* Linha de atividade no feed do dashboard */
-function ActivityRow({ event, onClickUser }: { event: ActivityEventView; onClickUser?: () => void }) {
+function ActivityRow({ event, onClickUser, showBrl, brlRate }: { event: ActivityEventView; onClickUser?: () => void; showBrl?: boolean; brlRate?: number | null }) {
   const icon = activityIcon(event.type)
   const desc = activityDescription(event)
   const when = relativeTime(new Date(event.timestamp))
-  const costSource = event.meta.extra?.costSource
-  const isRealCost = costSource === 'real'
+  const costVal = event.meta.cost ?? 0
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, background: C.card, fontSize: 12 }}>
       <span style={{ fontSize: 16 }}>{icon}</span>
@@ -2152,14 +2151,9 @@ function ActivityRow({ event, onClickUser }: { event: ActivityEventView; onClick
           <span style={{ color: C.textDim }}> · {desc}</span>
         </div>
       </div>
-      {event.meta.cost !== undefined && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {isRealCost ? (
-            <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: `${C.green}20`, border: `1px solid ${C.green}50`, borderRadius: 4, padding: '1px 5px', letterSpacing: '0.3px' }}>REAL</span>
-          ) : (
-            <span style={{ fontSize: 9, color: C.textDim, fontStyle: 'italic' }}>est.</span>
-          )}
-          <span style={{ fontSize: 10, color: C.green, fontFamily: 'monospace' }}>${event.meta.cost.toFixed(3)}</span>
+      {event.meta.cost !== undefined && costVal > 0 && (
+        <span style={{ fontSize: 10, color: C.green, fontFamily: 'monospace' }}>
+          {showBrl && brlRate ? `R$${(costVal * brlRate).toFixed(2)}` : `$${costVal.toFixed(3)}`}
         </span>
       )}
       <span style={{ fontSize: 10, color: C.textDim, whiteSpace: 'nowrap' }}>{when}</span>
@@ -2657,8 +2651,12 @@ export function AAZStudio() {
   const cp = (engineId: string, fallback: number) => clientPrices[engineId] ?? fallback
 
   // BRL conversion toggle
-  const [showBrl, setShowBrl] = useState(false)
+  const [showBrl, setShowBrl] = useState(true) // BRL ativo por padrão
   const [brlRate, setBrlRate] = useState<number | null>(null)
+  // Auto-fetch BRL rate no mount
+  useEffect(() => {
+    fetch('/api/currency').then(r => r.json()).then(d => { if (d.rate) setBrlRate(d.rate) }).catch(() => {})
+  }, [])
   const toggleBrl = useCallback(async () => {
     if (!showBrl && brlRate === null) {
       try {
