@@ -62,6 +62,7 @@ export async function checkBudget(
       userName: user.name,
       userEmail: user.email,
       userRole: user.role,
+      organizationId: user.organizationId,
       type: 'budget_exceeded',
       meta: {
         extra: { usedUsd: currentSpent, capUsd, upcomingCost },
@@ -85,6 +86,7 @@ export async function checkBudget(
       userName: user.name,
       userEmail: user.email,
       userRole: user.role,
+      organizationId: user.organizationId,
       type: 'budget_alert',
       meta: {
         extra: { usedUsd: currentSpent, capUsd, percentageUsed: pct },

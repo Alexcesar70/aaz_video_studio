@@ -21,10 +21,15 @@ interface Episode {
   reviewedAt?: string
   reviewedBy?: string
   creatorNote?: string
+  /** Organização dona do episódio (multi-tenant Phase 2) */
+  organizationId?: string
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const authUser = getAuthUser(request)
+    const orgId = authUser?.organizationId
+
     const redis = await getRedis()
     const keys = await redis.keys(`${PREFIX}*`)
     if (keys.length === 0) return NextResponse.json([])
@@ -33,8 +38,14 @@ export async function GET() {
       const val = await redis.get(key)
       if (val) episodes.push(JSON.parse(val))
     }
-    episodes.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    return NextResponse.json(episodes)
+
+    // Multi-tenant filtering: users in an org see their org's data + legacy data
+    const filtered = orgId
+      ? episodes.filter(e => e.organizationId === orgId || !e.organizationId)
+      : episodes
+
+    filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return NextResponse.json(filtered)
   } catch (err) {
     console.error('[/api/episodes GET]', err)
     return NextResponse.json({ error: 'Erro ao carregar episódios.' }, { status: 500 })
@@ -51,6 +62,10 @@ export async function POST(request: NextRequest) {
     if (authUser && !entry.createdBy) {
       entry.createdBy = authUser.id
     }
+    // Multi-tenant: stamp organizationId on creation
+    if (authUser?.organizationId && !entry.organizationId) {
+      entry.organizationId = authUser.organizationId
+    }
     const redis = await getRedis()
     await redis.set(`${PREFIX}${entry.id}`, JSON.stringify(entry))
 
@@ -60,6 +75,7 @@ export async function POST(request: NextRequest) {
         userName: authUser.name,
         userEmail: authUser.email,
         userRole: authUser.role,
+        organizationId: authUser.organizationId,
         type: 'episode_created',
         meta: {
           episodeId: entry.id,

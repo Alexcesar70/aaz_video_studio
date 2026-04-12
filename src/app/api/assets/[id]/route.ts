@@ -131,6 +131,7 @@ export async function PATCH(
           userName: authUser.name,
           userEmail: authUser.email,
           userRole: authUser.role,
+          organizationId: authUser.organizationId,
           type: 'asset_promoted',
           meta: {
             assetId: newId,
@@ -199,6 +200,7 @@ export async function DELETE(
         userName: authUser.name,
         userEmail: authUser.email,
         userRole: authUser.role,
+        organizationId: authUser.organizationId,
         type: 'asset_deleted',
         meta: {
           assetId: params.id,

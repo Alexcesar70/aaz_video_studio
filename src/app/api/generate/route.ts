@@ -180,6 +180,7 @@ export async function POST(request: NextRequest) {
         userName: authUser.name,
         userEmail: authUser.email,
         userRole: authUser.role,
+        organizationId: authUser.organizationId,
         type: 'scene_generated',
         meta: {
           cost: costUsd,

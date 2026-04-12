@@ -39,6 +39,8 @@ export interface Asset {
   tags?: string[]
   /** ID do usuário que criou (multi-user). 'legacy' pra dados antigos. */
   createdBy?: string
+  /** Organização dona do asset (multi-tenant Phase 2) */
+  organizationId?: string
   createdAt: string
   updatedAt: string
 }

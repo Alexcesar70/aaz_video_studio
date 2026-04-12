@@ -26,6 +26,9 @@ import { emitEvent } from '@/lib/activity'
  */
 export async function GET(request: NextRequest) {
   try {
+    const authUser = getAuthUser(request)
+    const orgId = authUser?.organizationId
+
     const redis = await getRedis()
     const params = request.nextUrl.searchParams
     const type = params.get('type') as AssetType | null
@@ -34,7 +37,7 @@ export async function GET(request: NextRequest) {
     // ── Custom assets (promovidos) ──
     const pattern = type ? `${ASSET_PREFIX}${type}:*` : `${ASSET_PREFIX}*`
     const keys = await redis.keys(pattern)
-    const customAssets: Asset[] = []
+    let customAssets: Asset[] = []
     for (const key of keys) {
       const val = await redis.get(key)
       if (val) {
@@ -44,8 +47,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Multi-tenant filtering: users in an org see their org's data + legacy data
+    if (orgId) {
+      customAssets = customAssets.filter(
+        a => a.organizationId === orgId || !a.organizationId
+      )
+    }
+
     // ── Drafts (opcional) ──
-    const drafts: Asset[] = []
+    let drafts: Asset[] = []
     if (includeDrafts) {
       const draftPattern = type ? `${DRAFT_PREFIX}${type}:*` : `${DRAFT_PREFIX}*`
       const draftKeys = await redis.keys(draftPattern)
@@ -56,6 +66,12 @@ export async function GET(request: NextRequest) {
             drafts.push(JSON.parse(val) as Asset)
           } catch {}
         }
+      }
+      // Multi-tenant filtering for drafts too
+      if (orgId) {
+        drafts = drafts.filter(
+          d => d.organizationId === orgId || !d.organizationId
+        )
       }
     }
 
@@ -165,6 +181,8 @@ export async function POST(request: NextRequest) {
       emoji: body.emoji,
       tags: body.tags,
       createdBy: authUser?.id,
+      // Multi-tenant: stamp organizationId on creation
+      organizationId: authUser?.organizationId,
       createdAt: now,
       updatedAt: now,
     }
@@ -190,6 +208,7 @@ export async function POST(request: NextRequest) {
         userName: authUser.name,
         userEmail: authUser.email,
         userRole: authUser.role,
+        organizationId: authUser.organizationId,
         type: 'asset_saved',
         meta: {
           assetId: storageId,

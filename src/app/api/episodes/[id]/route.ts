@@ -66,6 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           userName: authUser.name,
           userEmail: authUser.email,
           userRole: authUser.role,
+          organizationId: authUser.organizationId,
           type: 'episode_delivery_uploaded',
           meta: {
             episodeId: current.id,
@@ -108,6 +109,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
           userName: authUser.name,
           userEmail: authUser.email,
           userRole: authUser.role,
+          organizationId: authUser.organizationId,
           type: 'episode_delivery_reviewed',
           meta: {
             episodeId: current.id,

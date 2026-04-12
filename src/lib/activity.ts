@@ -80,6 +80,8 @@ export interface ActivityEvent {
   userName?: string
   userEmail?: string
   userRole?: string
+  /** Organização do usuário no momento do evento (multi-tenant Phase 2) */
+  organizationId?: string
   timestamp: string
   type: ActivityType
   meta: ActivityEventMeta

@@ -15,12 +15,17 @@ interface SceneAsset {
   emotion?: string
   /** ID do usuário que criou (multi-user). 'legacy' pra dados antigos. */
   createdBy?: string
+  /** Organização dona da cena (multi-tenant Phase 2) */
+  organizationId?: string
 }
 
 const ORPHAN = '__orphan__'
 
 export async function GET(request: NextRequest) {
   try {
+    const authUser = getAuthUser(request)
+    const orgId = authUser?.organizationId
+
     const redis = await getRedis()
     const episodeId = request.nextUrl.searchParams.get('episodeId')
     let pattern = 'aaz:scene:*'
@@ -41,9 +46,15 @@ export async function GET(request: NextRequest) {
         scenes.push(s)
       }
     }
+
+    // Multi-tenant filtering: users in an org see their org's data + legacy data
+    const filtered = orgId
+      ? scenes.filter(s => s.organizationId === orgId || !s.organizationId)
+      : scenes
+
     // Ordena por createdAt desc (mais recentes primeiro)
-    scenes.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
-    return NextResponse.json(scenes)
+    filtered.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+    return NextResponse.json(filtered)
   } catch (err) {
     console.error('[/api/scenes GET]', err)
     return NextResponse.json({ error: 'Erro ao carregar cenas.' }, { status: 500 })
@@ -60,6 +71,10 @@ export async function POST(request: NextRequest) {
     const authUser = getAuthUser(request)
     if (authUser && !entry.createdBy) {
       entry.createdBy = authUser.id
+    }
+    // Multi-tenant: stamp organizationId on creation
+    if (authUser?.organizationId && !entry.organizationId) {
+      entry.organizationId = authUser.organizationId
     }
     const redis = await getRedis()
     const epKey = entry.episodeId || ORPHAN

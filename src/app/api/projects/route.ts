@@ -12,10 +12,15 @@ interface Project {
   createdBy?: string
   /** Criadores autorizados neste projeto (admin vê sempre) */
   memberIds?: string[]
+  /** Organização dona do projeto (multi-tenant Phase 2) */
+  organizationId?: string
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const authUser = getAuthUser(request)
+    const orgId = authUser?.organizationId
+
     const redis = await getRedis()
     const keys = await redis.keys(`${PREFIX}*`)
     if (keys.length === 0) return NextResponse.json([])
@@ -24,8 +29,14 @@ export async function GET() {
       const val = await redis.get(key)
       if (val) projects.push(JSON.parse(val))
     }
-    projects.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    return NextResponse.json(projects)
+
+    // Multi-tenant filtering: users in an org see their org's data + legacy data
+    const filtered = orgId
+      ? projects.filter(p => p.organizationId === orgId || !p.organizationId)
+      : projects
+
+    filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    return NextResponse.json(filtered)
   } catch (err) {
     console.error('[/api/projects GET]', err)
     return NextResponse.json({ error: 'Erro ao carregar projetos.' }, { status: 500 })
@@ -42,6 +53,10 @@ export async function POST(request: NextRequest) {
     if (authUser && !entry.createdBy) {
       entry.createdBy = authUser.id
     }
+    // Multi-tenant: stamp organizationId on creation
+    if (authUser?.organizationId && !entry.organizationId) {
+      entry.organizationId = authUser.organizationId
+    }
     const redis = await getRedis()
     await redis.set(`${PREFIX}${entry.id}`, JSON.stringify(entry))
 
@@ -51,6 +66,7 @@ export async function POST(request: NextRequest) {
         userName: authUser.name,
         userEmail: authUser.email,
         userRole: authUser.role,
+        organizationId: authUser.organizationId,
         type: 'project_created',
         meta: {
           projectId: entry.id,

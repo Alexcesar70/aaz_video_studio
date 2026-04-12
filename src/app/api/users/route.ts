@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
       userName: admin.name,
       userEmail: admin.email,
       userRole: admin.role,
+      organizationId: admin.organizationId,
       type: 'user_created',
       meta: {
         targetUserId: result.user.id,

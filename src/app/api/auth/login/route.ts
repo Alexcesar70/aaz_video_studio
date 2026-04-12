@@ -91,6 +91,7 @@ export async function POST(request: NextRequest) {
       userName: user.name,
       userEmail: user.email,
       userRole: user.role,
+      organizationId: user.organizationId,
       type: 'login',
       meta: {},
     }).catch(() => {})

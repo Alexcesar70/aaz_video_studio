@@ -90,6 +90,31 @@ Desenvolvedor: **Alexandre** (solo).
   - Painel admin exibe badge REAL (verde) ou est. (cinza) por evento
   - Sistema de budget/relatórios usa custo real quando disponível
 
+### Multi-tenant Phase 1 — Org/Plan/Wallet models (COMPLETA)
+
+- `src/lib/organizations.ts` — Organization, Plan, Wallet models no Redis
+- `src/lib/users.ts` — User.organizationId opcional
+- `src/middleware.ts` — injeta `x-org-id` header a partir do JWT
+- `src/lib/auth.ts` — AuthUser.organizationId lido de `x-org-id`
+- Lead admin auto-promovido a `super_admin` no login
+- Bootstrap cria org padrão "AAZ com Jesus" (id: `aaz-com-jesus`)
+
+### Multi-tenant Phase 2 — Data isolation by organization (COMPLETA)
+
+- **Org-scoped queries**: todas as rotas CRUD filtram por `organizationId` no GET
+  - Usuários em org veem dados da org + dados legados (sem orgId)
+  - Super admin sem org vê tudo
+  - Dados legados (pré-Phase 2) continuam acessíveis (sem orgId = visível a todos da org)
+- **Org stamp on creation**: todas as rotas POST gravam `organizationId` no registro
+  - `/api/projects`, `/api/episodes`, `/api/scenes`, `/api/assets`
+  - `/api/scenarios`, `/api/library`
+- **Activity events**: todos os `emitEvent()` incluem `organizationId` do usuário
+  - 17 call sites atualizados (login, generate, director, assets, scenes, episodes, budget, users)
+  - `ActivityEvent.organizationId` field já existia na interface
+- **Activity API filtering**: `/api/activity` (mode=events) filtra por orgId do admin
+- **Asset model**: `Asset` interface em `src/lib/assets.ts` ganhou campo `organizationId`
+- **Nenhuma chave Redis renomeada** — retrocompat total
+
 ---
 
 ## PENDENTE / MELHORIAS FUTURAS
