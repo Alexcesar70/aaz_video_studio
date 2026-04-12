@@ -74,11 +74,13 @@ Desenvolvedor: **Alexandre** (solo).
   - Agregados diários por user (`aaz:daily:{YYYY-MM-DD}:{userId}`)
 - **Admin Panel** (aba Admin no AAZStudio.tsx):
   - Dashboard: KPIs (gasto mês, criadores ativos, cenas/semana, assets/semana)
-  - Top criadores por gasto + motores mais usados
-  - Feed de atividade recente com badge REAL/est. por evento
+  - Top criadores por gasto + motores mais usados (nomes clicáveis)
+  - Feed de atividade recente com badge REAL/est. por evento (nomes clicáveis)
   - Gestão de usuários (criar, editar budget, roles)
   - Fila de revisão de episódios (delivery workflow)
-  - Aba Gastos detalhados por usuário/mês
+  - Aba Gastos detalhados por usuário/mês com cards histórico mensal (nomes clicáveis)
+  - Seletor de mês no header (últimos 6 meses) — re-fetch automático de eventos
+  - **UserDetailModal**: extrato completo do usuário no mês (KPIs, lista cronológica tipo bank statement, custo por motor)
 - **Budget caps**: limite mensal por creator, hard block no backend, barra no header
 - **Episode delivery**: upload MP4 final + revisão admin (aprovar/pedir ajustes)
 - **Atelier**: criação de assets visuais (personagens, cenários, itens)
