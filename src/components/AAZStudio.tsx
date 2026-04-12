@@ -2596,6 +2596,7 @@ export function AAZStudio() {
 
   // Filtro "Meus" vs "Equipe" para assets e cenas
   const [assetOwnerFilter, setAssetOwnerFilter] = useState<'mine' | 'team' | 'all'>('mine')
+  const [showSheetWizard, setShowSheetWizard] = useState(false)
 
   /* Sessão atual (quem tá logado) — admin vê aba extra */
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
@@ -5677,6 +5678,14 @@ export function AAZStudio() {
 
           {/* ═══ PERSONAGENS ═══ */}
           {libTab === 'chars' && (<>
+            {/* Character Sheet Generator */}
+            <div style={{ background: `${C.purple}10`, border: `1px solid ${C.purple}30`, borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Character Sheet Generator</div>
+                <div style={{ fontSize: 12, color: C.textDim, marginTop: 2 }}>Crie um sheet completo (6 vistas) para manter consistência nas cenas.</div>
+              </div>
+              <button onClick={() => setShowSheetWizard(true)} style={{ background: C.purple, border: 'none', borderRadius: 8, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>+ Criar Sheet</button>
+            </div>
             {/* Upload de referências */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '20px' }}>
               <Label>Adicionar Referências de Personagem</Label>
@@ -6096,6 +6105,17 @@ export function AAZStudio() {
           showBrl={showBrl}
           brlRate={brlRate}
           onClose={() => setShowExtrato(false)}
+        />
+      )}
+
+      {/* Character Sheet Wizard */}
+      {showSheetWizard && (
+        <CharacterSheetWizard
+          clientPrices={clientPrices}
+          showBrl={showBrl}
+          brlRate={brlRate}
+          onClose={() => setShowSheetWizard(false)}
+          onSaved={() => { loadLibrary(); loadAssets() }}
         />
       )}
 
@@ -6556,6 +6576,249 @@ function AddRefModal({
 /* ═══════════════════════════════════════════════════════════════
    Modais de movimentação
 ═══════════════════════════════════════════════════════════════ */
+
+/* ══════════ CHARACTER SHEET WIZARD ══════════ */
+function CharacterSheetWizard({ onClose, onSaved, clientPrices, showBrl, brlRate }: {
+  onClose: () => void
+  onSaved: () => void
+  clientPrices: Record<string, number>
+  showBrl?: boolean
+  brlRate?: number | null
+}) {
+  const [step, setStep] = useState<1 | 2 | 3>(1)
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [refImage, setRefImage] = useState<string | null>(null)
+  const [engineId, setEngineId] = useState('nano-banana-pro')
+  const [includeAazStyle, setIncludeAazStyle] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [views, setViews] = useState<{ label: string; url: string; selected: boolean; regenerating: boolean }[]>([])
+  const [error, setError] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const VIEW_LABELS = ['Frontal', '¾ Direita', 'Perfil', '¾ Esquerda', 'Costas', 'Close Rosto']
+
+  const aazStyle = 'Clay texture 3D animation style, smooth clay surface on skin and clothes, handcrafted slightly rough finish, large expressive eyes with clay sheen, rounded proportions with soft edges, warm palette.'
+
+  const buildPrompt = (viewLabel: string) => {
+    const style = includeAazStyle ? aazStyle : ''
+    const refNote = refImage ? 'Based on the uploaded reference image. ' : ''
+    return `${refNote}${style} ${description.trim()}. ${viewLabel} view, character design reference, white background, consistent even lighting, orthographic camera, full body visible.`.trim()
+  }
+
+  const generateAll = async () => {
+    if (!description.trim()) { setError('Descreva o personagem.'); return }
+    setGenerating(true); setError(''); setViews([])
+
+    const newViews: typeof views = VIEW_LABELS.map(l => ({ label: l, url: '', selected: true, regenerating: false }))
+    setViews(newViews)
+
+    // Gera as 6 vistas em paralelo (2 por vez para não sobrecarregar)
+    for (let i = 0; i < VIEW_LABELS.length; i += 2) {
+      const batch = VIEW_LABELS.slice(i, i + 2)
+      const results = await Promise.all(batch.map(async (label) => {
+        try {
+          const body: Record<string, unknown> = {
+            engineId,
+            prompt: buildPrompt(label),
+            variations: 1,
+          }
+          if (refImage) body.reference_image = refImage
+          const res = await fetch('/api/generate-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          if (!res.ok) { const d = await res.json().catch(() => ({})); return { label, url: '', error: d.error ?? 'Erro' } }
+          const data = await res.json()
+          return { label, url: data.imageUrls?.[0] ?? '', error: '' }
+        } catch { return { label, url: '', error: 'Erro de rede' } }
+      }))
+
+      setViews(prev => prev.map(v => {
+        const r = results.find(x => x.label === v.label)
+        return r ? { ...v, url: r.url, selected: !!r.url } : v
+      }))
+    }
+    setGenerating(false)
+    setStep(2)
+  }
+
+  const regenerateView = async (index: number) => {
+    setViews(prev => prev.map((v, i) => i === index ? { ...v, regenerating: true } : v))
+    try {
+      const label = VIEW_LABELS[index]
+      const body: Record<string, unknown> = { engineId, prompt: buildPrompt(label), variations: 1 }
+      if (refImage) body.reference_image = refImage
+      const res = await fetch('/api/generate-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      if (res.ok) {
+        const data = await res.json()
+        const url = data.imageUrls?.[0] ?? ''
+        setViews(prev => prev.map((v, i) => i === index ? { ...v, url, selected: !!url, regenerating: false } : v))
+      } else { setViews(prev => prev.map((v, i) => i === index ? { ...v, regenerating: false } : v)) }
+    } catch { setViews(prev => prev.map((v, i) => i === index ? { ...v, regenerating: false } : v)) }
+  }
+
+  const saveSheet = async () => {
+    const selectedViews = views.filter(v => v.selected && v.url)
+    if (selectedViews.length === 0) { setError('Selecione pelo menos 1 vista.'); return }
+    if (!name.trim()) { setError('Dê um nome ao personagem.'); return }
+    setSaving(true)
+    try {
+      const charId = name.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+      const entry = {
+        charId,
+        name: name.trim(),
+        emoji: '🧑',
+        images: selectedViews.map(v => v.url),
+        createdAt: new Date().toISOString(),
+      }
+      await fetch('/api/library', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) })
+      onSaved()
+      onClose()
+    } catch { setError('Erro ao salvar.') }
+    finally { setSaving(false) }
+  }
+
+  const handleRefUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setRefImage(reader.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  const pricePerImg = clientPrices[engineId] ?? 0.04
+  const totalCost = 6 * pricePerImg
+  const fmt = (v: number) => showBrl && brlRate ? `R$${(v * brlRate).toFixed(2)}` : `$${v.toFixed(3)}`
+
+  const inputStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', width: '100%' }
+  const btnPrimary = { background: C.purple, border: 'none', borderRadius: 8, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 700 as const, cursor: 'pointer', fontFamily: 'inherit' }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 800, maxHeight: '92vh', overflow: 'auto', padding: 28 }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.purple, letterSpacing: '0.5px' }}>CHARACTER SHEET GENERATOR</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginTop: 2 }}>
+              {step === 1 ? 'Descreva o personagem' : step === 2 ? 'Selecione as vistas' : 'Salvar Character Sheet'}
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ fontSize: 11, color: C.textDim }}>Passo {step}/3</div>
+            <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: C.textDim, fontSize: 22, cursor: 'pointer' }}>×</button>
+          </div>
+        </div>
+
+        {/* PASSO 1: Descrição */}
+        {step === 1 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>NOME DO PERSONAGEM</div>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Maria, Tio Jonas, Princesa Léa..." style={inputStyle} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>DESCRIÇÃO VISUAL</div>
+              <textarea value={description} onChange={e => setDescription(e.target.value)} placeholder="Descreva a aparência: idade, cabelo, pele, olhos, roupa, acessórios..." rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>IMAGEM DE REFERÊNCIA (opcional)</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <input type="file" accept="image/*" onChange={handleRefUpload} style={{ fontSize: 12, color: C.textDim }} />
+                {refImage && <img src={refImage} alt="ref" style={{ width: 60, height: 60, borderRadius: 8, objectFit: 'cover', border: `1px solid ${C.border}` }} />}
+              </div>
+              <div style={{ fontSize: 10, color: C.textDim, marginTop: 4 }}>Suba um sketch, foto ou referência visual para guiar a geração.</div>
+            </div>
+            <div style={{ display: 'flex', gap: 14 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>ENGINE</div>
+                <select value={engineId} onChange={e => setEngineId(e.target.value)} style={inputStyle}>
+                  <option value="nano-banana-pro">Nano Banana Pro (rápido)</option>
+                  <option value="flux-1-dev">Flux 1 Dev (qualidade)</option>
+                  <option value="ideogram-v2">Ideogram V2 (premium)</option>
+                </select>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>ESTILO</div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: C.text }}>
+                  <input type="checkbox" checked={includeAazStyle} onChange={e => setIncludeAazStyle(e.target.checked)} style={{ accentColor: C.purple }} />
+                  Incluir estilo AAZ (clay/massinha)
+                </label>
+              </div>
+            </div>
+            <div style={{ background: C.card, borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 12, color: C.textDim }}>6 vistas × {fmt(pricePerImg)}/img</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>{fmt(totalCost)}</div>
+            </div>
+            {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
+            <button onClick={generateAll} disabled={generating} style={{ ...btnPrimary, opacity: generating ? 0.6 : 1 }}>
+              {generating ? 'Gerando 6 vistas...' : 'Gerar Character Sheet'}
+            </button>
+          </div>
+        )}
+
+        {/* PASSO 2: Seleção */}
+        {step === 2 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 12, color: C.textDim }}>Selecione as vistas que ficaram boas. Clique em ↺ para regenerar uma vista individual.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {views.map((v, i) => (
+                <div key={i} style={{ background: C.card, border: `2px solid ${v.selected ? C.purple : C.border}`, borderRadius: 12, overflow: 'hidden', cursor: 'pointer', opacity: v.url ? 1 : 0.5, transition: 'border-color 0.15s' }}>
+                  <div style={{ position: 'relative', paddingTop: '100%', background: C.surface }}>
+                    {v.url ? (
+                      <img src={v.url} alt={v.label} onClick={() => setViews(prev => prev.map((x, j) => j === i ? { ...x, selected: !x.selected } : x))} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.textDim, fontSize: 12 }}>{v.regenerating || generating ? '⟳ Gerando...' : 'Sem imagem'}</div>
+                    )}
+                  </div>
+                  <div style={{ padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: v.selected ? C.purple : C.textDim }}>{v.selected ? '✓ ' : ''}{v.label}</span>
+                    <button onClick={(e) => { e.stopPropagation(); regenerateView(i) }} disabled={v.regenerating} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 4, padding: '2px 8px', fontSize: 10, color: C.textDim, cursor: 'pointer', fontFamily: 'inherit' }}>{v.regenerating ? '...' : '↺'}</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim }}>{views.filter(v => v.selected && v.url).length} vista(s) selecionada(s) de {views.filter(v => v.url).length} gerada(s)</div>
+            {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setStep(1)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 20px', color: C.textDim, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Voltar</button>
+              <button onClick={() => { if (views.filter(v => v.selected && v.url).length === 0) { setError('Selecione pelo menos 1 vista.'); return }; setStep(3) }} style={btnPrimary}>Próximo →</button>
+            </div>
+          </div>
+        )}
+
+        {/* PASSO 3: Salvar */}
+        {step === 3 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ display: 'flex', gap: 12 }}>
+              {views.filter(v => v.selected && v.url).map((v, i) => (
+                <div key={i} style={{ flex: 1, maxWidth: 120 }}>
+                  <img src={v.url} alt={v.label} style={{ width: '100%', borderRadius: 8, border: `1px solid ${C.purple}40` }} />
+                  <div style={{ fontSize: 10, color: C.textDim, textAlign: 'center', marginTop: 4 }}>{v.label}</div>
+                </div>
+              ))}
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>NOME DO PERSONAGEM</div>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nome do personagem..." style={inputStyle} />
+            </div>
+            <div style={{ fontSize: 11, color: C.textDim }}>
+              O Character Sheet será salvo na biblioteca. Ao mencionar @{name.trim().toLowerCase().replace(/\s+/g, '_') || 'nome'} no prompt de vídeo, as vistas serão injetadas automaticamente no Omni Reference.
+            </div>
+            {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setStep(2)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 20px', color: C.textDim, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>← Voltar</button>
+              <button onClick={saveSheet} disabled={saving} style={{ ...btnPrimary, opacity: saving ? 0.6 : 1 }}>{saving ? 'Salvando...' : 'Salvar Character Sheet'}</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function MoveSceneModal({ scene, projects, episodes, onClose, onConfirm }: { scene: SceneAsset; projects: Project[]; episodes: Episode[]; onClose: () => void; onConfirm: (episodeId: string | null, projectId: string | null) => void | Promise<void> }) {
   const [projId, setProjId] = useState<string>(scene.projectId ?? '')
