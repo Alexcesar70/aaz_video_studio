@@ -38,7 +38,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       request,
       onBeforeGenerateToken: async (_pathname, _clientPayload) => {
         // Só creators e admins podem fazer upload de entrega
-        if (authUser.role !== 'creator' && authUser.role !== 'admin') {
+        if (authUser.role !== 'creator' && authUser.role !== 'admin' && authUser.role !== 'super_admin') {
           throw new Error('Access denied')
         }
         return {

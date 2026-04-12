@@ -5,7 +5,9 @@ import {
   verifyPassword,
   bootstrapAdminIfEmpty,
   touchLastActive,
+  LEAD_ADMIN_ID,
 } from '@/lib/users'
+import { bootstrapDefaultOrg } from '@/lib/organizations'
 import { emitEvent } from '@/lib/activity'
 
 const SESSION_COOKIE = 'aaz_session'
@@ -29,10 +31,17 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Bootstrap do admin se Redis estiver vazio (primeira inicialização).
-    // Idempotente: só cria se não houver nenhum user.
+    // Bootstrap do admin + org padrão se Redis estiver vazio (primeira inicialização).
+    // Idempotente: só cria se não houver nenhum user/org.
     try {
-      await bootstrapAdminIfEmpty()
+      const bootstrapResult = await bootstrapAdminIfEmpty()
+      // Se o admin foi criado agora, cria a org padrão também
+      if (bootstrapResult) {
+        await bootstrapDefaultOrg(bootstrapResult.user.id)
+      } else {
+        // Tenta criar a org padrão com o admin existente (idempotente)
+        await bootstrapDefaultOrg(LEAD_ADMIN_ID)
+      }
     } catch (err) {
       console.error('[auth/login] bootstrap falhou:', err)
       // Não bloqueia o login — tenta continuar; se nenhum user existir,
@@ -76,12 +85,17 @@ export async function POST(request: NextRequest) {
       meta: {},
     }).catch(() => {})
 
-    const token = await new SignJWT({
+    const tokenPayload: Record<string, unknown> = {
       userId: user.id,
       email: user.email,
       role: user.role,
       name: user.name,
-    })
+    }
+    if (user.organizationId) {
+      tokenPayload.organizationId = user.organizationId
+    }
+
+    const token = await new SignJWT(tokenPayload)
       .setProtectedHeader({ alg: 'HS256' })
       .setIssuedAt()
       .setExpirationTime('7d')
@@ -94,6 +108,7 @@ export async function POST(request: NextRequest) {
         email: user.email,
         name: user.name,
         role: user.role,
+        organizationId: user.organizationId,
       },
     })
 

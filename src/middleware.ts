@@ -37,10 +37,11 @@ export async function middleware(request: NextRequest) {
     if (payload.role) requestHeaders.set('x-user-role', String(payload.role))
     if (payload.email) requestHeaders.set('x-user-email', String(payload.email))
     if (payload.name) requestHeaders.set('x-user-name', String(payload.name))
+    if (payload.organizationId) requestHeaders.set('x-org-id', String(payload.organizationId))
 
     // Bloqueio de rotas /admin/* pra não-admins
     if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-      if (payload.role !== 'admin') {
+      if (payload.role !== 'admin' && payload.role !== 'super_admin') {
         const studioUrl = new URL('/studio', request.url)
         return NextResponse.redirect(studioUrl)
       }

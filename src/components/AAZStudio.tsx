@@ -78,7 +78,7 @@ interface HistoryTabProps {
   scenes: SceneAsset[]
   projects: Project[]
   episodes: Episode[]
-  currentUser: { id: string; email: string; name: string; role: 'admin' | 'creator' } | null
+  currentUser: { id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null
   onPlay: (scene: SceneAsset) => void
   onDownload: (url: string, filename: string) => void
   onDelete: (id: string) => void
@@ -994,7 +994,7 @@ interface AdminUser {
   id: string
   email: string
   name: string
-  role: 'admin' | 'creator'
+  role: 'super_admin' | 'admin' | 'creator'
   status: 'active' | 'revoked'
   monthlyBudgetUsd?: number
   assignedProjectIds?: string[]
@@ -1043,7 +1043,7 @@ function AdminPanel({
   currentUser,
   onOpenDelivery,
 }: {
-  currentUser: { id: string; email: string; name: string; role: 'admin' | 'creator' } | null
+  currentUser: { id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null
   onOpenDelivery: (ep: Episode) => void
 }) {
   const [subTab, setSubTab] = useState<'dashboard' | 'users' | 'review' | 'spend'>('dashboard')
@@ -2014,7 +2014,7 @@ function EpisodeDeliveryModal({
   onUpdated,
 }: {
   episode: Episode
-  currentUser: { id: string; email: string; name: string; role: 'admin' | 'creator' } | null
+  currentUser: { id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null
   onClose: () => void
   onUpdated: (updated: Episode) => void
 }) {
@@ -2025,7 +2025,7 @@ function EpisodeDeliveryModal({
   const [status, setStatus] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
-  const isAdmin = currentUser?.role === 'admin'
+  const isAdmin = currentUser?.role === 'admin' || currentUser?.role === 'super_admin'
   const hasDelivery = !!episode.finalVideoUrl
 
   const handleFile = (f: File) => {
@@ -2268,7 +2268,7 @@ export function AAZStudio() {
   const [tab, setTab] = useState('studio')
 
   /* Sessão atual (quem tá logado) — admin vê aba extra */
-  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: 'admin' | 'creator' } | null>(null)
+  const [currentUser, setCurrentUser] = useState<{ id: string; email: string; name: string; role: 'super_admin' | 'admin' | 'creator' } | null>(null)
   const [myBudget, setMyBudget] = useState<{ usedUsd: number; capUsd?: number; percentageUsed?: number } | null>(null)
   useEffect(() => {
     fetch('/api/auth/me')
@@ -2276,11 +2276,11 @@ export function AAZStudio() {
       .then(data => { if (data.user) setCurrentUser(data.user) })
       .catch(() => {})
   }, [])
-  const isAdminUser = currentUser?.role === 'admin'
+  const isAdminUser = currentUser?.role === 'admin' || currentUser?.role === 'super_admin'
 
-  // Carrega budget do creator (admin não tem cap)
+  // Carrega budget do creator (admin/super_admin não tem cap)
   const loadMyBudget = useCallback(async () => {
-    if (!currentUser || currentUser.role === 'admin') return
+    if (!currentUser || currentUser.role === 'admin' || currentUser.role === 'super_admin') return
     try {
       const res = await fetch('/api/me/budget')
       if (res.ok) setMyBudget(await res.json())

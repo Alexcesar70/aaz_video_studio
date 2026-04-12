@@ -58,9 +58,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     // Proteção: o admin lead (contato@qiqnada) não pode ser revogado nem
     // ter o role alterado por ninguém — garante que sempre há 1 admin.
     if (params.id === LEAD_ADMIN_ID) {
-      if (body.role && body.role !== 'admin') {
+      if (body.role && body.role !== 'admin' && body.role !== 'super_admin') {
         return NextResponse.json(
-          { error: 'O admin principal não pode ter o role alterado.' },
+          { error: 'O admin principal não pode ser rebaixado de role.' },
           { status: 403 }
         )
       }

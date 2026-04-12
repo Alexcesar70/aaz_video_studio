@@ -14,6 +14,8 @@ export interface AuthUser {
   email: string
   name: string
   role: UserRole
+  /** ID da organização à qual o usuário pertence (opcional para retrocompat) */
+  organizationId?: string
 }
 
 /**
@@ -25,29 +27,33 @@ export function getAuthUser(request: NextRequest): AuthUser | null {
   const email = request.headers.get('x-user-email')
   const name = request.headers.get('x-user-name')
   const role = request.headers.get('x-user-role') as UserRole | null
+  const organizationId = request.headers.get('x-org-id')
   if (!id || !role) return null
   return {
     id,
     email: email ?? '',
     name: name ?? '',
     role,
+    organizationId: organizationId ?? undefined,
   }
 }
 
 /**
- * Verifica se a request é de um admin. Útil pra gatear APIs sensíveis.
+ * Verifica se a request é de um admin ou super_admin.
+ * Útil pra gatear APIs sensíveis.
  */
 export function isAdmin(request: NextRequest): boolean {
-  return getAuthUser(request)?.role === 'admin'
+  const role = getAuthUser(request)?.role
+  return role === 'admin' || role === 'super_admin'
 }
 
 /**
- * Retorna o usuário autenticado ou lança erro se não for admin.
+ * Retorna o usuário autenticado ou lança erro se não for admin/super_admin.
  * Usado no topo de APIs /api/admin/** e /api/users/**.
  */
 export function requireAdmin(request: NextRequest): AuthUser {
   const user = getAuthUser(request)
-  if (!user || user.role !== 'admin') {
+  if (!user || (user.role !== 'admin' && user.role !== 'super_admin')) {
     throw new AuthError('Admin access required', 403)
   }
   return user

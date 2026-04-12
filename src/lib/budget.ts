@@ -40,8 +40,8 @@ export async function checkBudget(
     return { allowed: true, usedUsd: 0 }
   }
 
-  // Admins nunca são bloqueados
-  if (user.role === 'admin') {
+  // Admins e super_admins nunca são bloqueados
+  if (user.role === 'admin' || user.role === 'super_admin') {
     return { allowed: true, usedUsd: 0 }
   }
 

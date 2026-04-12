@@ -12,7 +12,7 @@
 import bcrypt from 'bcryptjs'
 import { getRedis } from './redis'
 
-export type UserRole = 'admin' | 'creator'
+export type UserRole = 'super_admin' | 'admin' | 'creator'
 export type UserStatus = 'active' | 'revoked'
 
 export interface User {
@@ -28,6 +28,12 @@ export interface User {
   monthlyBudgetUsd?: number
   /** IDs dos projetos que o creator pode ver/editar. Admin vê tudo sempre. */
   assignedProjectIds?: string[]
+  /** ID da organização à qual o usuário pertence */
+  organizationId?: string
+  /** Permissões granulares (ex: 'manage_users', 'manage_billing') */
+  permissions?: string[]
+  /** Produtos que o usuário pode acessar (ex: 'aaz_studio', 'courses') */
+  products?: string[]
   createdAt: string
   lastActiveAt?: string
   /** ID do admin que criou. 'system' pro bootstrap inicial. */
@@ -152,6 +158,9 @@ export async function createUser(params: {
   password?: string // se não vier, gera uma aleatória
   monthlyBudgetUsd?: number
   assignedProjectIds?: string[]
+  organizationId?: string
+  permissions?: string[]
+  products?: string[]
   createdBy: string
 }): Promise<{ user: PublicUser; plainPassword: string }> {
   const email = params.email.trim().toLowerCase()
@@ -188,6 +197,9 @@ export async function createUser(params: {
     passwordHash,
     monthlyBudgetUsd: params.monthlyBudgetUsd,
     assignedProjectIds: params.assignedProjectIds,
+    organizationId: params.organizationId,
+    permissions: params.permissions,
+    products: params.products,
     createdAt: now,
     createdBy: params.createdBy,
   }
@@ -205,7 +217,7 @@ export async function createUser(params: {
  */
 export async function updateUser(
   id: string,
-  updates: Partial<Pick<User, 'name' | 'email' | 'role' | 'status' | 'monthlyBudgetUsd' | 'assignedProjectIds' | 'lastActiveAt'>>
+  updates: Partial<Pick<User, 'name' | 'email' | 'role' | 'status' | 'monthlyBudgetUsd' | 'assignedProjectIds' | 'lastActiveAt' | 'organizationId' | 'permissions' | 'products'>>
 ): Promise<PublicUser | null> {
   const current = await getUserById(id)
   if (!current) return null
@@ -335,4 +347,32 @@ export async function bootstrapAdminIfEmpty(): Promise<{ user: PublicUser; plain
   console.log(`[users] Bootstrap admin criado: ${user.email} (senha = SITE_PASSWORD)`)
 
   return { user: toPublicUser(user), plainPassword: sitePassword }
+}
+
+/**
+ * Lista todos os usuários de uma organização (retorna PublicUser, sem hash).
+ * Ordenados por createdAt descendente.
+ *
+ * @param orgId ID da organização
+ * @returns Lista de usuários públicos da organização
+ */
+export async function getUsersByOrganization(orgId: string): Promise<PublicUser[]> {
+  const redis = await getRedis()
+  const keys = await redis.keys(`${USER_PREFIX}*`)
+  const users: User[] = []
+
+  for (const key of keys) {
+    const val = await redis.get(key)
+    if (val) {
+      try {
+        const user = JSON.parse(val) as User
+        if (user.organizationId === orgId) {
+          users.push(user)
+        }
+      } catch { /* skip malformed */ }
+    }
+  }
+
+  users.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
+  return users.map(toPublicUser)
 }

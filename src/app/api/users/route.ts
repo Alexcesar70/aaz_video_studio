@@ -47,9 +47,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-    if (body.role !== 'admin' && body.role !== 'creator') {
+    if (body.role !== 'super_admin' && body.role !== 'admin' && body.role !== 'creator') {
       return NextResponse.json(
-        { error: 'role deve ser admin ou creator.' },
+        { error: 'role deve ser super_admin, admin ou creator.' },
         { status: 400 }
       )
     }
