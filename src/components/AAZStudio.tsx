@@ -3780,9 +3780,12 @@ export function AAZStudio() {
     const entry = filteredLibrary[charId] ?? library[charId]
     if (!entry || refImgs.length >= 9) return
     setMode('omni_reference')
+    // Injeta no máximo 3 refs por personagem (frontal, ¾, perfil — as mais importantes)
+    const maxPerChar = 3
+    let added = 0
     for (const img of entry.images) {
-      if (refImgs.length >= 9) break
-      const idx = refImgs.length + 1
+      if (added >= maxPerChar || refImgs.length >= 9) break
+      added++
       setRefImgs(p => {
         if (p.length >= 9) return p
         return [...p, { url: img, label: `@image${p.length + 1}`, name: `${entry.name}`, fromLib: true, charId }]
@@ -3851,8 +3854,10 @@ export function AAZStudio() {
         // Injeta refs da library[charId] se houver (prioriza filtrada)
         const entry = filteredLibrary[charId] ?? library[charId]
         if (entry?.images?.length) {
+          let ca = 0
           for (const img of entry.images) {
-            if (inheritedRefImgs.length >= 9) break
+            if (ca >= 3 || inheritedRefImgs.length >= 9) break
+            ca++
             inheritedRefImgs.push({ url: img, label: `@image${inheritedRefImgs.length + 1}`, name: entry.name, fromLib: true, charId })
           }
         }
@@ -4001,8 +4006,11 @@ export function AAZStudio() {
       if (!entry?.images?.length) continue
       const char = CHARACTERS.find(c => c.id === id)!
       addedChars.push(char)
+      // Máximo 3 refs por personagem para otimizar consistência
+      let charAdded = 0
       for (const img of entry.images) {
-        if (workingRefImgs.length >= 9) break
+        if (charAdded >= 3 || workingRefImgs.length >= 9) break
+        charAdded++
         workingRefImgs.push({ url: img, label: `@image${workingRefImgs.length + 1}`, name: char.name, fromLib: true, charId: id })
       }
     }
