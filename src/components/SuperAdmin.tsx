@@ -284,8 +284,9 @@ function OrgsView() {
         <div style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 12, padding: 18 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{detail.org?.name}</div>
-              <div style={{ fontSize: 11, color: C.textDim }}>{detail.org?.slug} · {detail.org?.type === 'team' ? 'Time' : 'Individual'}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: '0.5px' }}>DASHBOARD FINANCEIRO</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginTop: 2 }}>{detail.org?.name}</div>
+              <div style={{ fontSize: 11, color: C.textDim }}>{detail.org?.slug} · {detail.org?.type === 'team' ? 'Time' : 'Individual'} · Plano: {detail.planName ?? detail.org?.plan}</div>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
               {detail.org?.status === 'active'
@@ -293,18 +294,58 @@ function OrgsView() {
                 : <button onClick={() => toggleStatus('reactivate')} style={btnStyle}>Reativar</button>}
             </div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
-            <KPI label="Saldo" value={`$${(detail.wallet?.balanceUsd ?? 0).toFixed(2)}`} color={C.green} />
+
+          {/* KPIs financeiros */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 14 }}>
+            <KPI label="Saldo" value={`$${(detail.wallet?.balanceUsd ?? 0).toFixed(2)}`} color={(detail.wallet?.balanceUsd ?? 0) < 5 ? C.red : C.green} />
             <KPI label="Total recebido" value={`$${(detail.wallet?.totalTopUps ?? 0).toFixed(2)}`} color={C.blue} />
             <KPI label="Total gasto" value={`$${(detail.wallet?.totalSpent ?? 0).toFixed(2)}`} color={C.purple} />
+            <KPI label="Produtos criados" value={`${detail.orgEvents?.filter((e: D) => ['scene_generated', 'image_generated'].includes(e.type)).length ?? 0}`} sub={`${detail.orgEvents?.filter((e: D) => e.type === 'scene_generated').length ?? 0} cenas · ${detail.orgEvents?.filter((e: D) => e.type === 'image_generated').length ?? 0} imgs`} color={C.gold} />
           </div>
+
+          {/* Engines + Membro mais ativo (lado a lado) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+            <div style={{ background: C.card, borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 8 }}>ENGINES MAIS USADAS</div>
+              {(() => {
+                const eng = new Map<string, number>()
+                for (const e of (detail.orgEvents ?? [])) if (e.meta?.engineId) eng.set(e.meta.engineId, (eng.get(e.meta.engineId) ?? 0) + 1)
+                const list = Array.from(eng.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5)
+                return list.length > 0 ? list.map(([id, n]) => (
+                  <div key={id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                    <span style={{ color: C.text }}>{id}</span><span style={{ color: C.textDim }}>{n}×</span>
+                  </div>
+                )) : <div style={{ color: C.textDim, fontSize: 11 }}>Sem dados</div>
+              })()}
+            </div>
+            <div style={{ background: C.card, borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 8 }}>GASTO POR MEMBRO</div>
+              {(() => {
+                const members = new Map<string, { name: string; cost: number }>()
+                for (const e of (detail.orgEvents ?? [])) {
+                  if (!e.meta?.cost || e.meta.cost <= 0) continue
+                  if (!members.has(e.userId)) members.set(e.userId, { name: e.userName ?? e.userId, cost: 0 })
+                  members.get(e.userId)!.cost += e.meta.cost
+                }
+                return Array.from(members.values()).sort((a, b) => b.cost - a.cost).slice(0, 5).map(m => (
+                  <div key={m.name} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '3px 0' }}>
+                    <span style={{ color: C.text }}>{m.name}</span><span style={{ color: C.green, fontFamily: 'monospace' }}>${m.cost.toFixed(2)}</span>
+                  </div>
+                ))
+              })()}
+            </div>
+          </div>
+
+          {/* Adicionar créditos */}
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Adicionar créditos</div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
             <input type="number" placeholder="Valor (USD)" value={creditAmt} onChange={e => setCreditAmt(e.target.value)} style={{ ...inputStyle, width: 120 }} />
             <input placeholder="Descrição (opcional)" value={creditDesc} onChange={e => setCreditDesc(e.target.value)} style={inputStyle} />
             <button onClick={addCredits} style={btnStyle}>Adicionar</button>
           </div>
-          {msg && <div style={{ fontSize: 12, color: C.green, marginBottom: 10 }}>{msg}</div>}
+          {msg && <div style={{ fontSize: 12, color: msg.includes('Erro') ? C.red : C.green, marginBottom: 10 }}>{msg}</div>}
+
+          {/* Membros */}
           {detail.members?.length > 0 && (
             <>
               <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Membros ({detail.members.length})</div>
@@ -314,6 +355,26 @@ function OrgsView() {
                   <span style={{ color: m.role === 'admin' ? C.gold : C.textDim }}>{m.role}</span>
                 </div>
               ))}
+            </>
+          )}
+
+          {/* Últimas transações da wallet */}
+          {detail.recentTransactions?.length > 0 && (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8, marginTop: 14 }}>Últimas transações</div>
+              <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                {detail.recentTransactions.slice(0, 20).map((t: D) => {
+                  const dt = new Date(t.createdAt)
+                  const isPos = t.amountUsd > 0
+                  return (
+                    <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: `1px solid ${C.border}80`, fontSize: 11 }}>
+                      <span style={{ color: C.textDim, fontFamily: 'monospace' }}>{dt.toLocaleDateString('pt-BR')} {dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style={{ color: C.text, flex: 1, marginLeft: 10 }}>{t.description}</span>
+                      <span style={{ color: isPos ? C.green : C.red, fontFamily: 'monospace', fontWeight: 600 }}>{isPos ? '+' : ''}{t.amountUsd?.toFixed(2)}</span>
+                    </div>
+                  )
+                })}
+              </div>
             </>
           )}
         </div>
