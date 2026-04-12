@@ -72,6 +72,13 @@ export async function POST(request: NextRequest) {
       console.log('[auth/login] Lead admin promovido para super_admin')
     }
 
+    // Migração: associa user sem org à org padrão "aaz-com-jesus"
+    if (user && !user.organizationId) {
+      await updateUser(user.id, { organizationId: 'aaz-com-jesus' })
+      user = { ...user, organizationId: 'aaz-com-jesus' }
+      console.log(`[auth/login] User ${user.id} associado à org aaz-com-jesus`)
+    }
+
     if (!user) {
       await recordLoginAttempt(ip, email, false)
       return NextResponse.json(
