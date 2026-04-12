@@ -1055,12 +1055,36 @@ function AdminPanel({
   const [inviteOpen, setInviteOpen] = useState(false)
   const [newUserCreds, setNewUserCreds] = useState<{ email: string; name: string; password: string } | null>(null)
 
-  const loadAll = useCallback(async () => {
+  // Month selector + user detail modal
+  const now = new Date()
+  const currentMonthStr = now.toISOString().slice(0, 7) // "2026-04"
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthStr)
+  const [detailUserId, setDetailUserId] = useState<string | null>(null)
+
+  // Generate last 6 months options
+  const monthOptions = useMemo(() => {
+    const opts: { value: string; label: string }[] = []
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      opts.push({
+        value: d.toISOString().slice(0, 7),
+        label: d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+      })
+    }
+    return opts
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonthStr])
+
+  const loadAll = useCallback(async (month?: string) => {
+    const m = month ?? selectedMonth
     setLoading(true)
     try {
+      const from = `${m}-01`
+      const toDate = new Date(parseInt(m.slice(0, 4)), parseInt(m.slice(5, 7)), 0) // last day of month
+      const to = toDate.toISOString().slice(0, 10)
       const [usersRes, eventsRes, monthlyRes, epsRes] = await Promise.all([
         fetch('/api/users'),
-        fetch('/api/activity?mode=events&limit=500'),
+        fetch(`/api/activity?mode=events&limit=500&from=${from}&to=${to}`),
         fetch('/api/activity?mode=monthly'),
         fetch('/api/episodes'),
       ])
@@ -1086,17 +1110,19 @@ function AdminPanel({
     } finally {
       setLoading(false)
     }
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth])
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  // Deriva agregados pro dashboard — calculados dos eventos (mais confiável que daily aggregates)
-  const now = new Date()
-  const currentMonth = now.toISOString().slice(0, 7) // "2026-04"
-  const monthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  // Derive month label from selectedMonth
+  const monthLabel = (() => {
+    const [y, m] = selectedMonth.split('-').map(Number)
+    return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+  })()
 
-  // Eventos do mês atual (filtro por timestamp)
-  const monthlyEvents = events.filter(e => e.timestamp.slice(0, 7) === currentMonth)
+  // Eventos do mês selecionado (filtro por timestamp)
+  const monthlyEvents = events.filter(e => e.timestamp.slice(0, 7) === selectedMonth)
 
   // Gasto total do mês — soma direta dos custos dos eventos
   const computedMonthlyCost = monthlyEvents
@@ -1157,16 +1183,27 @@ function AdminPanel({
             <span>Admin Panel</span>
           </div>
           <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-            Mission control da produção · {monthLabel} · v2.2
+            Mission control da produção · v3.0
           </div>
         </div>
-        <button
-          onClick={loadAll}
-          disabled={loading}
-          style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', color: C.textDim, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
-        >
-          {loading ? '⟳ Carregando...' : '↻ Atualizar'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <select
+            value={selectedMonth}
+            onChange={e => { setSelectedMonth(e.target.value); loadAll(e.target.value) }}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 12px', color: C.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
+          >
+            {monthOptions.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => loadAll()}
+            disabled={loading}
+            style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '8px 16px', cursor: 'pointer', color: C.textDim, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}
+          >
+            {loading ? '⟳ Carregando...' : '↻ Atualizar'}
+          </button>
+        </div>
       </div>
 
       {/* Sub-tabs */}
@@ -1228,7 +1265,7 @@ function AdminPanel({
                         {i + 1}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</div>
+                        <div onClick={() => setDetailUserId(c.id)} style={{ fontSize: 13, fontWeight: 600, color: C.blue, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: `${C.blue}40`, textUnderlineOffset: 2 }}>{c.name}</div>
                         <div style={{ fontSize: 10, color: C.textDim }}>{c.scenes} cenas · {c.assets} assets</div>
                       </div>
                       <div style={{ fontSize: 13, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>
@@ -1282,7 +1319,7 @@ function AdminPanel({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 400, overflowY: 'auto' }}>
                 {events.slice(0, 50).map(e => (
-                  <ActivityRow key={e.id} event={e} />
+                  <ActivityRow key={e.id} event={e} onClickUser={() => setDetailUserId(e.userId)} />
                 ))}
               </div>
             )}
@@ -1442,15 +1479,42 @@ function AdminPanel({
       {subTab === 'spend' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
-            Gastos detalhados · {monthLabel}
+            Gastos detalhados
           </div>
+
+          {/* Monthly history cards */}
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+            {monthOptions.map(o => {
+              const isSelected = o.value === selectedMonth
+              const mCost = events.filter(e => e.timestamp.slice(0, 7) === o.value && e.meta.cost != null && e.meta.cost > 0).reduce((s, e) => s + (e.meta.cost ?? 0), 0)
+              const displayCost = isSelected ? computedMonthlyCost : mCost
+              return (
+                <div
+                  key={o.value}
+                  onClick={() => { setSelectedMonth(o.value); loadAll(o.value) }}
+                  style={{
+                    minWidth: 120, padding: '12px 16px', borderRadius: 10, cursor: 'pointer',
+                    background: isSelected ? C.surface : C.card,
+                    border: `1px solid ${isSelected ? C.gold : C.border}`,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 700, color: isSelected ? C.gold : C.textDim, textTransform: 'capitalize', whiteSpace: 'nowrap' }}>{o.label}</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: isSelected ? C.green : C.text, fontFamily: 'monospace', marginTop: 4 }}>${displayCost.toFixed(2)}</div>
+                </div>
+              )
+            })}
+          </div>
+
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+              {monthLabel}
+            </div>
             <div style={{ fontSize: 11, color: C.textDim, marginBottom: 12, fontStyle: 'italic' }}>
               Cenas de vídeo refletem o custo real cobrado pelo Segmind (saldo antes vs. depois da geração).
               Imagens, Scene Director e Image Director são estimativas baseadas nos preços unitários de cada motor.
             </div>
             {(() => {
-              // Calcula gastos por usuário diretamente dos eventos do mês
               const spendByUser = new Map<string, { cost: number; counts: Record<string, number> }>()
               for (const e of monthlyEvents) {
                 if (!spendByUser.has(e.userId)) spendByUser.set(e.userId, { cost: 0, counts: {} })
@@ -1473,7 +1537,7 @@ function AdminPanel({
                   const u = users.find(us => us.id === userId)
                   return (
                     <div key={userId} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr', gap: 10, padding: '8px 0', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
-                      <div style={{ color: C.text, fontWeight: 600 }}>{u?.name ?? userId}</div>
+                      <div onClick={() => setDetailUserId(userId)} style={{ color: C.blue, fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: `${C.blue}40`, textUnderlineOffset: 2 }}>{u?.name ?? userId}</div>
                       <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.scene_generated ?? 0}</div>
                       <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.image_generated ?? 0}</div>
                       <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.counts.scene_director_called ?? 0}</div>
