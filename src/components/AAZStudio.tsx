@@ -4271,7 +4271,7 @@ export function AAZStudio() {
           <Pill color={C.textDim}>{engine.name}</Pill>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Pill color={C.green}>${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s</Pill>
+          <Pill color={C.green}>{showBrl && brlRate ? `R$${(cp(engine.id, engine.pricePerSecond) * brlRate).toFixed(2)}/s` : `$${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s`}</Pill>
           <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
           {/* Budget pill pra creators com cap mensal */}
           {myBudget && myBudget.capUsd !== undefined && (
@@ -4957,7 +4957,7 @@ export function AAZStudio() {
                 >
                   {VIDEO_ENGINES.map(eng => (
                     <option key={eng.id} value={eng.id}>
-                      {eng.name} · ${cp(eng.id, eng.pricePerSecond).toFixed(2)}/s
+                      {eng.name} · {showBrl && brlRate ? `R$${(cp(eng.id, eng.pricePerSecond) * brlRate).toFixed(2)}/s` : `$${cp(eng.id, eng.pricePerSecond).toFixed(2)}/s`}
                     </option>
                   ))}
                 </select>
@@ -5221,8 +5221,8 @@ export function AAZStudio() {
             {/* Custo (preço estimado baseado na engine selecionada) */}
             <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · ${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s</div>
-                <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${cost}</div>
+                <div style={{ fontSize: 13, color: C.textDim }}>{duration}s · {showBrl && brlRate ? `R$${(cp(engine.id, engine.pricePerSecond) * brlRate).toFixed(2)}/s` : `$${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s`}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>{showBrl && brlRate ? `R$${(parseFloat(cost) * brlRate).toFixed(2)}` : `$${cost}`}</div>
               </div>
               <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', letterSpacing: '0.3px' }}>
                 {engine.name} · será descontado do saldo
@@ -5463,7 +5463,7 @@ export function AAZStudio() {
                   >
                     {IMAGE_ENGINES.map(eng => (
                       <option key={eng.id} value={eng.id}>
-                        {eng.name} · ${cp(eng.id, eng.pricePerImage).toFixed(3)}/img
+                        {eng.name} · {showBrl && brlRate ? `R$${(cp(eng.id, eng.pricePerImage) * brlRate).toFixed(2)}/img` : `$${cp(eng.id, eng.pricePerImage).toFixed(3)}/img`}
                       </option>
                     ))}
                   </select>
@@ -5498,8 +5498,8 @@ export function AAZStudio() {
 
                 <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <div style={{ fontSize: 13, color: C.textDim }}>{atVariations} × ${cp(atEngine.id, atEngine.pricePerImage).toFixed(3)}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>${atTotalCost}</div>
+                    <div style={{ fontSize: 13, color: C.textDim }}>{atVariations} × {showBrl && brlRate ? `R$${(cp(atEngine.id, atEngine.pricePerImage) * brlRate).toFixed(2)}` : `$${cp(atEngine.id, atEngine.pricePerImage).toFixed(3)}`}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: C.green, fontFamily: 'monospace' }}>{showBrl && brlRate ? `R$${(parseFloat(atTotalCost) * brlRate).toFixed(2)}` : `$${atTotalCost}`}</div>
                   </div>
                   <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginTop: 4 }}>{atEngine.name} · será descontado do saldo</div>
                 </div>
