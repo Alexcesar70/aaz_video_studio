@@ -78,6 +78,7 @@ interface HistoryTabProps {
   scenes: SceneAsset[]
   projects: Project[]
   episodes: Episode[]
+  currentUser: { id: string; email: string; name: string; role: 'admin' | 'creator' } | null
   onPlay: (scene: SceneAsset) => void
   onDownload: (url: string, filename: string) => void
   onDelete: (id: string) => void
@@ -88,6 +89,7 @@ interface HistoryTabProps {
   onPlayProjectSequential: (project: Project) => void
   onSetSceneStatus: (sceneId: string, status: SceneStatus) => void
   onRenameEpisode: (episodeId: string, newName: string) => void
+  onOpenDelivery: (episode: Episode) => void
 }
 
 function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene, onSetStatus }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void; onMoveScene: (s: SceneAsset) => void; onSetStatus: (sceneId: string, status: SceneStatus) => void }) {
@@ -189,7 +191,77 @@ function EpisodeHeader({ episode, count, onMove, onDelete, onPlaySequential, onR
   )
 }
 
-function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode, onPlayEpisodeSequential, onPlayProjectSequential, onSetSceneStatus, onRenameEpisode }: HistoryTabProps) {
+/** Card de entrega final do episódio — upload MP4 do CapCut/Premiere */
+function EpisodeDeliveryCard({ episode, onOpen }: { episode: Episode; onOpen: (e: Episode) => void }) {
+  const status = episode.finalStatus ?? 'none'
+  const hasDelivery = !!episode.finalVideoUrl
+  const statusColor = status === 'approved' ? C.green : status === 'needs_changes' ? C.gold : status === 'pending_review' ? C.purple : C.textDim
+  const statusLabel = status === 'approved' ? '✓ Aprovado' : status === 'needs_changes' ? '🟠 Precisa ajustes' : status === 'pending_review' ? '🟡 Aguardando revisão' : 'Sem entrega'
+  const uploadedWhen = episode.finalVideoUploadedAt ? new Date(episode.finalVideoUploadedAt).toLocaleDateString('pt-BR') + ' ' + new Date(episode.finalVideoUploadedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''
+
+  return (
+    <div style={{
+      background: hasDelivery ? `${statusColor}10` : C.card,
+      border: `1px solid ${hasDelivery ? statusColor + '60' : C.border}`,
+      borderRadius: 10,
+      padding: '14px 16px',
+      marginTop: 10,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 14,
+      flexWrap: 'wrap',
+    }}>
+      {hasDelivery && episode.finalVideoUrl ? (
+        <video src={episode.finalVideoUrl} muted playsInline preload="metadata" style={{ width: 80, height: 48, borderRadius: 6, objectFit: 'cover', background: '#000', border: `1px solid ${statusColor}40`, flexShrink: 0 }} />
+      ) : (
+        <div style={{ width: 80, height: 48, borderRadius: 6, background: C.card, border: `1px dashed ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>📹</div>
+      )}
+
+      <div style={{ flex: 1, minWidth: 180 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 2 }}>
+          ENTREGA FINAL
+        </div>
+        {hasDelivery ? (
+          <>
+            <div style={{ fontSize: 13, fontWeight: 600, color: statusColor }}>{statusLabel}</div>
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
+              {episode.finalVideoSizeMB ? `${episode.finalVideoSizeMB} MB · ` : ''}Enviado {uploadedWhen}
+            </div>
+            {episode.reviewNote && (
+              <div style={{ fontSize: 11, color: C.text, marginTop: 6, fontStyle: 'italic', background: C.card, padding: '6px 10px', borderRadius: 6, border: `1px solid ${statusColor}30`, maxWidth: 500 }}>
+                <strong style={{ color: statusColor }}>Admin:</strong> "{episode.reviewNote}"
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ fontSize: 12, color: C.textDim }}>
+            Depois de montar o episódio no CapCut/Premiere, envie o MP4 final pra revisão do admin.
+          </div>
+        )}
+      </div>
+
+      <button
+        onClick={() => onOpen(episode)}
+        style={{
+          background: hasDelivery ? 'transparent' : C.purple,
+          border: `1px solid ${hasDelivery ? C.border : C.purple}`,
+          borderRadius: 8,
+          padding: '9px 16px',
+          cursor: 'pointer',
+          color: hasDelivery ? C.text : '#fff',
+          fontSize: 12,
+          fontWeight: 700,
+          fontFamily: 'inherit',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {hasDelivery ? '📤 Reenviar / ver' : '📤 Enviar episódio final'}
+      </button>
+    </div>
+  )
+}
+
+function HistoryTab({ scenes, projects, episodes, currentUser, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode, onPlayEpisodeSequential, onPlayProjectSequential, onSetSceneStatus, onRenameEpisode, onOpenDelivery }: HistoryTabProps) {
   const total = scenes.length
   const orphans = scenes.filter(s => !s.episodeId)
   const episodesWithScenes = episodes.filter(ep => scenes.some(s => s.episodeId === ep.id))
@@ -243,6 +315,9 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
                       <div key={ep.id}>
                         <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} onRename={onRenameEpisode} /></div>
                         <div style={{ marginLeft: 8 }}>{sceneGrid(epScenes)}</div>
+                        <div style={{ marginLeft: 8 }}>
+                          <EpisodeDeliveryCard episode={ep} onOpen={onOpenDelivery} />
+                        </div>
                       </div>
                     )
                   })}
@@ -262,6 +337,7 @@ function HistoryTab({ scenes, projects, episodes, onPlay, onDownload, onDelete, 
                     <div key={ep.id}>
                       <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} onRename={onRenameEpisode} />
                       {sceneGrid(epScenes)}
+                      <EpisodeDeliveryCard episode={ep} onOpen={onOpenDelivery} />
                     </div>
                   )
                 })}
@@ -925,11 +1001,18 @@ interface MonthlyTotals {
   byUser: Record<string, { cost: number; counts: Record<string, number> }>
 }
 
-function AdminPanel() {
-  const [subTab, setSubTab] = useState<'dashboard' | 'users' | 'spend'>('dashboard')
+function AdminPanel({
+  currentUser,
+  onOpenDelivery,
+}: {
+  currentUser: { id: string; email: string; name: string; role: 'admin' | 'creator' } | null
+  onOpenDelivery: (ep: Episode) => void
+}) {
+  const [subTab, setSubTab] = useState<'dashboard' | 'users' | 'review' | 'spend'>('dashboard')
   const [users, setUsers] = useState<AdminUser[]>([])
   const [events, setEvents] = useState<ActivityEventView[]>([])
   const [monthly, setMonthly] = useState<MonthlyTotals | null>(null)
+  const [deliveryEpisodes, setDeliveryEpisodes] = useState<Episode[]>([])
   const [loading, setLoading] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [newUserCreds, setNewUserCreds] = useState<{ email: string; name: string; password: string } | null>(null)
@@ -937,10 +1020,11 @@ function AdminPanel() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     try {
-      const [usersRes, eventsRes, monthlyRes] = await Promise.all([
+      const [usersRes, eventsRes, monthlyRes, epsRes] = await Promise.all([
         fetch('/api/users'),
         fetch('/api/activity?mode=events&limit=100'),
         fetch('/api/activity?mode=monthly'),
+        fetch('/api/episodes'),
       ])
       if (usersRes.ok) {
         const data = await usersRes.json()
@@ -953,6 +1037,11 @@ function AdminPanel() {
       if (monthlyRes.ok) {
         const data = await monthlyRes.json()
         setMonthly(data)
+      }
+      if (epsRes.ok) {
+        const eps = await epsRes.json() as Episode[]
+        // Apenas episódios com entrega em revisão ou com histórico de revisão
+        setDeliveryEpisodes(eps.filter(e => e.finalVideoUrl))
       }
     } catch (err) {
       console.error('[admin] load failed', err)
@@ -1029,6 +1118,7 @@ function AdminPanel() {
         {([
           ['dashboard', '📊 Dashboard'],
           ['users', `👥 Usuários (${users.length})`],
+          ['review', `🎬 Revisão${deliveryEpisodes.filter(e => e.finalStatus === 'pending_review').length > 0 ? ` (${deliveryEpisodes.filter(e => e.finalStatus === 'pending_review').length})` : ''}`],
           ['spend', '💰 Gastos'],
         ] as [typeof subTab, string][]).map(([id, lbl]) => (
           <button
@@ -1213,6 +1303,86 @@ function AdminPanel() {
       )}
 
       {/* ═══ GASTOS ═══ */}
+      {/* ═══ REVISÃO DE ENTREGAS ═══ */}
+      {subTab === 'review' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+            Revisão de entregas finais
+          </div>
+          <div style={{ fontSize: 12, color: C.textDim, marginTop: -6 }}>
+            Episódios montados pelos criadores no CapCut/Premiere e enviados pra revisão. Clique num card pra abrir, assistir e aprovar/pedir ajustes.
+          </div>
+          {deliveryEpisodes.length === 0 ? (
+            <div style={{ padding: 40, textAlign: 'center', color: C.textDim, fontSize: 13, border: `1px dashed ${C.border}`, borderRadius: 10 }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>📭</div>
+              Nenhuma entrega registrada ainda.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {/* Ordena: pending_review primeiro, depois needs_changes, depois approved */}
+              {[...deliveryEpisodes]
+                .sort((a, b) => {
+                  const order = { pending_review: 0, needs_changes: 1, approved: 2, none: 3 } as const
+                  const sa = order[a.finalStatus ?? 'none']
+                  const sb = order[b.finalStatus ?? 'none']
+                  if (sa !== sb) return sa - sb
+                  return (b.finalVideoUploadedAt ?? '').localeCompare(a.finalVideoUploadedAt ?? '')
+                })
+                .map(ep => {
+                  const status = ep.finalStatus ?? 'none'
+                  const statusColor = status === 'approved' ? C.green : status === 'needs_changes' ? C.gold : C.purple
+                  const statusLabel = status === 'approved' ? '✓ Aprovado' : status === 'needs_changes' ? '🟠 Precisa ajustes' : '🟡 Aguardando revisão'
+                  const uploader = users.find(u => u.id === ep.finalVideoUploadedBy)
+                  return (
+                    <div
+                      key={ep.id}
+                      onClick={() => onOpenDelivery(ep)}
+                      style={{
+                        background: C.surface,
+                        border: `1px solid ${statusColor}50`,
+                        borderRadius: 12,
+                        padding: 14,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 14,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {ep.finalVideoUrl && (
+                        <video src={ep.finalVideoUrl} muted playsInline preload="metadata" style={{ width: 120, height: 68, borderRadius: 8, objectFit: 'cover', background: '#000', border: `1px solid ${statusColor}40`, flexShrink: 0 }} />
+                      )}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
+                          {ep.name || '(sem nome)'}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.textDim, marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                          {uploader && <span>por {uploader.name}</span>}
+                          {ep.finalVideoSizeMB && <span>· {ep.finalVideoSizeMB} MB</span>}
+                          {ep.finalVideoUploadedAt && <span>· enviado {relativeTime(new Date(ep.finalVideoUploadedAt))}</span>}
+                        </div>
+                        {ep.creatorNote && (
+                          <div style={{ fontSize: 11, color: C.text, marginTop: 6, fontStyle: 'italic', maxWidth: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            &ldquo;{ep.creatorNote}&rdquo;
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: statusColor, background: `${statusColor}20`, border: `1px solid ${statusColor}50`, padding: '4px 10px', borderRadius: 12, whiteSpace: 'nowrap' }}>
+                          {statusLabel}
+                        </span>
+                        <button onClick={(e) => { e.stopPropagation(); onOpenDelivery(ep) }} style={{ background: statusColor, border: `1px solid ${statusColor}`, borderRadius: 8, padding: '7px 14px', cursor: 'pointer', color: status === 'approved' ? '#fff' : '#000', fontSize: 11, fontWeight: 700, fontFamily: 'inherit' }}>
+                          Revisar →
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
       {subTab === 'spend' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>
@@ -1434,6 +1604,214 @@ function InviteUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+/* Modal: entrega final de episódio — upload MP4 ou review */
+function EpisodeDeliveryModal({
+  episode,
+  currentUser,
+  onClose,
+  onUpdated,
+}: {
+  episode: Episode
+  currentUser: { id: string; email: string; name: string; role: 'admin' | 'creator' } | null
+  onClose: () => void
+  onUpdated: (updated: Episode) => void
+}) {
+  const [creatorNote, setCreatorNote] = useState(episode.creatorNote ?? '')
+  const [reviewNote, setReviewNote] = useState(episode.reviewNote ?? '')
+  const [uploading, setUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [status, setStatus] = useState('')
+  const fileInput = useRef<HTMLInputElement>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const isAdmin = currentUser?.role === 'admin'
+  const hasDelivery = !!episode.finalVideoUrl
+
+  const handleFile = (f: File) => {
+    if (!f.type.startsWith('video/')) {
+      setStatus('⚠ Selecione um arquivo de vídeo (MP4, MOV, WebM).')
+      return
+    }
+    const sizeMB = f.size / (1024 * 1024)
+    if (sizeMB > 500) {
+      setStatus(`⚠ Arquivo muito grande (${sizeMB.toFixed(1)} MB). Máximo: 500 MB.`)
+      return
+    }
+    setPendingFile(f)
+    setStatus(`Arquivo pronto: ${f.name} · ${sizeMB.toFixed(1)} MB`)
+  }
+
+  const submitUpload = async () => {
+    if (!pendingFile) { setStatus('Selecione um arquivo primeiro.'); return }
+    setUploading(true); setProgress(0); setStatus('Fazendo upload direto pro Blob...')
+    try {
+      const { upload } = await import('@vercel/blob/client')
+      const filename = `episode-${episode.id}-${Date.now()}.mp4`
+      const blob = await upload(filename, pendingFile, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-client-upload',
+        onUploadProgress: ({ percentage }) => setProgress(percentage),
+      })
+      setStatus('Upload completo. Registrando entrega...')
+      // Notifica o backend que a entrega foi enviada
+      const res = await fetch(`/api/episodes/${encodeURIComponent(episode.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'upload_delivery',
+          finalVideoUrl: blob.url,
+          finalVideoSizeMB: Math.round(pendingFile.size / (1024 * 1024) * 10) / 10,
+          creatorNote: creatorNote.trim() || undefined,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const updated = await res.json() as Episode
+      setStatus('✓ Entrega enviada! Admin foi notificado.')
+      onUpdated(updated)
+      window.setTimeout(() => onClose(), 1200)
+    } catch (err) {
+      setStatus(err instanceof Error ? '✕ ' + err.message : 'Erro no upload.')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const submitReview = async (finalStatus: 'approved' | 'needs_changes') => {
+    setStatus('Registrando revisão...')
+    try {
+      const res = await fetch(`/api/episodes/${encodeURIComponent(episode.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'review',
+          finalStatus,
+          reviewNote: reviewNote.trim() || undefined,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
+      const updated = await res.json() as Episode
+      setStatus(finalStatus === 'approved' ? '✓ Aprovado!' : '🟠 Ajustes solicitados.')
+      onUpdated(updated)
+      window.setTimeout(() => onClose(), 800)
+    } catch (err) {
+      setStatus(err instanceof Error ? '✕ ' + err.message : 'Erro na revisão.')
+    }
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 680, maxHeight: '92vh', overflow: 'auto', padding: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.purple, letterSpacing: '0.5px' }}>ENTREGA FINAL</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginTop: 2 }}>
+              {episode.name || '(sem nome)'}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', color: C.textDim, fontSize: 22, cursor: 'pointer' }}>×</button>
+        </div>
+
+        {/* Se já tem entrega, mostra o player */}
+        {hasDelivery && episode.finalVideoUrl && (
+          <div style={{ marginBottom: 18 }}>
+            <video src={episode.finalVideoUrl} controls style={{ width: '100%', borderRadius: 10, background: '#000' }} />
+            <div style={{ fontSize: 11, color: C.textDim, marginTop: 8, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <span>📦 {episode.finalVideoSizeMB} MB</span>
+              {episode.finalVideoUploadedAt && <span>📤 {new Date(episode.finalVideoUploadedAt).toLocaleString('pt-BR')}</span>}
+              {episode.finalVideoUploadedBy && <span>por {episode.finalVideoUploadedBy}</span>}
+              <span style={{ color: episode.finalStatus === 'approved' ? C.green : episode.finalStatus === 'needs_changes' ? C.gold : C.purple, fontWeight: 700 }}>
+                {episode.finalStatus === 'approved' ? '✓ Aprovado' : episode.finalStatus === 'needs_changes' ? '🟠 Precisa ajustes' : '🟡 Aguardando revisão'}
+              </span>
+            </div>
+
+            {/* Nota do creator (se houver) */}
+            {episode.creatorNote && (
+              <div style={{ marginTop: 10, padding: '10px 14px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, color: C.text }}>
+                <strong style={{ color: C.purple }}>Criador:</strong> &ldquo;{episode.creatorNote}&rdquo;
+              </div>
+            )}
+
+            {/* Nota do admin (se houver) */}
+            {episode.reviewNote && (
+              <div style={{ marginTop: 8, padding: '10px 14px', background: `${C.gold}10`, border: `1px solid ${C.gold}40`, borderRadius: 8, fontSize: 12, color: C.text }}>
+                <strong style={{ color: C.gold }}>Admin:</strong> &ldquo;{episode.reviewNote}&rdquo;
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* BRANCH A: Admin revisando uma entrega pendente */}
+        {isAdmin && hasDelivery && (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 8, letterSpacing: '0.5px' }}>REVISÃO DO ADMIN</div>
+            <textarea
+              value={reviewNote}
+              onChange={e => setReviewNote(e.target.value)}
+              placeholder="Nota opcional pro criador (ex: 'Música muito alta no primeiro minuto, abaixa pra -6dB')"
+              style={{ width: '100%', minHeight: 80, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box' }}
+            />
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button onClick={() => submitReview('needs_changes')} style={{ flex: 1, background: `${C.gold}20`, border: `1px solid ${C.gold}60`, borderRadius: 10, padding: '11px', cursor: 'pointer', color: C.gold, fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+                ↺ Pedir ajustes
+              </button>
+              <button onClick={() => submitReview('approved')} style={{ flex: 1, background: C.green, border: `1px solid ${C.green}`, borderRadius: 10, padding: '11px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+                ✓ Aprovar entrega
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* BRANCH B: Creator enviando (nova ou re-envio) */}
+        {(!isAdmin || !hasDelivery) && (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 8, letterSpacing: '0.5px' }}>
+              {hasDelivery ? 'ENVIAR NOVA VERSÃO' : 'ENVIAR ENTREGA'}
+            </div>
+            <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>
+              Depois de montar o episódio no CapCut/Premiere e exportar como MP4, selecione o arquivo e envie. Máximo 500 MB.
+            </div>
+
+            <button
+              onClick={() => fileInput.current?.click()}
+              style={{ width: '100%', background: C.card, border: `1px dashed ${C.purple}60`, borderRadius: 10, padding: '22px', cursor: 'pointer', color: C.purple, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', marginBottom: 12 }}
+            >
+              {pendingFile ? `📹 ${pendingFile.name}` : '📁 Selecionar arquivo MP4 do computador'}
+            </button>
+            <input ref={fileInput} type="file" accept="video/mp4,video/mov,video/quicktime,video/webm" style={{ display: 'none' }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
+
+            <textarea
+              value={creatorNote}
+              onChange={e => setCreatorNote(e.target.value)}
+              placeholder="Notas pro admin (opcional). Ex: 'Adicionei música de fundo e a vinheta. Em dúvida sobre o corte dos 2:15.'"
+              style={{ width: '100%', minHeight: 70, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical', boxSizing: 'border-box', marginBottom: 10 }}
+            />
+
+            {uploading && (
+              <div style={{ marginBottom: 10 }}>
+                <div style={{ height: 6, background: C.card, borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${progress}%`, background: C.purple, transition: 'width 0.2s' }} />
+                </div>
+                <div style={{ fontSize: 10, color: C.textDim, textAlign: 'center', marginTop: 4 }}>{progress.toFixed(0)}%</div>
+              </div>
+            )}
+
+            <button
+              onClick={submitUpload}
+              disabled={!pendingFile || uploading}
+              style={{ width: '100%', background: (!pendingFile || uploading) ? C.card : C.purple, border: `1px solid ${(!pendingFile || uploading) ? C.border : C.purple}`, borderRadius: 10, padding: '13px', cursor: (!pendingFile || uploading) ? 'not-allowed' : 'pointer', color: (!pendingFile || uploading) ? C.textDim : '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit' }}
+            >
+              {uploading ? '⟳ Enviando...' : '📤 Enviar para revisão'}
+            </button>
+          </div>
+        )}
+
+        {status && (
+          <div style={{ marginTop: 12, fontSize: 12, color: C.textDim, textAlign: 'center' }}>{status}</div>
+        )}
       </div>
     </div>
   )
@@ -2318,6 +2696,8 @@ export function AAZStudio() {
   const [addRefModal, setAddRefModal] = useState<'image' | 'video' | 'audio' | null>(null)
   /* Modal: Quick-Create — gerar asset sem sair do Estúdio */
   const [quickCreate, setQuickCreate] = useState<{ type: AssetType; initialName: string } | null>(null)
+  /* Modal: entrega final de episódio (upload MP4 + review pelo admin) */
+  const [deliveryModal, setDeliveryModal] = useState<Episode | null>(null)
   /* Modal: Confirmação de exclusão */
   const [confirmModal, setConfirmModal] = useState<{
     title: string
@@ -2332,7 +2712,7 @@ export function AAZStudio() {
   const [sequentialPlayer, setSequentialPlayer] = useState<{ scenes: SceneAsset[]; title: string } | null>(null)
 
   useEffect(() => {
-    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal || sequentialPlayer || quickCreate
+    const anyModal = playerModalScene || moveSceneModal || moveEpisodeModal || addRefModal || confirmModal || sequentialPlayer || quickCreate || deliveryModal
     if (!anyModal) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -2343,11 +2723,12 @@ export function AAZStudio() {
         setConfirmModal(null)
         setSequentialPlayer(null)
         setQuickCreate(null)
+        setDeliveryModal(null)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal, sequentialPlayer, quickCreate])
+  }, [playerModalScene, moveSceneModal, moveEpisodeModal, addRefModal, confirmModal, sequentialPlayer, quickCreate, deliveryModal])
 
   const uploadFrame = async (file: File, setter: (v: string) => void, previewSetter: (v: string) => void) => {
     const url = await toDataUrl(file)
@@ -4368,7 +4749,10 @@ export function AAZStudio() {
       {/* ══════════ ASSETS — Personagens, Cenários, Cenas ══════════ */}
       {/* ══════════ ADMIN PANEL — só role=admin ══════════ */}
       {tab === 'admin' && isAdminUser && (
-        <AdminPanel />
+        <AdminPanel
+          currentUser={currentUser}
+          onOpenDelivery={(ep) => setDeliveryModal(ep)}
+        />
       )}
 
       {tab === 'library' && (
@@ -4649,6 +5033,8 @@ export function AAZStudio() {
               scenes={sceneAssets}
               projects={projects}
               episodes={episodes}
+              currentUser={currentUser}
+              onOpenDelivery={(ep) => setDeliveryModal(ep)}
               onPlay={(s) => setPlayerModalScene(s)}
               onDownload={downloadVideo}
               onDelete={(id) => {
@@ -4783,6 +5169,19 @@ export function AAZStudio() {
             else if (addRefModal === 'video') await addVideoRefFromFile(file)
             else if (addRefModal === 'audio') await addAudioRefFromFile(file)
             setAddRefModal(null)
+          }}
+        />
+      )}
+
+      {/* Episode delivery — upload MP4 final + revisão */}
+      {deliveryModal && (
+        <EpisodeDeliveryModal
+          episode={deliveryModal}
+          currentUser={currentUser}
+          onClose={() => setDeliveryModal(null)}
+          onUpdated={(updated) => {
+            setEpisodes(prev => prev.map(e => e.id === updated.id ? updated : e))
+            setDeliveryModal(updated)
           }}
         />
       )}
