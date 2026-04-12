@@ -1054,6 +1054,8 @@ function AdminPanel({
   const [loading, setLoading] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [newUserCreds, setNewUserCreds] = useState<{ email: string; name: string; password: string } | null>(null)
+  const [segmindBalance, setSegmindBalance] = useState<number | null>(null)
+  const [allScenes, setAllScenes] = useState<{ id: string; episodeId: string | null; cost: string; duration: number; createdBy?: string; createdAt: string }[]>([])
 
   // Month/year selectors + user detail modal
   const now = new Date()
@@ -1087,11 +1089,13 @@ function AdminPanel({
       const from = `${m}-01`
       const toDate = new Date(parseInt(m.slice(0, 4)), parseInt(m.slice(5, 7)), 0) // last day of month
       const to = toDate.toISOString().slice(0, 10)
-      const [usersRes, eventsRes, monthlyRes, epsRes] = await Promise.all([
+      const [usersRes, eventsRes, monthlyRes, epsRes, scenesRes, balanceRes] = await Promise.all([
         fetch('/api/users'),
-        fetch(`/api/activity?mode=events&limit=500&from=${from}&to=${to}`),
+        fetch(`/api/activity?mode=events&limit=2000&from=${from}&to=${to}`),
         fetch('/api/activity?mode=monthly'),
         fetch('/api/episodes'),
+        fetch('/api/scenes'),
+        fetch('/api/segmind-balance').catch(() => null),
       ])
       if (usersRes.ok) {
         const data = await usersRes.json()
@@ -1107,8 +1111,15 @@ function AdminPanel({
       }
       if (epsRes.ok) {
         const eps = await epsRes.json() as Episode[]
-        // Apenas episódios com entrega em revisão ou com histórico de revisão
         setDeliveryEpisodes(eps.filter(e => e.finalVideoUrl))
+      }
+      if (scenesRes && scenesRes.ok) {
+        const scenes = await scenesRes.json()
+        setAllScenes(Array.isArray(scenes) ? scenes : [])
+      }
+      if (balanceRes && balanceRes.ok) {
+        const bd = await balanceRes.json()
+        setSegmindBalance(bd.balance ?? null)
       }
     } catch (err) {
       console.error('[admin] load failed', err)
@@ -1177,6 +1188,37 @@ function AdminPanel({
   const engineUsageList = Array.from(engineUsage.entries()).sort((a, b) => b[1] - a[1])
   const totalEngineUse = engineUsageList.reduce((sum, [, n]) => sum + n, 0) || 1
 
+  // ── Métricas avançadas ──
+  const sceneEvents = monthlyEvents.filter(e => e.type === 'scene_generated')
+  const avgCostPerScene = sceneEvents.length > 0
+    ? sceneEvents.reduce((s, e) => s + (e.meta.cost ?? 0), 0) / sceneEvents.length : 0
+
+  // Taxa de aproveitamento: cenas salvas em episódios vs total de gerações
+  const scenesInEpisodes = allScenes.filter(s => s.episodeId != null).length
+  const totalSavedScenes = allScenes.length
+  const utilizationRate = totalSavedScenes > 0 ? (scenesInEpisodes / totalSavedScenes) * 100 : 0
+
+  // Projeção mensal: gasto atual / dia do mês × dias no mês
+  const dayOfMonth = new Date().getDate()
+  const daysInMonth = new Date(selectedYear, selectedMonthNum, 0).getDate()
+  const isCurrentMonth = selectedMonth === currentMonthStr
+  const projectedCost = isCurrentMonth && dayOfMonth > 0
+    ? (computedMonthlyCost / dayOfMonth) * daysInMonth : computedMonthlyCost
+
+  // Custo por episódio (cenas agrupadas)
+  const episodeCosts = new Map<string, { name: string; sceneCount: number; totalCost: number }>()
+  for (const s of allScenes) {
+    if (!s.episodeId) continue
+    if (!episodeCosts.has(s.episodeId)) {
+      const ep = deliveryEpisodes.find(e => e.id === s.episodeId)
+      episodeCosts.set(s.episodeId, { name: ep?.name ?? s.episodeId, sceneCount: 0, totalCost: 0 })
+    }
+    const bucket = episodeCosts.get(s.episodeId)!
+    bucket.sceneCount++
+    bucket.totalCost += parseFloat(s.cost) || 0
+  }
+  const episodeCostList = Array.from(episodeCosts.entries()).sort((a, b) => b[1].totalCost - a[1].totalCost)
+
   return (
     <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
@@ -1188,7 +1230,7 @@ function AdminPanel({
             <span>Admin Panel</span>
           </div>
           <div style={{ fontSize: 13, color: C.textDim, marginTop: 4 }}>
-            Mission control da produção · v3.1
+            Mission control da produção · v4.0
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1252,12 +1294,19 @@ function AdminPanel({
       {/* ═══ DASHBOARD ═══ */}
       {subTab === 'dashboard' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          {/* KPIs */}
+          {/* KPIs — linha 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KpiCard label="Gasto este mês" value={`$${computedMonthlyCost.toFixed(2)}`} sub="vídeos: custo real · resto: estimado" color={C.green} />
+            <KpiCard label="Gasto este mês" value={`$${computedMonthlyCost.toFixed(2)}`} sub={isCurrentMonth ? `projeção: ~$${projectedCost.toFixed(2)}` : monthLabel} color={C.green} />
+            <KpiCard label="Saldo Segmind" value={segmindBalance !== null ? `$${segmindBalance.toFixed(2)}` : '—'} sub={segmindBalance !== null && segmindBalance < 10 ? 'SALDO BAIXO' : 'conta ativa'} color={segmindBalance !== null && segmindBalance < 10 ? C.red : C.blue} />
+            <KpiCard label="Custo médio/cena" value={`$${avgCostPerScene.toFixed(2)}`} sub={`${sceneEvents.length} cenas no mês`} color={C.purple} />
+            <KpiCard label="Aproveitamento" value={`${utilizationRate.toFixed(0)}%`} sub={`${scenesInEpisodes}/${totalSavedScenes} em episódios`} color={utilizationRate >= 60 ? C.green : utilizationRate >= 30 ? C.gold : C.red} />
+          </div>
+          {/* KPIs — linha 2 */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
             <KpiCard label="Cenas (semana)" value={`${scenesThisWeek}`} sub="vídeos gerados" color={C.blue} />
             <KpiCard label="Assets (semana)" value={`${assetsThisWeek}`} sub="novos na biblioteca" color={C.gold} />
+            <KpiCard label="Episódios" value={`${episodeCostList.length}`} sub={`custo total: $${episodeCostList.reduce((s, [, d]) => s + d.totalCost, 0).toFixed(2)}`} color={C.green} />
           </div>
 
           {/* Top criadores + Engines */}
@@ -1584,6 +1633,34 @@ function AdminPanel({
             )
             })()}
           </div>
+
+          {/* Custo por Episódio */}
+          {episodeCostList.length > 0 && (
+            <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>
+                Custo por episódio
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, padding: '6px 0', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+                  <div>EPISÓDIO</div>
+                  <div>CENAS</div>
+                  <div style={{ textAlign: 'right' }}>CUSTO</div>
+                </div>
+                {episodeCostList.map(([epId, data]) => (
+                  <div key={epId} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, padding: '8px 0', fontSize: 12, borderBottom: `1px solid ${C.border}80` }}>
+                    <div style={{ color: C.text, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{data.name}</div>
+                    <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{data.sceneCount}</div>
+                    <div style={{ color: C.green, fontWeight: 700, fontFamily: 'monospace', textAlign: 'right' }}>${data.totalCost.toFixed(2)}</div>
+                  </div>
+                ))}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 10, padding: '10px 0 0', fontSize: 13, fontWeight: 700, borderTop: `2px solid ${C.border}`, marginTop: 4 }}>
+                  <div style={{ color: C.text }}>TOTAL</div>
+                  <div style={{ color: C.textDim, fontFamily: 'monospace' }}>{episodeCostList.reduce((s, [, d]) => s + d.sceneCount, 0)}</div>
+                  <div style={{ color: C.green, fontFamily: 'monospace', textAlign: 'right' }}>${episodeCostList.reduce((s, [, d]) => s + d.totalCost, 0).toFixed(2)}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1670,7 +1747,7 @@ function UserDetailModal({ userId, users, events, monthLabel, onClose }: {
           {([
             ['Total gasto', `$${totalCost.toFixed(2)}`, C.green],
             ['Cenas', `${scenesCount}`, C.blue],
-            ['Imagens', `${imagesCount}`, C.purple],
+            ['Custo médio/cena', scenesCount > 0 ? `$${(totalCost / scenesCount).toFixed(2)}` : '—', C.purple],
             ['Director', `${directorCount}`, C.gold],
           ] as [string, string, string][]).map(([lbl, val, col]) => (
             <div key={lbl} style={{ background: C.surface, border: `1px solid ${col}40`, borderRadius: 10, padding: 14 }}>

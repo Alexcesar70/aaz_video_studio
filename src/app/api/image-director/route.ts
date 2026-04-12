@@ -102,6 +102,7 @@ export async function POST(request: NextRequest) {
 
     const claudeData = await claudeRes.json() as {
       content: { type: string; text: string }[]
+      usage?: { input_tokens?: number; output_tokens?: number }
     }
 
     const text = claudeData.content
@@ -134,8 +135,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Activity event — Claude sonnet, output bem menor que scene director
-    // (~1 prompt × 200 tokens). Custo estimado: ~$0.005 por chamada
+    // Activity event — custo real do Claude sonnet calculado a partir de usage tokens
+    // Preço Claude sonnet: $3/M input, $15/M output
+    const inputTokens = claudeData.usage?.input_tokens ?? 0
+    const outputTokens = claudeData.usage?.output_tokens ?? 0
+    const realCost = (inputTokens * 3 / 1_000_000) + (outputTokens * 15 / 1_000_000)
+    const costSource = (inputTokens > 0 || outputTokens > 0) ? 'real' : 'estimated'
+    const cost = costSource === 'real' ? realCost : 0.005
+
     const authUser = getAuthUser(request)
     if (authUser) {
       emitEvent({
@@ -145,8 +152,15 @@ export async function POST(request: NextRequest) {
         userRole: authUser.role,
         type: 'image_director_called',
         meta: {
-          cost: 0.005,
+          cost,
           assetType: body.type,
+          extra: {
+            costSource,
+            estimatedCostUsd: 0.005,
+            realCostUsd: costSource === 'real' ? realCost : null,
+            inputTokens,
+            outputTokens,
+          },
         },
       }).catch(() => {})
     }
