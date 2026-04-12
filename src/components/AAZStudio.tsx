@@ -1366,16 +1366,16 @@ function AdminPanel({
           {/* KPIs — linha 1 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             <KpiCard label="Gasto este mês" value={`$${computedMonthlyCost.toFixed(2)}${showBrl && brlRate ? ` (~R$${(computedMonthlyCost * brlRate).toFixed(2)})` : ''}`} sub={isCurrentMonth ? `projeção: ~$${projectedCost.toFixed(2)}` : monthLabel} color={C.green} />
-            <KpiCard label="Saldo Segmind" value={segmindBalance !== null ? `$${segmindBalance.toFixed(2)}` : '—'} sub={segmindBalance !== null && segmindBalance < 10 ? 'SALDO BAIXO' : 'conta ativa'} color={segmindBalance !== null && segmindBalance < 10 ? C.red : C.blue} />
-            <KpiCard label="Custo médio/cena" value={`$${avgCostPerScene.toFixed(2)}`} sub={`${sceneEvents.length} cenas no mês`} color={C.purple} />
-            <KpiCard label="Aproveitamento" value={`${utilizationRate.toFixed(0)}%`} sub={`${scenesInEpisodes}/${totalSavedScenes} em episódios`} color={utilizationRate >= 60 ? C.green : utilizationRate >= 30 ? C.gold : C.red} />
+            <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
+            <KpiCard label="Custo médio/cena" value={`$${avgCostPerScene.toFixed(2)}`} sub={`${sceneEvents.length} cenas no mês`} color={C.blue} />
+            <KpiCard label="Gerações hoje" value={`${monthlyEvents.filter(e => e.type === 'scene_generated' && e.timestamp.slice(0, 10) === new Date().toISOString().slice(0, 10)).length}`} sub="cenas de vídeo" color={C.gold} />
           </div>
           {/* KPIs — linha 2 */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-            <KpiCard label="Criadores ativos" value={`${activeUsers7d.length}/${users.length}`} sub="últimos 7 dias" color={C.purple} />
             <KpiCard label="Cenas (semana)" value={`${scenesThisWeek}`} sub="vídeos gerados" color={C.blue} />
             <KpiCard label="Assets (semana)" value={`${assetsThisWeek}`} sub="novos na biblioteca" color={C.gold} />
             <KpiCard label="Episódios" value={`${episodeCostList.length}`} sub={`custo total: $${episodeCostList.reduce((s, [, d]) => s + d.totalCost, 0).toFixed(2)}`} color={C.green} />
+            <KpiCard label="Aproveitamento" value={`${utilizationRate.toFixed(0)}%`} sub={`${scenesInEpisodes}/${totalSavedScenes} em episódios`} color={utilizationRate >= 60 ? C.green : utilizationRate >= 30 ? C.gold : C.red} />
           </div>
 
           {/* BRL disclaimer */}

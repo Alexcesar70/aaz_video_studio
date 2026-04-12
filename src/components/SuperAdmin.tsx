@@ -8,7 +8,7 @@ const C = {
   red: '#F87171', purple: '#A78BFA', text: '#E8E8F0', textDim: '#9898B0',
 }
 
-type View = 'dashboard' | 'orgs' | 'plans' | 'users' | 'financial'
+type View = 'dashboard' | 'orgs' | 'plans' | 'users' | 'financial' | 'pricing'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type D = Record<string, any>
@@ -505,7 +505,98 @@ const NAV: { id: View; label: string; icon: string }[] = [
   { id: 'plans', label: 'Planos', icon: '📋' },
   { id: 'users', label: 'Usuários', icon: '👥' },
   { id: 'financial', label: 'Financeiro', icon: '💰' },
+  { id: 'pricing', label: 'Precificação', icon: '🏷' },
 ]
+
+function PricingView() {
+  const [config, setConfig] = useState<D | null>(null)
+  const [engines, setEngines] = useState<D[]>([])
+  const [newMargin, setNewMargin] = useState('')
+  const [msg, setMsg] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    fetch('/api/admin/pricing').then(r => r.json()).then(d => {
+      setConfig(d.config ?? null)
+      setEngines(d.engines ?? [])
+      if (d.config) setNewMargin(d.config.marginFactor.toString())
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+  useEffect(load, [load])
+
+  const updateMargin = async () => {
+    const f = parseFloat(newMargin)
+    if (!f || f < 1) { setMsg('Fator mínimo: 1.0'); return }
+    const r = await fetch('/api/admin/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_margin', marginFactor: f }) })
+    if (r.ok) { const d = await r.json(); setConfig(d.config); setEngines(d.engines); setMsg('Margem atualizada! Todos os preços recalculados.') }
+    else setMsg('Erro ao atualizar margem')
+  }
+
+  const updateBaseCost = async (engineId: string, newCost: string) => {
+    const cost = parseFloat(newCost)
+    if (!cost || cost <= 0) return
+    const r = await fetch('/api/admin/pricing', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update_engine', engine: { engineId, baseCost: cost } }) })
+    if (r.ok) { load(); setMsg(`Custo base de ${engineId} atualizado`) }
+  }
+
+  const inputStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 8px', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', width: 80, textAlign: 'right' as const }
+  const btnStyle = { background: C.gold, border: 'none', borderRadius: 6, padding: '8px 14px', color: '#000', fontSize: 12, fontWeight: 700 as const, cursor: 'pointer', fontFamily: 'inherit' }
+
+  const unitLabel = (u: string) => u === 'second' ? '/seg' : u === 'image' ? '/img' : '/chamada'
+  const typeLabel = (t: string) => t === 'video' ? '🎬 Vídeo' : t === 'image' ? '🖼 Imagem' : '✨ Director'
+
+  if (loading && engines.length === 0) return <div style={{ color: C.textDim }}>Carregando precificação...</div>
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div style={{ fontSize: 20, fontWeight: 700, color: C.text }}>Precificação</div>
+
+      {/* Margem global */}
+      <div style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 12, padding: 18 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Fator de margem global</div>
+        <div style={{ fontSize: 11, color: C.textDim, marginBottom: 12 }}>
+          Preço do cliente = Custo médio × Fator. Ex: fator 1.4 = 40% de margem.
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="number" step="0.1" min="1" max="10" value={newMargin} onChange={e => setNewMargin(e.target.value)} style={{ ...inputStyle, width: 100 }} />
+          <span style={{ fontSize: 12, color: C.textDim }}>× ({config ? `${((config.marginFactor - 1) * 100).toFixed(0)}% de margem` : ''})</span>
+          <button onClick={updateMargin} style={btnStyle}>Aplicar</button>
+        </div>
+        {msg && <div style={{ fontSize: 12, color: msg.includes('Erro') ? C.red : C.green, marginTop: 8 }}>{msg}</div>}
+      </div>
+
+      {/* Tabela de engines */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 0.8fr', gap: 8, padding: '10px 16px', fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', borderBottom: `1px solid ${C.border}` }}>
+          <div>ENGINE</div><div>TIPO</div><div>UNIDADE</div><div>CUSTO BASE</div><div>MARGEM</div><div>PREÇO CLIENTE</div><div>AMOSTRAS</div>
+        </div>
+        {engines.map(e => (
+          <div key={e.engineId} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 1fr 0.8fr', gap: 8, padding: '10px 16px', fontSize: 12, borderBottom: `1px solid ${C.border}80`, alignItems: 'center' }}>
+            <div style={{ color: C.text, fontWeight: 600 }}>{e.engineName}</div>
+            <div style={{ color: C.textDim }}>{typeLabel(e.type)}</div>
+            <div style={{ color: C.textDim }}>{unitLabel(e.unit)}</div>
+            <div>
+              <input
+                type="number" step="0.001" defaultValue={e.baseCost.toFixed(4)}
+                onBlur={ev => { if (ev.target.value !== e.baseCost.toFixed(4)) updateBaseCost(e.engineId, ev.target.value) }}
+                style={inputStyle}
+              />
+            </div>
+            <div style={{ color: C.gold, fontFamily: 'monospace', fontWeight: 700 }}>×{config?.marginFactor ?? 1.4}</div>
+            <div style={{ color: C.green, fontFamily: 'monospace', fontWeight: 700 }}>${e.clientPrice.toFixed(4)}</div>
+            <div style={{ color: C.textDim, fontSize: 11 }}>{e.sampleCount > 0 ? `${e.sampleCount} calls` : 'inicial'}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 11, color: C.textDim, fontStyle: 'italic' }}>
+        O custo base é atualizado automaticamente a partir da média das últimas 20 chamadas reais por engine.
+        Enquanto não houver chamadas, usa os valores iniciais. Ao alterar a margem, todos os preços são recalculados.
+      </div>
+    </div>
+  )
+}
 
 export function SuperAdmin() {
   const [view, setView] = useState<View>('dashboard')
@@ -539,6 +630,7 @@ export function SuperAdmin() {
         {view === 'plans' && <PlansView />}
         {view === 'users' && <UsersView />}
         {view === 'financial' && <FinancialView />}
+        {view === 'pricing' && <PricingView />}
       </div>
     </div>
   )
