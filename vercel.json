@@ -1,17 +1,16 @@
 {
-  "framework": "nextjs",
-  "buildCommand": "next build",
-  "devCommand": "next dev",
-  "installCommand": "npm install",
   "functions": {
     "src/app/api/generate/route.ts": {
-      "maxDuration": 120
+      "maxDuration": 300
     },
     "src/app/api/generate-sheet/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/generate-image/route.ts": {
       "maxDuration": 120
     },
     "src/app/api/scene-director/route.ts": {
-      "maxDuration": 30
+      "maxDuration": 60
     }
   }
 }
