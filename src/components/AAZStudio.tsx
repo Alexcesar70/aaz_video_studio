@@ -4375,17 +4375,6 @@ export function AAZStudio() {
         ] as [string, string][]).map(([id, lbl]) => (
           <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${id === 'admin' ? C.gold : C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
-        {/* Filtro Meus/Equipe/Todos */}
-        <div style={{ display: 'flex', gap: 2, marginLeft: 'auto', background: C.card, borderRadius: 6, padding: 2, alignItems: 'center' }}>
-          {([['mine', 'Meus'], ['team', 'Equipe'], ['all', 'Todos']] as [typeof assetOwnerFilter, string][]).map(([id, lbl]) => (
-            <button key={id} onClick={() => setAssetOwnerFilter(id)} style={{
-              background: assetOwnerFilter === id ? C.surface : 'transparent',
-              border: assetOwnerFilter === id ? `1px solid ${C.border}` : '1px solid transparent',
-              borderRadius: 5, padding: '4px 10px', cursor: 'pointer',
-              fontSize: 11, fontWeight: 600, color: assetOwnerFilter === id ? C.text : C.textDim, fontFamily: 'inherit',
-            }}>{lbl}</button>
-          ))}
-        </div>
       </div>
 
       {/* ══════════ ESTÚDIO ══════════ */}
@@ -5674,6 +5663,20 @@ export function AAZStudio() {
             ] as [typeof libTab, string][]).map(([id, lbl]) => (
               <button key={id} onClick={() => setLibTab(id)} style={{ flex: 1, padding: '10px', borderRadius: 8, background: libTab === id ? C.surface : 'transparent', border: libTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: libTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
             ))}
+          </div>
+
+          {/* Filtro de propriedade */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: C.textDim }}>Exibindo:</span>
+            <select
+              value={assetOwnerFilter}
+              onChange={e => setAssetOwnerFilter(e.target.value as typeof assetOwnerFilter)}
+              style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: '6px 10px', color: C.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit', outline: 'none', cursor: 'pointer' }}
+            >
+              <option value="mine">Meus assets</option>
+              <option value="team">Assets da equipe</option>
+              <option value="all">Todos os assets</option>
+            </select>
           </div>
 
           {/* ═══ PERSONAGENS ═══ */}
