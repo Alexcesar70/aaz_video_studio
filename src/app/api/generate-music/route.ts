@@ -21,7 +21,7 @@ import { getClientPrice, recordEngineCost } from '@/lib/pricing'
 
 export const maxDuration = 120
 
-const SUNO_API_BASE = 'https://apibox.erweima.ai'
+const SUNO_API_BASE = 'https://api.sunoapi.org'
 
 export async function POST(request: NextRequest) {
   try {

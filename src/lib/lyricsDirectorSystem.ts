@@ -48,6 +48,13 @@ Estruture a letra assim:
 - Evite linguagem religiosa pesada (sem "pecado", "condenação", etc.)
 - Prefira: "Jesus cuida", "Deus é amor", "somos amigos de Deus"
 - A cantiga deve durar ~1-2 minutos quando cantada
+- PROIBIDO incluir descrições narrativas, direções de cena ou indicações de quem fala/canta
+  Exemplos do que NÃO colocar na letra:
+  ✗ "Abigail fala para Zaqueu"
+  ✗ "(Abraão cantando)"
+  ✗ "Miriã sussurra"
+  A letra é SOMENTE o texto cantável — sem anotações de palco, falas ou narrações.
+  Direções visuais ficam para o roteiro de cenas (storyboard), não na letra.
 
 ## SAÍDA
 Retorne APENAS a letra formatada, sem explicações. Use markdown simples:
