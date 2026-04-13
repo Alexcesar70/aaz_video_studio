@@ -6653,7 +6653,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
   const [refraoCount, setRefraoCount] = useState(1)
   const [useRhyme, setUseRhyme] = useState(true)
   const [musicLoading, setMusicLoading] = useState(false)
-  const [storyboard, setStoryboard] = useState<{ cena: number; trecho: string; duracao: number; personagens: string[]; cenario: string; acao: string; prompt_en: string }[]>([])
+  const [storyboard, setStoryboard] = useState<{ cena: number; trecho: string; duracao: number; personagens: string[]; cenario: string; acao: string; prompt_en: string; videoUrl?: string; videoStatus?: string }[]>([])
   const [storyboardLoading, setStoryboardLoading] = useState(false)
   const [error, setError] = useState('')
   const [assetsPhase, setAssetsPhase] = useState(false)
@@ -7208,47 +7208,75 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
       )}
 
       {/* PASSO 4: Produção */}
-      {step === 4 && (
+      {step === 4 && (() => {
+        const scenesReady = storyboard.filter(s => s.videoUrl).length
+        const allReady = scenesReady === storyboard.length && storyboard.length > 0
+        return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Produção</div>
-          <div style={{ background: `${C.green}10`, border: `1px solid ${C.green}30`, borderRadius: 12, padding: 18 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginBottom: 8 }}>✓ Tudo pronto para produzir!</div>
-            <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.6 }}>
-              1. Crie os <strong>Character Sheets</strong> no Atelier (se ainda não criou)<br />
-              2. Clique <strong>"Gerar esta cena →"</strong> em cada cena abaixo — vai pro Estúdio com prompt e personagens prontos<br />
-              3. O Seedance gera o vídeo de cada cena com áudio ambiente<br />
-              4. Na <strong>edição final</strong> (CapCut/Premiere), sobreponha a cantiga ao vídeo montado
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Produção · {scenesReady}/{storyboard.length} cenas</div>
+            <div style={{ height: 6, width: 120, background: C.card, borderRadius: 3 }}>
+              <div style={{ height: '100%', width: `${storyboard.length > 0 ? (scenesReady / storyboard.length) * 100 : 0}%`, background: C.green, borderRadius: 3 }} />
             </div>
           </div>
-          {musicUrl && (
+
+          {allReady && (
+            <div style={{ background: `${C.green}10`, border: `1px solid ${C.green}30`, borderRadius: 12, padding: 18, textAlign: 'center' }}>
+              <div style={{ fontSize: 20, marginBottom: 8 }}>🎉</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.green, marginBottom: 6 }}>Cantiga completa!</div>
+              <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>{title} · {storyboard.length} cenas · Na edição final, sobreponha a cantiga do Suno ao vídeo.</div>
+              {musicUrl && <div style={{ marginBottom: 8 }}><audio controls src={musicUrl} style={{ width: '100%', maxWidth: 400 }} /></div>}
+              <button onClick={() => { autoSave({ status: 'completed' }); setMode(null); loadMinhasCantigas() }} style={btnPrimary}>✓ Finalizar cantiga</button>
+            </div>
+          )}
+
+          {!allReady && (
             <div style={{ background: C.card, borderRadius: 10, padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>Áudio da cantiga (para edição final)</div>
+              <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.6 }}>
+                Clique <strong>"Gerar esta cena →"</strong> para ir ao Estúdio com tudo preenchido.<br />
+                Na edição final, sobreponha a cantiga ao vídeo montado.
+              </div>
+            </div>
+          )}
+
+          {musicUrl && !allReady && (
+            <div style={{ background: C.surface, borderRadius: 10, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 4 }}>Cantiga (para edição final)</div>
               <audio controls src={musicUrl} style={{ width: '100%' }} />
             </div>
           )}
-          <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Cenas do roteiro:</div>
+
           {storyboard.map((s, i) => (
-            <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+            <div key={i} style={{ background: C.card, border: `1px solid ${s.videoUrl ? C.green + '60' : C.border}`, borderRadius: 10, padding: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: s.videoUrl ? C.green : C.textDim }}>{s.videoUrl ? '✓' : '○'}</span>
                   <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>Cena {s.cena}</span>
-                  <span style={{ fontSize: 11, color: C.textDim }}> · {s.duracao}s</span>
+                  <span style={{ fontSize: 11, color: C.textDim }}>{s.duracao}s</span>
                 </div>
-                {onGoToStudio && (
-                  <button onClick={() => onGoToStudio(s.prompt_en, musicUrl, s.duracao, s.personagens ?? [])} style={{ background: C.purple, border: 'none', borderRadius: 6, padding: '6px 14px', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Gerar esta cena →</button>
-                )}
+                {s.videoUrl ? (
+                  <a href={s.videoUrl} download style={{ fontSize: 11, color: C.blue, textDecoration: 'none' }}>⬇ Download</a>
+                ) : onGoToStudio ? (
+                  <button onClick={() => onGoToStudio(s.prompt_en, musicUrl, s.duracao, s.personagens ?? [])} style={{ background: C.purple, border: 'none', borderRadius: 6, padding: '6px 14px', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Gerar esta cena →</button>
+                ) : null}
               </div>
-              <div style={{ fontSize: 11, color: C.purple, fontStyle: 'italic', marginBottom: 4 }}>"{s.trecho}"</div>
-              <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{s.acao}</div>
-              <div style={{ fontSize: 10, color: C.textDim, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {s.personagens?.map(p => <span key={p} style={{ background: `${C.purple}20`, border: `1px solid ${C.purple}30`, borderRadius: 4, padding: '1px 6px' }}>@{p}</span>)}
-                {musicUrl && <span style={{ background: `${C.green}20`, border: `1px solid ${C.green}30`, borderRadius: 4, padding: '1px 6px' }}>@Audio1</span>}
+              {s.videoUrl && (
+                <video src={s.videoUrl} controls muted playsInline preload="metadata" style={{ width: '100%', maxWidth: 320, borderRadius: 8, marginBottom: 6 }} />
+              )}
+              <div style={{ fontSize: 11, color: C.purple, fontStyle: 'italic' }}>"{s.trecho}"</div>
+              <div style={{ fontSize: 10, color: C.textDim, display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                {s.personagens?.map(p => <span key={p} style={{ background: `${C.purple}15`, borderRadius: 3, padding: '1px 5px' }}>@{p}</span>)}
               </div>
             </div>
           ))}
-          <button onClick={() => { setMode(null); setStep(1); setLyrics(''); setMusicUrl(''); setStoryboard([]) }} style={btnSecondary}>← Começar nova cantiga</button>
+
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => { setAssetsPhase(true); setStep(3) }} style={btnSecondary}>← Voltar aos assets</button>
+            <button onClick={() => { setMode(null); loadMinhasCantigas() }} style={btnSecondary}>Salvar e sair</button>
+          </div>
         </div>
-      )}
+        )
+      })()}
       </>)}
     </div>
   )
