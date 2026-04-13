@@ -131,23 +131,40 @@ export async function POST(request: NextRequest) {
         if (!wc.allowed) return NextResponse.json({ error: wc.reason }, { status: 402 })
       }
 
-      // Step 1: Design preview
-      const designRes = await fetch(`${ELEVEN_BASE}/text-to-voice/create-previews`, {
-        method: 'POST',
-        headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ voice_description: description, text: 'Olá! Eu sou um personagem do AAZ com Jesus. Vamos compartilhar e cuidar uns dos outros!' }),
-      })
+      // Step 1: Design previews (gera 3 variações)
+      const previews: { id: string; audioUrl: string }[] = []
+      for (let i = 0; i < 3; i++) {
+        try {
+          const designRes = await fetch(`${ELEVEN_BASE}/text-to-voice/design`, {
+            method: 'POST',
+            headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              voice_description: description,
+              text: 'Olá! Eu sou um personagem especial. Vamos compartilhar e cuidar uns dos outros!',
+            }),
+          })
 
-      if (!designRes.ok) {
-        const err = await designRes.text().catch(() => '')
-        return NextResponse.json({ error: `ElevenLabs design: ${err.slice(0, 200)}` }, { status: designRes.status })
+          if (!designRes.ok) {
+            const err = await designRes.text().catch(() => '')
+            console.error(`[generate-voice] Design preview ${i + 1} error:`, designRes.status, err.slice(0, 200))
+            if (i === 0) return NextResponse.json({ error: `ElevenLabs: ${err.slice(0, 200)}` }, { status: designRes.status })
+            continue
+          }
+
+          const designData = await designRes.json()
+          console.log(`[generate-voice] Design preview ${i + 1}:`, JSON.stringify(designData).slice(0, 300))
+          const voiceId = designData.generated_voice_id ?? designData.voice_id
+          const audioBase64 = designData.audio_base_64 ?? designData.audio
+          if (voiceId) {
+            previews.push({
+              id: voiceId,
+              audioUrl: audioBase64 ? `data:audio/mpeg;base64,${audioBase64}` : '',
+            })
+          }
+        } catch (err) {
+          console.error(`[generate-voice] Design preview ${i + 1} exception:`, err)
+        }
       }
-
-      const designData = await designRes.json()
-      const previews = (designData.previews ?? []).map((p: Record<string, unknown>) => ({
-        id: p.generated_voice_id,
-        audioUrl: p.audio_base_64 ? `data:audio/mpeg;base64,${p.audio_base_64}` : '',
-      }))
 
       // Wallet deduction
       if (walletId && designCost > 0) {
@@ -162,7 +179,7 @@ export async function POST(request: NextRequest) {
       const { voicePreviewId, name } = body
       if (!voicePreviewId || !name) return NextResponse.json({ error: 'voicePreviewId e name obrigatórios.' }, { status: 400 })
 
-      const res = await fetch(`${ELEVEN_BASE}/text-to-voice/create-voice-from-preview`, {
+      const res = await fetch(`${ELEVEN_BASE}/text-to-voice`, {
         method: 'POST',
         headers: { 'xi-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ voice_name: name, voice_description: body.description ?? '', generated_voice_id: voicePreviewId }),
