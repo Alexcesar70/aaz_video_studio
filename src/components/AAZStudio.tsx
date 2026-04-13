@@ -6701,7 +6701,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
     if (!voiceSuggestion.trim()) return
     setVoiceLoading(true); setVoicePreviews([])
     try {
-      const r = await fetch('/api/voice/design', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: voiceSuggestion, sampleText: 'Olá! Eu sou um personagem muito especial e estou aqui para contar histórias incríveis. Vamos compartilhar, cuidar uns dos outros e viver grandes aventuras juntos! Cada dia é uma oportunidade de aprender algo novo.' }) })
+      const r = await fetch('/api/voice/design', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: voiceSuggestion, sampleText: 'Olá! Eu sou um personagem muito especial e estou aqui para contar histórias incríveis para vocês. Vamos compartilhar, cuidar uns dos outros e viver grandes aventuras juntos! Cada dia é uma oportunidade nova de aprender algo importante. Quando a gente divide o que tem, tudo fica melhor. Eu gosto de brincar no quintal, de correr com os amigos e de ouvir histórias antes de dormir. Às vezes eu fico com medo, mas daí eu lembro que nunca estou sozinho. Vocês querem vir comigo nessa aventura? Então vamos lá, que o dia está só começando e tem muita coisa boa esperando por nós!' }) })
       if (r.ok) { const d = await r.json(); setVoicePreviews(d.previews ?? []) }
       else setMsg('Erro ao gerar previews')
     } catch { setMsg('Erro de rede') }
