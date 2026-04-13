@@ -6595,7 +6595,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
   const [lyrics, setLyrics] = useState('')
   const [lyricsLoading, setLyricsLoading] = useState(false)
   const [title, setTitle] = useState('')
-  const [style, setStyle] = useState("children's christian song, gentle acoustic guitar, warm female vocals, Brazilian Portuguese")
+  const [style, setStyle] = useState("children's christian song, gentle acoustic guitar, warm and sweet child female vocals singing in Brazilian Portuguese, São Paulo accent")
   const [musicUrl, setMusicUrl] = useState('')
   const [uploadedAudioUrl, setUploadedAudioUrl] = useState('')
   const [musicDuration, setMusicDuration] = useState('1:30')
@@ -6874,10 +6874,14 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
       {/* PASSO 3: Roteiro Visual */}
       {step === 3 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Roteiro Visual — {storyboard.length} cenas</div>
           {storyboardLoading ? (
-            <div style={{ color: C.textDim, padding: 20, textAlign: 'center' }}>✨ Claude está criando o roteiro visual...</div>
-          ) : storyboard.length > 0 ? (
+            <div style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 12, padding: 40, textAlign: 'center' }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>✨</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Claude está criando o roteiro visual...</div>
+              <div style={{ fontSize: 12, color: C.textDim }}>Dividindo a letra em cenas com prompts otimizados para o Seedance. Aguarde.</div>
+            </div>
+          ) : storyboard.length > 0 ? (<>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Roteiro Visual — {storyboard.length} cenas</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {storyboard.map((s, i) => (
                 <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
@@ -6891,13 +6895,17 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
                 </div>
               ))}
             </div>
-          ) : (
-            <button onClick={generateStoryboard} style={btnPrimary}>✨ Gerar Roteiro Visual</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setStep(2)} style={btnSecondary}>← Voltar</button>
+              <button onClick={() => setStep(4)} style={btnPrimary}>Próximo: Produção →</button>
+            </div>
+          </>) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: 20 }}>
+              <div style={{ fontSize: 13, color: C.textDim }}>O roteiro visual ainda não foi gerado.</div>
+              <button onClick={generateStoryboard} style={btnPrimary}>✨ Gerar Roteiro Visual</button>
+              <button onClick={() => setStep(2)} style={btnSecondary}>← Voltar</button>
+            </div>
           )}
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setStep(2)} style={btnSecondary}>← Voltar</button>
-            <button onClick={() => setStep(4)} disabled={!storyboard.length} style={{ ...btnPrimary, opacity: storyboard.length ? 1 : 0.4 }}>Próximo: Produção →</button>
-          </div>
         </div>
       )}
 
