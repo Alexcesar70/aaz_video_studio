@@ -5285,16 +5285,43 @@ export function AAZStudio() {
             clientPrices={clientPrices}
             showBrl={showBrl}
             brlRate={brlRate}
-            onGoToStudio={(prompt, audioUrl, dur, chars) => {
+            onGoToStudio={(prompt, _audioUrl, dur, chars) => {
               setTab('studio')
               setMode('omni_reference')
-              setPrompts(prev => ({ ...prev, en: prompt }))
-              setLang('en')
               setDuration(dur > 0 ? dur : 5)
-              if (audioUrl) setRefAuds([{ url: audioUrl, label: '@audio1', name: 'Cantiga' }])
-              // Seleciona personagens
+              setGenerateAudio(true) // áudio ambiente gerado pelo Seedance
+              setRefAuds([]) // NÃO envia cantiga como ref (limite 15s do Seedance)
+
+              // Seleciona personagens e injeta refs do Character Sheet
               const matched = chars.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean) as Character[]
-              if (matched.length) setSelChars(matched)
+              if (matched.length) {
+                setSelChars(matched)
+                // Injeta character sheets como @Image refs
+                const newRefs: RefItem[] = []
+                for (const char of matched) {
+                  const entry = library[char.id]
+                  if (!entry?.images?.length) continue
+                  let added = 0
+                  for (const img of entry.images) {
+                    if (added >= 3 || newRefs.length >= 9) break
+                    added++
+                    newRefs.push({ url: img, label: `@image${newRefs.length + 1}`, name: char.name, fromLib: true, charId: char.id })
+                  }
+                }
+                if (newRefs.length) setRefImgs(newRefs)
+              }
+
+              // Monta o prompt com @mentions dos personagens
+              let finalPrompt = prompt
+              chars.forEach((charId, i) => {
+                const char = CHARACTERS.find(c => c.id === charId)
+                if (char) {
+                  // Adiciona @imageN ao final do prompt para referenciar o character sheet
+                  finalPrompt += ` @image${i + 1} is ${char.name}.`
+                }
+              })
+              setPrompts(prev => ({ ...prev, en: finalPrompt }))
+              setLang('en')
             }}
           />
         </div>
@@ -6916,15 +6943,15 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
           <div style={{ background: `${C.green}10`, border: `1px solid ${C.green}30`, borderRadius: 12, padding: 18 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.green, marginBottom: 8 }}>✓ Tudo pronto para produzir!</div>
             <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.6 }}>
-              1. Vá ao <strong>Atelier</strong> e crie os Character Sheets dos personagens da cantiga<br />
-              2. Volte ao <strong>Estúdio</strong> e gere cada cena usando os prompts do roteiro<br />
-              3. Use o áudio da cantiga como <strong>@Audio1</strong> no Omni Reference<br />
-              4. Monte o episódio com todas as cenas na ordem do roteiro
+              1. Crie os <strong>Character Sheets</strong> no Atelier (se ainda não criou)<br />
+              2. Clique <strong>"Gerar esta cena →"</strong> em cada cena abaixo — vai pro Estúdio com prompt e personagens prontos<br />
+              3. O Seedance gera o vídeo de cada cena com áudio ambiente<br />
+              4. Na <strong>edição final</strong> (CapCut/Premiere), sobreponha a cantiga ao vídeo montado
             </div>
           </div>
           {musicUrl && (
             <div style={{ background: C.card, borderRadius: 10, padding: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>Áudio da cantiga (use como @Audio1)</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>Áudio da cantiga (para edição final)</div>
               <audio controls src={musicUrl} style={{ width: '100%' }} />
             </div>
           )}
