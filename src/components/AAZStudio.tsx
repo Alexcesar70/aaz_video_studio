@@ -6690,6 +6690,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
     { id: 'abigail', name: 'Abigail', emoji: '👧', desc: '7 year old girl, dark curly hair, curious and empathetic' },
     { id: 'zaqueu', name: 'Zaqueu', emoji: '🧑', desc: '9 year old boy, mini-dreads, creative and sometimes insecure' },
     { id: 'tuba', name: 'Tuba', emoji: '🐕', desc: 'Dog, amber-orange fur, expressive eyebrows' },
+    { id: 'theos', name: 'Theos', emoji: '✨', desc: 'Invisible divine presence, speaks directly to the viewer with a warm omniscient voice, never seen but always felt' },
     { id: 'miriam', name: 'Miriã', emoji: '👩', desc: 'Adult mother, curly hair, warm and guiding' },
     { id: 'elias', name: 'Elias', emoji: '👨', desc: 'Adult father, short beard, calm and impactful' },
   ]
