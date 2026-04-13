@@ -5280,7 +5280,23 @@ export function AAZStudio() {
       {/* ══════════ CANTIGAS — Produção de cantigas infantis ══════════ */}
       {tab === 'cantigas' && (
         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <CantigasWizard currentUser={currentUser} clientPrices={clientPrices} showBrl={showBrl} brlRate={brlRate} />
+          <CantigasWizard
+            currentUser={currentUser}
+            clientPrices={clientPrices}
+            showBrl={showBrl}
+            brlRate={brlRate}
+            onGoToStudio={(prompt, audioUrl, dur, chars) => {
+              setTab('studio')
+              setMode('omni_reference')
+              setPrompts(prev => ({ ...prev, en: prompt }))
+              setLang('en')
+              setDuration(dur > 0 ? dur : 5)
+              if (audioUrl) setRefAuds([{ url: audioUrl, label: '@audio1', name: 'Cantiga' }])
+              // Seleciona personagens
+              const matched = chars.map(id => CHARACTERS.find(c => c.id === id)).filter(Boolean) as Character[]
+              if (matched.length) setSelChars(matched)
+            }}
+          />
         </div>
       )}
 
@@ -6564,12 +6580,14 @@ function AddRefModal({
 ═══════════════════════════════════════════════════════════════ */
 
 /* ══════════ CANTIGAS WIZARD ══════════ */
-function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate }: {
+function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStudio }: {
   currentUser: CurrentUser | null
   clientPrices: Record<string, number>
   showBrl?: boolean
   brlRate?: number | null
+  onGoToStudio?: (prompt: string, audioUrl: string, duration: number, chars: string[]) => void
 }) {
+  const [mode, setMode] = useState<'create' | 'upload' | null>(null)
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
   const [idea, setIdea] = useState('')
   const [theme, setTheme] = useState('')
@@ -6579,6 +6597,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate }: {
   const [title, setTitle] = useState('')
   const [style, setStyle] = useState("children's christian song, gentle acoustic guitar, warm female vocals, Brazilian Portuguese")
   const [musicUrl, setMusicUrl] = useState('')
+  const [uploadedAudioUrl, setUploadedAudioUrl] = useState('')
   const [musicLoading, setMusicLoading] = useState(false)
   const [storyboard, setStoryboard] = useState<{ cena: number; trecho: string; duracao: number; personagens: string[]; cenario: string; acao: string; prompt_en: string }[]>([])
   const [storyboardLoading, setStoryboardLoading] = useState(false)
@@ -6649,29 +6668,97 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate }: {
   const btnPrimary = { background: C.gold, border: 'none', borderRadius: 8, padding: '10px 20px', color: '#000', fontSize: 13, fontWeight: 700 as const, cursor: 'pointer', fontFamily: 'inherit' }
   const btnSecondary = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 20px', color: C.textDim, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }
 
+  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const r = await fetch('/api/blob-upload', { method: 'POST', body: formData })
+      if (r.ok) {
+        const d = await r.json()
+        setUploadedAudioUrl(d.url)
+        setMusicUrl(d.url)
+        setTitle(file.name.replace(/\.\w+$/, ''))
+      }
+    } catch { setError('Erro ao fazer upload do áudio.') }
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
         <span style={{ fontSize: 28 }}>🎵</span>
         <div>
           <div style={{ fontSize: 22, fontWeight: 700, color: C.text }}>Cantigas</div>
-          <div style={{ fontSize: 13, color: C.textDim }}>Crie cantigas infantis cristãs do zero — letra, música e roteiro visual.</div>
+          <div style={{ fontSize: 13, color: C.textDim }}>Crie cantigas infantis cristãs do zero ou dê vida à sua cantiga existente.</div>
         </div>
       </div>
 
-      {/* Steps indicator */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
-        {(['Ideia + Letra', 'Música', 'Roteiro Visual', 'Produção']).map((lbl, i) => (
-          <div key={i} style={{ flex: 1, padding: '8px', borderRadius: 6, background: step === i + 1 ? C.gold + '20' : C.card, border: `1px solid ${step === i + 1 ? C.gold : C.border}`, textAlign: 'center', fontSize: 11, fontWeight: 700, color: step === i + 1 ? C.gold : step > i + 1 ? C.green : C.textDim }}>
-            {step > i + 1 ? '✓ ' : ''}{i + 1}. {lbl}
+      {/* Seletor de modo */}
+      {!mode && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div onClick={() => { setMode('create'); setStep(1) }} style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 14, padding: 28, cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.15s' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>✨</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Criar do zero</div>
+            <div style={{ fontSize: 12, color: C.textDim }}>IA escreve a letra, gera a música e cria o roteiro visual cena a cena.</div>
           </div>
-        ))}
-      </div>
+          <div onClick={() => { setMode('upload'); setStep(2) }} style={{ background: C.surface, border: `1px solid ${C.purple}40`, borderRadius: 14, padding: 28, cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.15s' }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>🎤</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Dê vida à sua cantiga!</div>
+            <div style={{ fontSize: 12, color: C.textDim }}>Suba uma cantiga que você já tem (MP3/WAV), cole a letra e gere o roteiro visual.</div>
+          </div>
+        </div>
+      )}
 
-      {error && <div style={{ background: `${C.red}15`, border: `1px solid ${C.red}30`, borderRadius: 8, padding: 12, fontSize: 12, color: C.red, marginBottom: 14 }}>{error}</div>}
+      {mode && (<>
+        {/* Botão voltar ao início */}
+        <div style={{ marginBottom: 12 }}>
+          <button onClick={() => { setMode(null); setStep(1); setLyrics(''); setMusicUrl(''); setStoryboard([]); setError('') }} style={{ background: 'transparent', border: 'none', color: C.blue, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', padding: 0 }}>← Voltar ao início</button>
+        </div>
 
-      {/* PASSO 1: Ideia + Letra */}
-      {step === 1 && (
+        {/* Steps indicator */}
+        <div style={{ display: 'flex', gap: 4, marginBottom: 20 }}>
+          {(mode === 'upload'
+            ? ['Áudio + Letra', 'Roteiro Visual', 'Produção']
+            : ['Ideia + Letra', 'Música', 'Roteiro Visual', 'Produção']
+          ).map((lbl, i) => {
+            const stepNum = mode === 'upload' ? i + 2 : i + 1
+            return (
+              <div key={i} style={{ flex: 1, padding: '8px', borderRadius: 6, background: step === stepNum ? C.gold + '20' : C.card, border: `1px solid ${step === stepNum ? C.gold : C.border}`, textAlign: 'center', fontSize: 11, fontWeight: 700, color: step === stepNum ? C.gold : step > stepNum ? C.green : C.textDim }}>
+                {step > stepNum ? '✓ ' : ''}{lbl}
+              </div>
+            )
+          })}
+        </div>
+
+        {error && <div style={{ background: `${C.red}15`, border: `1px solid ${C.red}30`, borderRadius: 8, padding: 12, fontSize: 12, color: C.red, marginBottom: 14 }}>{error}</div>}
+
+        {/* MODO UPLOAD — Passo 2: Áudio + Letra */}
+        {mode === 'upload' && step === 2 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>SUBA SUA CANTIGA (MP3/WAV)</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input type="file" accept="audio/*" onChange={handleAudioUpload} style={{ fontSize: 12, color: C.textDim }} />
+              </div>
+              {musicUrl && (
+                <div style={{ marginTop: 10 }}>
+                  <audio controls src={musicUrl} style={{ width: '100%' }} />
+                  <div style={{ fontSize: 11, color: C.green, marginTop: 4 }}>✓ Áudio carregado</div>
+                </div>
+              )}
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>COLE A LETRA DA CANTIGA</div>
+              <textarea value={lyrics} onChange={e => setLyrics(e.target.value)} placeholder="Cole aqui a letra da sua cantiga para que o Claude possa criar o roteiro visual..." rows={10} style={{ ...inputStyle, resize: 'vertical', fontFamily: 'monospace', fontSize: 12, lineHeight: 1.6 }} />
+            </div>
+            <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título da cantiga..." style={{ ...inputStyle, maxWidth: 300 }} />
+            <button onClick={() => { if (lyrics.trim() && musicUrl) { setStep(3); generateStoryboard() } else { setError('Suba o áudio e cole a letra.') } }} disabled={!lyrics.trim() || !musicUrl} style={{ ...btnPrimary, alignSelf: 'flex-start', opacity: lyrics.trim() && musicUrl ? 1 : 0.4 }}>Gerar Roteiro Visual →</button>
+          </div>
+        )}
+
+        {/* MODO CRIAR — PASSO 1: Ideia + Letra */}
+        {mode === 'create' && step === 1 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>IDEIA DA CANTIGA</div>
@@ -6794,17 +6881,28 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate }: {
           )}
           <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Cenas do roteiro:</div>
           {storyboard.map((s, i) => (
-            <div key={i} style={{ background: C.card, borderRadius: 8, padding: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <span style={{ fontSize: 12, fontWeight: 700, color: C.gold }}>Cena {s.cena}</span>
-                <span style={{ fontSize: 11, color: C.textDim }}> · {s.duracao}s · {s.personagens?.join(', ')}</span>
-                <div style={{ fontSize: 11, color: C.text, marginTop: 2 }}>{s.acao?.slice(0, 80)}...</div>
+            <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <div>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>Cena {s.cena}</span>
+                  <span style={{ fontSize: 11, color: C.textDim }}> · {s.duracao}s</span>
+                </div>
+                {onGoToStudio && (
+                  <button onClick={() => onGoToStudio(s.prompt_en, musicUrl, s.duracao, s.personagens ?? [])} style={{ background: C.purple, border: 'none', borderRadius: 6, padding: '6px 14px', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>Gerar esta cena →</button>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: C.purple, fontStyle: 'italic', marginBottom: 4 }}>"{s.trecho}"</div>
+              <div style={{ fontSize: 11, color: C.text, marginBottom: 4 }}>{s.acao}</div>
+              <div style={{ fontSize: 10, color: C.textDim, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {s.personagens?.map(p => <span key={p} style={{ background: `${C.purple}20`, border: `1px solid ${C.purple}30`, borderRadius: 4, padding: '1px 6px' }}>@{p}</span>)}
+                {musicUrl && <span style={{ background: `${C.green}20`, border: `1px solid ${C.green}30`, borderRadius: 4, padding: '1px 6px' }}>@Audio1</span>}
               </div>
             </div>
           ))}
-          <button onClick={() => setStep(1)} style={btnSecondary}>← Começar nova cantiga</button>
+          <button onClick={() => { setMode(null); setStep(1); setLyrics(''); setMusicUrl(''); setStoryboard([]) }} style={btnSecondary}>← Começar nova cantiga</button>
         </div>
       )}
+      </>)}
     </div>
   )
 }
