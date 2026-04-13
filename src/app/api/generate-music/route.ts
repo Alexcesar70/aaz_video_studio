@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       prompt: prompt.trim(),
       customMode,
       instrumental,
-      mv: 'chirp-v4',
+      model: 'V4',
     }
     if (customMode) {
       sunoPayload.title = title || 'Cantiga AAZ'
