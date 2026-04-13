@@ -4379,6 +4379,7 @@ export function AAZStudio() {
         {([
           ['studio', 'Estúdio'],
           ['cantigas', '🎵 Cantigas'],
+          ['senoide', '🎙 Senoide'],
           ['atelier', '🎨 Atelier'],
           ['library', 'Assets'],
           ...(isAdminUser ? [['admin', '👑 Admin']] : []),
@@ -5332,6 +5333,13 @@ export function AAZStudio() {
               setLang('en')
             }}
           />
+        </div>
+      )}
+
+      {/* ══════════ SENOIDE — Produção de áudio ══════════ */}
+      {tab === 'senoide' && (
+        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <SenoidePanel currentUser={currentUser} clientPrices={clientPrices} showBrl={showBrl} brlRate={brlRate} library={library} atAssets={filteredAtAssets} />
         </div>
       )}
 
@@ -6629,6 +6637,323 @@ function AddRefModal({
 /* ═══════════════════════════════════════════════════════════════
    Modais de movimentação
 ═══════════════════════════════════════════════════════════════ */
+
+/* ══════════ SENOIDE PANEL ══════════ */
+function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, atAssets }: {
+  currentUser: CurrentUser | null
+  clientPrices: Record<string, number>
+  showBrl?: boolean
+  brlRate?: number | null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  library: Record<string, any>
+  atAssets: Asset[]
+}) {
+  const [subTab, setSubTab] = useState<'learn' | 'voices' | 'dialogues' | 'polyglot'>('voices')
+  const [voiceAction, setVoiceAction] = useState<'describe' | 'clone' | 'library' | null>(null)
+  const [voiceTarget, setVoiceTarget] = useState<string | null>(null) // charId
+  const [voiceSuggestion, setVoiceSuggestion] = useState('')
+  const [voiceLoading, setVoiceLoading] = useState(false)
+  const [voicePreviews, setVoicePreviews] = useState<{ id: string; audioUrl: string }[]>([])
+  const [libraryVoices, setLibraryVoices] = useState<Record<string, unknown>[]>([])
+  const [librarySearch, setLibrarySearch] = useState('')
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const [ttsText, setTtsText] = useState('')
+  const [ttsVoiceId, setTtsVoiceId] = useState('')
+  const [ttsAudioUrl, setTtsAudioUrl] = useState('')
+  const [ttsLoading, setTtsLoading] = useState(false)
+  const [msg, setMsg] = useState('')
+  // Voice assignments: charId → voiceId (persisted in localStorage for now)
+  const [voiceMap, setVoiceMap] = useState<Record<string, { voiceId: string; voiceName: string }>>(() => {
+    try { return JSON.parse(localStorage.getItem('aaz_voice_map') ?? '{}') } catch { return {} }
+  })
+  const saveVoiceMap = (map: Record<string, { voiceId: string; voiceName: string }>) => {
+    setVoiceMap(map); try { localStorage.setItem('aaz_voice_map', JSON.stringify(map)) } catch {}
+  }
+
+  const fmt = (v: number) => showBrl && brlRate ? `R$${(v * brlRate).toFixed(2)}` : `$${v.toFixed(3)}`
+
+  // Characters: leads + custom
+  const LEADS = [
+    { id: 'abraao', name: 'Abraão', emoji: '👦', desc: '8 year old boy, messy orange-red hair, brave and impulsive' },
+    { id: 'abigail', name: 'Abigail', emoji: '👧', desc: '7 year old girl, dark curly hair, curious and empathetic' },
+    { id: 'zaqueu', name: 'Zaqueu', emoji: '🧑', desc: '9 year old boy, mini-dreads, creative and sometimes insecure' },
+    { id: 'tuba', name: 'Tuba', emoji: '🐕', desc: 'Dog, amber-orange fur, expressive eyebrows' },
+    { id: 'miriam', name: 'Miriã', emoji: '👩', desc: 'Adult mother, curly hair, warm and guiding' },
+    { id: 'elias', name: 'Elias', emoji: '👨', desc: 'Adult father, short beard, calm and impactful' },
+  ]
+  const customChars = atAssets.filter(a => a.type === 'character' && !a.isOfficial)
+  const allChars = [...LEADS, ...customChars.map(a => ({ id: a.id, name: a.name, emoji: '🧑', desc: a.description ?? '' }))]
+
+  const suggestVoice = async (charId: string) => {
+    const char = allChars.find(c => c.id === charId)
+    if (!char) return
+    setVoiceLoading(true); setMsg('')
+    try {
+      const r = await fetch('/api/suggest-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ characterName: char.name, characterDescription: char.desc }) })
+      if (r.ok) { const d = await r.json(); setVoiceSuggestion(d.suggestion ?? '') }
+      else setMsg('Erro ao sugerir voz')
+    } catch { setMsg('Erro de rede') }
+    finally { setVoiceLoading(false) }
+  }
+
+  const generatePreviews = async () => {
+    if (!voiceSuggestion.trim()) return
+    setVoiceLoading(true); setVoicePreviews([])
+    try {
+      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'design', description: voiceSuggestion }) })
+      if (r.ok) { const d = await r.json(); setVoicePreviews(d.previews ?? []) }
+      else setMsg('Erro ao gerar previews')
+    } catch { setMsg('Erro de rede') }
+    finally { setVoiceLoading(false) }
+  }
+
+  const saveDesignedVoice = async (previewId: string) => {
+    if (!voiceTarget) return
+    const char = allChars.find(c => c.id === voiceTarget)
+    setVoiceLoading(true)
+    try {
+      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save_voice', voicePreviewId: previewId, name: char?.name ?? voiceTarget, description: voiceSuggestion }) })
+      if (r.ok) { const d = await r.json(); saveVoiceMap({ ...voiceMap, [voiceTarget]: { voiceId: d.voiceId, voiceName: char?.name ?? '' } }); setMsg('✓ Voz salva!'); setVoiceAction(null); setVoicePreviews([]) }
+    } catch { setMsg('Erro ao salvar') }
+    finally { setVoiceLoading(false) }
+  }
+
+  const searchLibrary = async () => {
+    setLibraryLoading(true)
+    try {
+      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list_voices', search: librarySearch }) })
+      if (r.ok) { const d = await r.json(); setLibraryVoices(d.voices ?? []) }
+    } catch {}
+    finally { setLibraryLoading(false) }
+  }
+
+  const generateTTS = async () => {
+    if (!ttsText.trim() || !ttsVoiceId) { setMsg('Escreva o texto e selecione uma voz.'); return }
+    setTtsLoading(true); setTtsAudioUrl('')
+    try {
+      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'tts', text: ttsText, voiceId: ttsVoiceId }) })
+      if (r.ok) { const d = await r.json(); setTtsAudioUrl(d.audioUrl ?? '') }
+      else { const d = await r.json().catch(() => ({})); setMsg(d.error ?? 'Erro ao gerar') }
+    } catch { setMsg('Erro de rede') }
+    finally { setTtsLoading(false) }
+  }
+
+  const inputStyle = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px', color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', width: '100%' }
+  const btnP = { background: C.purple, border: 'none', borderRadius: 8, padding: '10px 18px', color: '#fff', fontSize: 13, fontWeight: 700 as const, cursor: 'pointer', fontFamily: 'inherit' }
+  const btnS = { background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 18px', color: C.textDim, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+        <span style={{ fontSize: 28 }}>🎙</span>
+        <div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: C.text }}>Senoide</div>
+          <div style={{ fontSize: 13, color: C.textDim }}>Crie vozes, diálogos e traduções para seus personagens e cantigas.</div>
+        </div>
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
+        {([['learn', '🎓 Aprender'], ['voices', '🗣 Vozes'], ['dialogues', '🎭 Diálogos'], ['polyglot', '🌍 Poliglota']] as [typeof subTab, string][]).map(([id, lbl]) => (
+          <button key={id} onClick={() => setSubTab(id)} style={{ flex: 1, padding: '10px', borderRadius: 8, background: subTab === id ? C.surface : 'transparent', border: subTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: subTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
+        ))}
+      </div>
+
+      {msg && <div style={{ background: msg.startsWith('✓') ? `${C.green}15` : `${C.red}15`, border: `1px solid ${msg.startsWith('✓') ? C.green : C.red}30`, borderRadius: 8, padding: 10, fontSize: 12, color: msg.startsWith('✓') ? C.green : C.red, marginBottom: 12 }}>{msg}</div>}
+
+      {/* ═══ APRENDER ═══ */}
+      {subTab === 'learn' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Domine a arte de dar voz aos personagens</div>
+          <div style={{ fontSize: 12, color: C.textDim }}>A forma como você escreve muda como a voz soa. Use estas técnicas:</div>
+          {[
+            ['! para entusiasmo', '"Eu quero dividir o pão com você!"'],
+            ['... para hesitação', '"Eu... quero dividir o pão... com você."'],
+            ['CAPS para ênfase', '"EU QUERO dividir o pão com VOCÊ!"'],
+            ['— para pausa', '"Eu quero dividir o pão — com você."'],
+            ['(tom) para direção', '"(sussurrando) Eu quero dividir o pão..."'],
+            ['♪ para cantar', '"♪ Eu quero dividir o pão com você ♪"'],
+          ].map(([tip, example]) => (
+            <div key={tip} style={{ background: C.card, borderRadius: 8, padding: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 4 }}>{tip}</div>
+              <div style={{ fontSize: 13, color: C.text, fontFamily: 'monospace' }}>{example}</div>
+            </div>
+          ))}
+          <div style={{ background: C.surface, borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 8 }}>Laboratório</div>
+            <textarea value={ttsText} onChange={e => setTtsText(e.target.value)} placeholder="Escreva seu texto aqui e ouça como soa..." rows={3} style={{ ...inputStyle, resize: 'vertical', marginBottom: 8 }} />
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <select value={ttsVoiceId} onChange={e => setTtsVoiceId(e.target.value)} style={{ ...inputStyle, width: 200 }}>
+                <option value="">Selecionar voz...</option>
+                {Object.entries(voiceMap).map(([charId, v]) => <option key={charId} value={v.voiceId}>{v.voiceName || charId}</option>)}
+              </select>
+              <button onClick={generateTTS} disabled={ttsLoading} style={{ ...btnP, opacity: ttsLoading ? 0.6 : 1 }}>{ttsLoading ? 'Gerando...' : '▶ Gerar e ouvir'}</button>
+              <span style={{ fontSize: 11, color: C.textDim }}>Custo: {fmt((ttsText.length / 100) * (clientPrices['elevenlabs-tts'] ?? 0.003))}</span>
+            </div>
+            {ttsAudioUrl && <audio controls src={ttsAudioUrl} style={{ width: '100%', marginTop: 10 }} />}
+          </div>
+          <div style={{ fontSize: 10, color: C.textDim, fontStyle: 'italic', marginTop: 8 }}>Diretrizes baseadas nas especificações da ElevenLabs, nosso parceiro oficial de síntese de voz.</div>
+        </div>
+      )}
+
+      {/* ═══ VOZES ═══ */}
+      {subTab === 'voices' && !voiceAction && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Vozes dos Personagens</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
+            {allChars.map(c => {
+              const hasVoice = !!voiceMap[c.id]
+              return (
+                <div key={c.id} style={{ background: C.card, border: `1px solid ${hasVoice ? C.green + '60' : C.border}`, borderRadius: 12, padding: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>{c.emoji}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 4 }}>{c.name}</div>
+                  {hasVoice ? (
+                    <div>
+                      <div style={{ fontSize: 11, color: C.green, marginBottom: 8 }}>🎙✓ Voz configurada</div>
+                      <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
+                        <button onClick={() => { setTtsVoiceId(voiceMap[c.id].voiceId); setTtsText(`Olá! Eu sou ${c.name}.`); generateTTS() }} style={{ ...btnS, padding: '4px 10px', fontSize: 11 }}>▶ Ouvir</button>
+                        <button onClick={() => { setVoiceTarget(c.id); setVoiceAction('describe'); suggestVoice(c.id) }} style={{ ...btnS, padding: '4px 10px', fontSize: 11 }}>✏ Mudar</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setVoiceTarget(c.id); setVoiceAction(null); setVoiceSuggestion(''); setVoicePreviews([]) }} style={{ ...btnP, padding: '6px 14px', fontSize: 12 }}>+ Criar voz</button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          {/* Escolha de método quando voiceTarget setado mas sem action */}
+          {voiceTarget && !voiceAction && (
+            <div style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 12, padding: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Criar voz para {allChars.find(c => c.id === voiceTarget)?.name}</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                <div onClick={() => { setVoiceAction('describe'); suggestVoice(voiceTarget) }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, cursor: 'pointer', textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📝</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Descrever</div>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>IA sugere a voz a partir do personagem</div>
+                </div>
+                <div onClick={() => { setVoiceAction('clone') }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, cursor: 'pointer', textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>🎤</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Clonar</div>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>Grave ou suba áudio de referência</div>
+                </div>
+                <div onClick={() => { setVoiceAction('library'); searchLibrary() }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, cursor: 'pointer', textAlign: 'center' }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>📚</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Biblioteca</div>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>Escolha entre 10.000+ vozes</div>
+                </div>
+              </div>
+              <button onClick={() => { setVoiceTarget(null) }} style={{ ...btnS, marginTop: 12 }}>← Cancelar</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* DESCREVER VOZ */}
+      {subTab === 'voices' && voiceAction === 'describe' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => { setVoiceAction(null) }} style={{ ...btnS, padding: '4px 12px' }}>←</button>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Descrever voz · {allChars.find(c => c.id === voiceTarget)?.name}</div>
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, padding: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 6 }}>SUGESTÃO DA IA</div>
+            <textarea value={voiceSuggestion} onChange={e => setVoiceSuggestion(e.target.value)} rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
+            <div style={{ fontSize: 10, color: C.textDim, marginTop: 4 }}>Edite livremente. Quanto mais detalhada a descrição, melhor o resultado.</div>
+          </div>
+          <button onClick={generatePreviews} disabled={voiceLoading || !voiceSuggestion.trim()} style={{ ...btnP, alignSelf: 'flex-start', opacity: voiceLoading ? 0.6 : 1 }}>{voiceLoading ? 'Gerando...' : '🎙 Gerar 3 previews'}</button>
+          {voicePreviews.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {voicePreviews.map((p, i) => (
+                <div key={i} style={{ background: C.card, borderRadius: 8, padding: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Preview {i + 1}</span>
+                  {p.audioUrl && <audio controls src={p.audioUrl} style={{ flex: 1, height: 32 }} />}
+                  <button onClick={() => saveDesignedVoice(p.id)} disabled={voiceLoading} style={btnP}>Usar esta ✓</button>
+                </div>
+              ))}
+              <button onClick={generatePreviews} style={btnS}>🔄 Gerar novos</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* BIBLIOTECA */}
+      {subTab === 'voices' && voiceAction === 'library' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => { setVoiceAction(null) }} style={{ ...btnS, padding: '4px 12px' }}>←</button>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Biblioteca de Vozes</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={librarySearch} onChange={e => setLibrarySearch(e.target.value)} placeholder="Buscar: feminino, criança, brasileiro..." style={{ ...inputStyle, flex: 1 }} onKeyDown={e => e.key === 'Enter' && searchLibrary()} />
+            <button onClick={searchLibrary} disabled={libraryLoading} style={btnP}>{libraryLoading ? '...' : '🔍 Buscar'}</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {libraryVoices.map((v: Record<string, unknown>) => (
+              <div key={v.id as string} style={{ background: C.card, borderRadius: 8, padding: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{v.name as string}</div>
+                  <div style={{ fontSize: 11, color: C.textDim }}>{v.gender as string} · {v.age as string} · {v.accent as string}</div>
+                </div>
+                {v.previewUrl ? <audio controls src={String(v.previewUrl)} style={{ height: 32 }} /> : null}
+                <button onClick={() => { if (voiceTarget) { saveVoiceMap({ ...voiceMap, [voiceTarget]: { voiceId: v.id as string, voiceName: v.name as string } }); setMsg('✓ Voz vinculada!'); setVoiceAction(null) } }} style={btnP}>Usar ✓</button>
+              </div>
+            ))}
+            {libraryVoices.length === 0 && !libraryLoading && <div style={{ color: C.textDim, textAlign: 'center', padding: 20 }}>Busque para encontrar vozes.</div>}
+          </div>
+        </div>
+      )}
+
+      {/* CLONAR */}
+      {subTab === 'voices' && voiceAction === 'clone' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button onClick={() => { setVoiceAction(null) }} style={{ ...btnS, padding: '4px 12px' }}>←</button>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Clonar voz · {allChars.find(c => c.id === voiceTarget)?.name}</div>
+          </div>
+          <div style={{ background: C.surface, borderRadius: 10, padding: 16 }}>
+            <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>Suba um arquivo de áudio (MP3/WAV, mínimo 30 segundos) imitando como o personagem falaria.</div>
+            <input type="file" accept="audio/*" onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file || !voiceTarget) return
+              setVoiceLoading(true)
+              try {
+                const formData = new FormData(); formData.append('file', file)
+                const upRes = await fetch('/api/blob-upload', { method: 'POST', body: formData })
+                if (!upRes.ok) { setMsg('Erro no upload'); return }
+                const { url } = await upRes.json()
+                const char = allChars.find(c => c.id === voiceTarget)
+                const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clone', name: char?.name ?? voiceTarget, audioUrl: url }) })
+                if (r.ok) { const d = await r.json(); saveVoiceMap({ ...voiceMap, [voiceTarget]: { voiceId: d.voiceId, voiceName: char?.name ?? '' } }); setMsg('✓ Voz clonada!'); setVoiceAction(null) }
+                else setMsg('Erro ao clonar')
+              } catch { setMsg('Erro') }
+              finally { setVoiceLoading(false) }
+            }} style={{ fontSize: 12, color: C.textDim }} />
+            {voiceLoading && <div style={{ color: C.gold, fontSize: 12, marginTop: 8 }}>Clonando voz...</div>}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ DIÁLOGOS (placeholder) ═══ */}
+      {subTab === 'dialogues' && (
+        <div style={{ color: C.textDim, textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 28, marginBottom: 12 }}>🎭</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Diálogos</div>
+          <div style={{ fontSize: 13 }}>Em breve — escreva e gere áudio de diálogos por episódio.</div>
+        </div>
+      )}
+
+      {/* ═══ POLIGLOTA (placeholder) ═══ */}
+      {subTab === 'polyglot' && (
+        <div style={{ color: C.textDim, textAlign: 'center', padding: 40 }}>
+          <div style={{ fontSize: 28, marginBottom: 12 }}>🌍</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Poliglota</div>
+          <div style={{ fontSize: 13 }}>Em breve — traduza cantigas e episódios para outros idiomas.</div>
+        </div>
+      )}
+    </div>
+  )
+}
 
 /* ══════════ CANTIGAS WIZARD ══════════ */
 function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStudio }: {
