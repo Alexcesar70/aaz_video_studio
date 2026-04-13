@@ -42,7 +42,8 @@ export async function designVoice(
   for (let i = 0; i < count; i++) {
     try {
       const preview = await provider.designVoice(input.description, sampleText)
-      if (preview.id) previews.push(preview)
+      console.log(`[designVoice] Preview ${i + 1}: id=${preview.id}, hasAudio=${!!preview.audioUrl}`)
+      previews.push(preview)
     } catch (err) {
       console.error(`[designVoice] Preview ${i + 1} failed:`, err)
       if (i === 0) throw err // se o primeiro falha, propaga

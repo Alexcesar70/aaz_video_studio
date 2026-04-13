@@ -6879,8 +6879,8 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
               {voicePreviews.map((p, i) => (
                 <div key={i} style={{ background: C.card, borderRadius: 8, padding: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
                   <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Preview {i + 1}</span>
-                  {p.audioUrl && <audio controls src={p.audioUrl} style={{ flex: 1, height: 32 }} />}
-                  <button onClick={() => saveDesignedVoice(p.id)} disabled={voiceLoading} style={btnP}>Usar esta ✓</button>
+                  {p.audioUrl ? <audio controls src={p.audioUrl} style={{ flex: 1, height: 32 }} /> : <span style={{ flex: 1, fontSize: 11, color: C.textDim }}>Áudio não disponível</span>}
+                  <button onClick={() => saveDesignedVoice(p.id)} disabled={voiceLoading || !p.id} style={{ ...btnP, opacity: p.id ? 1 : 0.4 }}>Usar esta ✓</button>
                 </div>
               ))}
               <button onClick={generatePreviews} style={btnS}>🔄 Gerar novos</button>

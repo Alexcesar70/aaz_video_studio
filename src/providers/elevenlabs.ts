@@ -60,9 +60,14 @@ export class ElevenLabsProvider implements VoiceProvider {
       throw new Error(`ElevenLabs Design error ${res.status}: ${err.slice(0, 200)}`)
     }
     const data = await res.json()
+    console.log('[ElevenLabs] designVoice response keys:', Object.keys(data), 'generated_voice_id:', data.generated_voice_id ?? 'MISSING')
     return {
-      id: data.generated_voice_id ?? '',
-      audioUrl: data.audio_base_64 ? `data:audio/mpeg;base64,${data.audio_base_64}` : '',
+      id: data.generated_voice_id ?? data.voice_id ?? '',
+      audioUrl: data.audio_base_64
+        ? `data:audio/mpeg;base64,${data.audio_base_64}`
+        : data.audio
+          ? `data:audio/mpeg;base64,${data.audio}`
+          : data.preview_url ?? data.audio_url ?? '',
     }
   }
 
