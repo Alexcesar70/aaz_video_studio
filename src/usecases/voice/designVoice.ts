@@ -35,7 +35,7 @@ export async function designVoice(
     if (!wc.allowed) throw new Error(wc.reason ?? 'Saldo insuficiente')
   }
 
-  const sampleText = input.sampleText ?? 'Olá! Eu sou um personagem especial. Vamos compartilhar e cuidar uns dos outros!'
+  const sampleText = input.sampleText ?? 'Olá! Eu sou um personagem muito especial e estou aqui para contar histórias incríveis. Vamos compartilhar, cuidar uns dos outros e viver grandes aventuras juntos!'
 
   // Gera previews
   const previews: VoicePreview[] = []
