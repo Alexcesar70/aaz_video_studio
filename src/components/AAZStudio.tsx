@@ -6993,9 +6993,22 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
 
             {epScenes.map((scene, si) => (
               <div key={scene.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>Cena {si + 1} · {scene.duration}s</span>
-                  {scene.videoUrl && <video src={scene.videoUrl} muted playsInline preload="metadata" style={{ width: 80, height: 45, borderRadius: 6, objectFit: 'cover' }} />}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>Cena {scene.sceneNumber ?? si + 1} · {scene.duration}s</span>
+                    {scene.title && <span style={{ fontSize: 12, color: C.text, marginLeft: 8 }}>{scene.title}</span>}
+                    <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{scene.prompt?.slice(0, 80)}{scene.prompt?.length > 80 ? '...' : ''}</div>
+                  </div>
+                  {scene.videoUrl && (
+                    <video
+                      src={scene.videoUrl}
+                      controls
+                      muted
+                      playsInline
+                      preload="metadata"
+                      style={{ width: 120, height: 68, borderRadius: 6, objectFit: 'cover', flexShrink: 0, cursor: 'pointer' }}
+                    />
+                  )}
                 </div>
                 {scene.characters.map(charId => {
                   const char = allChars.find(c => c.id === charId)
