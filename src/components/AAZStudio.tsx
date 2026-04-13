@@ -6661,8 +6661,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
   const [ttsVoiceId, setTtsVoiceId] = useState('')
   const [ttsAudioUrl, setTtsAudioUrl] = useState('')
   const [ttsLoading, setTtsLoading] = useState(false)
-  const [msg, setMsg] = useState('')
-  // Voice assignments: charId → voiceId (persisted in localStorage for now)
+  const [msg, setMsg] = useState('')  // Voice assignments: charId → voiceId (persisted in localStorage for now)
   const [voiceMap, setVoiceMap] = useState<Record<string, { voiceId: string; voiceName: string }>>(() => {
     try { return JSON.parse(localStorage.getItem('aaz_voice_map') ?? '{}') } catch { return {} }
   })
@@ -6755,7 +6754,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
       {/* Sub-tabs */}
       <div style={{ display: 'flex', gap: 4, background: C.card, padding: 4, borderRadius: 10, border: `1px solid ${C.border}`, marginBottom: 18 }}>
         {([['learn', '🎓 Aprender'], ['voices', '🗣 Vozes'], ['dialogues', '🎭 Diálogos'], ['polyglot', '🌍 Poliglota']] as [typeof subTab, string][]).map(([id, lbl]) => (
-          <button key={id} onClick={() => setSubTab(id)} style={{ flex: 1, padding: '10px', borderRadius: 8, background: subTab === id ? C.surface : 'transparent', border: subTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: subTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
+          <button key={id} onClick={() => { setSubTab(id); setMsg(''); setVoiceAction(null); setVoiceTarget(null) }} style={{ flex: 1, padding: '10px', borderRadius: 8, background: subTab === id ? C.surface : 'transparent', border: subTab === id ? `1px solid ${C.border}` : '1px solid transparent', cursor: 'pointer', fontSize: 13, fontWeight: 600, color: subTab === id ? C.text : C.textDim, fontFamily: 'inherit' }}>{lbl}</button>
         ))}
       </div>
 
@@ -6811,7 +6810,15 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
                     <div>
                       <div style={{ fontSize: 11, color: C.green, marginBottom: 8 }}>🎙✓ Voz configurada</div>
                       <div style={{ display: 'flex', gap: 4, justifyContent: 'center' }}>
-                        <button onClick={() => { setTtsVoiceId(voiceMap[c.id].voiceId); setTtsText(`Olá! Eu sou ${c.name}.`); generateTTS() }} style={{ ...btnS, padding: '4px 10px', fontSize: 11 }}>▶ Ouvir</button>
+                        <button onClick={async () => {
+                          setTtsLoading(true); setMsg('')
+                          try {
+                            const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'tts', text: `Olá! Eu sou ${c.name}.`, voiceId: voiceMap[c.id].voiceId }) })
+                            if (r.ok) { const d = await r.json(); setTtsAudioUrl(d.audioUrl ?? '') }
+                            else setMsg('Erro ao gerar áudio')
+                          } catch { setMsg('Erro de rede') }
+                          finally { setTtsLoading(false) }
+                        }} style={{ ...btnS, padding: '4px 10px', fontSize: 11 }}>▶ Ouvir</button>
                         <button onClick={() => { setVoiceTarget(c.id); setVoiceAction('describe'); suggestVoice(c.id) }} style={{ ...btnS, padding: '4px 10px', fontSize: 11 }}>✏ Mudar</button>
                       </div>
                     </div>
