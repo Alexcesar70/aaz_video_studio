@@ -174,14 +174,130 @@ Desenvolvedor: **Alexandre** (solo).
   - Botão "Baixar CSV" para exportar extrato
   - Fecha com ESC ou click fora (mesmo padrão dos outros modais)
 
+### Phase 3 — Super Admin Console `/admin` (COMPLETA)
+
+- `src/components/SuperAdmin.tsx` — UI completa com sidebar + 8 views
+- `src/app/admin/layout.tsx` + `page.tsx` — rota `/admin` (super_admin only)
+- **Dashboard**: 4 KPIs financeiros (receita de uso, custos, lucro bruto, saldo Segmind)
+  - Alertas automáticos (saldo baixo, prejuízo, orgs inativas)
+  - Tabela L/P Acumulados (venda vs custo vs lucro por transação)
+  - Top clientes + Operacional
+  - KPIs clicáveis → páginas dedicadas
+- **3 Páginas financeiras dedicadas**:
+  - Receita Bruta: ranking clientes, ticket médio, histórico recargas
+  - Custos Totais: breakdown Segmind/Claude, custo por engine, lista cronológica
+  - Lucro/Prejuízo: margem por engine, L/P por transação, engine +/- lucrativa
+- **Organizações**: tabela + dashboard financeiro por org (saldo, membros, engines, transações)
+  - Criar nova org com formulário completo
+  - Adicionar créditos, suspender/reativar
+  - Associação automática de users órfãos
+- **Planos**: criar/editar/desativar planos (nome, preço, créditos, max users)
+- **Usuários**: agrupados por organização, busca, detalhes, resetar senha, mudar role
+- **Financeiro**: extrato por org e período, exportar CSV
+- **Precificação**: margem individual por engine, custo base editável, auto-recálculo
+- **Segurança**: logs de tentativas de login com IP, email, status
+- APIs: `/api/admin/*` (dashboard, organizations, plans, users, pricing, export, login-logs)
+
+### Phase 5 — Wallet Integration (COMPLETA)
+
+- `GET /api/me/wallet` — saldo da wallet do usuário/org
+- Wallet check + dedução em 4 rotas de geração (generate, generate-image, scene-director, image-director)
+- WalletPill no header do studio (color-coded por alertLevel)
+- Saldo nunca vai negativo — bloqueia antes de gerar
+
+### Pricing Table (COMPLETA)
+
+- `src/lib/pricing.ts` — modelo PricingConfig + EnginePricing por engine
+- Margem individual por engine (editável no Super Admin)
+- Custo base auto-atualizado pela média das últimas 20 chamadas
+- Preço do cliente = custo base × margem
+- Creator vê preço do cliente (nunca o custo real do Segmind)
+- Wallet cobra preço do cliente, não custo API
+- `/api/pricing` — preços públicos para o studio
+- `/api/admin/pricing` — gestão completa (Super Admin)
+
+### Rate Limiting + Segurança (COMPLETA)
+
+- `src/lib/rateLimit.ts` — rate limiting por IP e email
+- 5 tentativas max em 15min, bloqueio de 30min após exceder
+- Log de auditoria (últimos 500 eventos) no Redis
+- `/api/admin/login-logs` — consulta logs (Super Admin)
+- Aba Segurança no Super Admin com KPIs e tabela de logs
+
+### BRL como padrão (COMPLETA)
+
+- BRL ativo por padrão (showBrl=true)
+- Auto-fetch da cotação no mount
+- Todos os preços no studio em R$: seletores, custo, pill, atelier, feed
+- Toggle R$ alterna entre BRL/USD
+- Disclaimer com cotação em modais
+
+### Filtro Meus/Equipe/Todos (COMPLETA)
+
+- Dropdown "Exibindo:" na aba Assets
+- Cenas e assets filtrados por createdBy
+- Omni Reference não auto-carrega sheets de outros membros
+- Máximo 3 refs injetadas por personagem (consistência)
+- Library filtrada por ownership
+
+### Character Sheet Generator (COMPLETA)
+
+- Wizard de 3 passos no Atelier (não nos Assets)
+- Gera 6 vistas: Frontal, ¾ Direita, Perfil, ¾ Esquerda, Costas, Close Rosto
+- Regeneração individual por vista
+- Upload de imagem de referência (sketch, foto)
+- Engine selecionável (Nano Banana, Flux, Ideogram)
+- Toggle estilo AAZ (clay/massinha)
+- Salva como Character Sheet na biblioteca
+
+### Cantigas — Produção completa de cantigas infantis (COMPLETA)
+
+- **Modelo**: `src/lib/cantigas.ts` — Cantiga, CantigaCena, assets por cena
+- **API CRUD**: `GET/POST /api/cantigas`, `GET/PATCH/DELETE /api/cantigas/[id]`
+- **Suno API**: `POST /api/generate-music` — gera música via sunoapi.org (model V4)
+  - Polling assíncrono (POST → taskId → GET status até SUCCESS)
+  - Callback endpoint: `/api/webhooks/suno`
+- **Lyrics Director**: `POST /api/lyrics-director` — Claude gera letras
+  - System prompt otimizado para cantigas infantis cristãs PT-BR
+  - Proibido direções de cena na letra (só texto cantável)
+- **Storyboard Director**: modo 'storyboard' — divide letra em cenas
+  - Personagens ATUAM (não cantam) — emoções pela física do corpo
+  - Retorna ações em português (sem prompts)
+- **Prompt Generator**: modo 'generate_prompt' — gera prompts em inglês
+  - Inclui @image refs, character descriptions, clay texture, blocked words
+  - Gerado APÓS o creator editar e aprovar as ações
+- **UI**: aba 🎵 Cantigas no studio com wizard completo:
+  - Dois modos: "Criar do zero" e "Dê vida à sua cantiga!" (upload)
+  - Passo 1: Ideia + Letra (com controles: tempo, refrão, rima)
+  - Passo 2: Música (Suno) com player e download
+  - Passo 3: Roteiro Visual editável + "Aprovar e Gerar Prompts"
+  - Passo 3.5: Preparação de assets guiada (fila um a um)
+  - Passo 4: Produção com progresso, thumbnails, finalização
+- **Persistência**: auto-save a cada passo no Redis
+- **Minhas Cantigas**: lista com cards de progresso, "Continuar →"
+- **Proteção de rota**: modal de aviso ao sair no meio da criação
+- **"Gerar esta cena →"**: vai pro estúdio com prompt, personagens, @Image refs, duração
+
+### Correções importantes
+
+- First/last frame mutuamente exclusivo com Omni Reference no Seedance
+- Prompt inclui @Video1 automaticamente para referência de vídeo
+- Eventos registram preço do cliente (não custo Segmind)
+- Team Leader não vê saldo Segmind (só Super Admin)
+- Users sem org associados automaticamente no login
+
 ---
 
 ## PENDENTE / MELHORIAS FUTURAS
 
-- Custo real para **imagens** (Segmind não retorna custo no response — mesma abordagem de saldo antes/depois)
-- Custo real para **Claude** (ler `usage.input_tokens` + `usage.output_tokens` da resposta da API)
-- Reconciliação mensal (campo no admin para inserir total cobrado pelo Segmind)
-- Atualizar preços hardcoded em `videoEngines.ts` e `imageEngines.ts` quando Segmind mudar
+- **Cantigas**: recorte de áudio por cena (ffmpeg-wasm) para usar @Audio1 no Seedance
+- **Cantigas**: vincular vídeos gerados de volta ao storyboard da cantiga
+- **Custo real para imagens** (mesma abordagem saldo antes/depois do Segmind)
+- **Email de boas-vindas** ao criar creator (Resend/SendGrid)
+- **Integração Stripe/Hotmart** para billing automático
+- **Chave Segmind por organização** (cliente traz sua própria key)
+- **Self-service signup** (cliente se cadastra e paga sozinho)
+- Reconciliação mensal (admin insere total cobrado pelo Segmind)
 
 ---
 
@@ -195,11 +311,13 @@ SESSION_SECRET=          # openssl rand -base64 32
 # Segmind (server-side apenas — nunca expor no browser)
 SEGMIND_API_KEY=         # sg-...
 SEGMIND_VIDEO_ENDPOINT=https://api.segmind.com/v1/seedance-2.0
-SEGMIND_SHEET_ENDPOINT=https://api.segmind.com/v1/seedance-2.0-character
 
-# Anthropic (Scene Director)
+# Anthropic (Scene Director, Lyrics Director)
 ANTHROPIC_API_KEY=       # sk-ant-...
 ANTHROPIC_MODEL=claude-sonnet-4-20250514
+
+# Suno (Cantigas — geração de música)
+SUNO_API_KEY=            # chave do sunoapi.org
 
 # Vercel KV (preenchido automaticamente ao conectar no painel)
 KV_URL=
@@ -207,9 +325,11 @@ KV_REST_API_URL=
 KV_REST_API_TOKEN=
 KV_REST_API_READ_ONLY_TOKEN=
 
+# Vercel Blob
+BLOB_READ_WRITE_TOKEN=
+
 # App
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-NEXT_PUBLIC_COST_PER_SEC=0.08
+NEXT_PUBLIC_APP_URL=https://aaz-video-studio.vercel.app
 ```
 
 ---
