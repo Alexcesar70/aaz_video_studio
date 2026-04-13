@@ -6633,6 +6633,60 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
   const [storyboardLoading, setStoryboardLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // ── Persistência ──
+  const [cantigaId, setCantigaId] = useState<string | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [minhasCantigas, setMinhasCantigas] = useState<Record<string, any>[]>([])
+  const [loadingList, setLoadingList] = useState(true)
+
+  // Carrega lista de cantigas do user
+  const loadMinhasCantigas = useCallback(async () => {
+    try {
+      const r = await fetch('/api/cantigas')
+      if (r.ok) { const d = await r.json(); setMinhasCantigas(d.cantigas ?? []) }
+    } catch {} finally { setLoadingList(false) }
+  }, [])
+  useEffect(() => { loadMinhasCantigas() }, [loadMinhasCantigas])
+
+  // Auto-save: salva estado atual no Redis
+  const autoSave = useCallback(async (overrides?: Record<string, unknown>) => {
+    const statusMap: Record<number, string> = { 1: 'lyrics', 2: 'music', 3: 'storyboard', 4: 'producing' }
+    const data = {
+      title: title || 'Nova cantiga',
+      status: statusMap[step] ?? 'lyrics',
+      step,
+      idea, theme, characters, lyrics, musicDuration, refraoCount, useRhyme,
+      musicUrl, musicStyle: style, storyboard,
+      ...overrides,
+    }
+    try {
+      if (cantigaId) {
+        await fetch(`/api/cantigas/${cantigaId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      } else {
+        const r = await fetch('/api/cantigas', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+        if (r.ok) { const d = await r.json(); setCantigaId(d.cantiga?.id ?? null) }
+      }
+    } catch {}
+  }, [cantigaId, title, step, idea, theme, characters, lyrics, musicDuration, refraoCount, useRhyme, musicUrl, style, storyboard])
+
+  // Restaura cantiga existente
+  const loadCantiga = (c: Record<string, any>) => {
+    setCantigaId(c.id)
+    setTitle(c.title ?? '')
+    setIdea(c.idea ?? '')
+    setTheme(c.theme ?? '')
+    setCharacters(c.characters ?? [])
+    setLyrics(c.lyrics ?? '')
+    setMusicDuration(c.musicDuration ?? '1:30')
+    setRefraoCount(c.refraoCount ?? 1)
+    setUseRhyme(c.useRhyme ?? true)
+    setMusicUrl(c.musicUrl ?? '')
+    setStyle(c.musicStyle ?? style)
+    setStoryboard(c.storyboard ?? [])
+    setStep(c.step ?? 1)
+    setMode(c.musicUrl && !c.idea ? 'upload' : 'create')
+  }
+
   const fmt = (v: number) => showBrl && brlRate ? `R$${(v * brlRate).toFixed(2)}` : `$${v.toFixed(3)}`
   const CHARS = [
     { id: 'abraao', name: 'Abraão', emoji: '👦' },
@@ -6681,6 +6735,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
       const d = await r.json()
       if (d.status === 'processing') { setError(`Música em processamento (ID: ${d.taskId}). Aguarde e tente novamente.`); return }
       setMusicUrl(d.musicUrl ?? '')
+      if (d.musicUrl) autoSave({ musicUrl: d.musicUrl, status: 'music' })
       if (!d.musicUrl) setError('Música gerada mas URL não retornada. Tente novamente.')
     } catch { setError('Erro de rede') }
     finally { setMusicLoading(false) }
@@ -6734,17 +6789,55 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
 
       {/* Seletor de modo */}
       {!mode && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-          <div onClick={() => { setMode('create'); setStep(1) }} style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 14, padding: 28, cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.15s' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>✨</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Criar do zero</div>
-            <div style={{ fontSize: 12, color: C.textDim }}>IA escreve a letra, gera a música e cria o roteiro visual cena a cena.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div onClick={() => { setMode('create'); setStep(1); setCantigaId(null); setTitle(''); setIdea(''); setLyrics(''); setMusicUrl(''); setStoryboard([]) }} style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 14, padding: 28, cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.15s' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>✨</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Criar do zero</div>
+              <div style={{ fontSize: 12, color: C.textDim }}>IA escreve a letra, gera a música e cria o roteiro visual cena a cena.</div>
+            </div>
+            <div onClick={() => { setMode('upload'); setStep(2); setCantigaId(null); setTitle(''); setLyrics(''); setMusicUrl(''); setStoryboard([]) }} style={{ background: C.surface, border: `1px solid ${C.purple}40`, borderRadius: 14, padding: 28, cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.15s' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🎤</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Dê vida à sua cantiga!</div>
+              <div style={{ fontSize: 12, color: C.textDim }}>Suba uma cantiga que você já tem (MP3/WAV), cole a letra e gere o roteiro visual.</div>
+            </div>
           </div>
-          <div onClick={() => { setMode('upload'); setStep(2) }} style={{ background: C.surface, border: `1px solid ${C.purple}40`, borderRadius: 14, padding: 28, cursor: 'pointer', textAlign: 'center', transition: 'border-color 0.15s' }}>
-            <div style={{ fontSize: 40, marginBottom: 12 }}>🎤</div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Dê vida à sua cantiga!</div>
-            <div style={{ fontSize: 12, color: C.textDim }}>Suba uma cantiga que você já tem (MP3/WAV), cole a letra e gere o roteiro visual.</div>
-          </div>
+
+          {/* Minhas Cantigas */}
+          {loadingList ? (
+            <div style={{ color: C.textDim, fontSize: 12 }}>Carregando cantigas...</div>
+          ) : minhasCantigas.length > 0 && (
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 12 }}>Minhas Cantigas</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+                {minhasCantigas.map((c: Record<string, any>) => {
+                  const statusLabels: Record<string, string> = { lyrics: 'Escrevendo letra', music: 'Gerando música', storyboard: 'Criando roteiro', assets: 'Criando assets', producing: 'Produzindo', completed: 'Completa' }
+                  const statusColors: Record<string, string> = { lyrics: C.gold, music: C.purple, storyboard: C.blue, assets: C.gold, producing: C.green, completed: C.green }
+                  const scenes = c.storyboard?.length ?? 0
+                  const scenesReady = c.storyboard?.filter((s: Record<string, any>) => s.videoStatus === 'ready').length ?? 0
+                  const hasMusic = !!c.musicUrl
+                  const hasLyrics = !!c.lyrics
+                  const hasStoryboard = scenes > 0
+                  return (
+                    <div key={c.id} onClick={() => loadCantiga(c)} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, cursor: 'pointer', transition: 'border-color 0.15s' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{c.title || 'Sem título'}</div>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: statusColors[c.status] ?? C.textDim, background: `${statusColors[c.status] ?? C.textDim}20`, padding: '2px 8px', borderRadius: 4 }}>{statusLabels[c.status] ?? c.status}</span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 11, color: C.textDim }}>
+                        <div>{hasLyrics ? '✓' : '○'} Letra {hasMusic ? '· ✓ Música' : ''}</div>
+                        <div>{hasStoryboard ? `✓ Roteiro (${scenes} cenas)` : '○ Roteiro'} {scenesReady > 0 ? `· 🎬 ${scenesReady}/${scenes}` : ''}</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                        <span style={{ fontSize: 10, color: C.textDim }}>{new Date(c.updatedAt).toLocaleDateString('pt-BR')}</span>
+                        <span style={{ fontSize: 11, color: C.blue, fontWeight: 600 }}>Continuar →</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -6858,7 +6951,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Título da cantiga..." style={{ ...inputStyle, maxWidth: 300 }} />
-            <button onClick={() => { if (lyrics.trim()) setStep(2) }} disabled={!lyrics.trim()} style={{ ...btnPrimary, opacity: lyrics.trim() ? 1 : 0.4 }}>Próximo: Música →</button>
+            <button onClick={() => { if (lyrics.trim()) { autoSave({ status: 'music', step: 2 }); setStep(2) } }} disabled={!lyrics.trim()} style={{ ...btnPrimary, opacity: lyrics.trim() ? 1 : 0.4 }}>Próximo: Música →</button>
           </div>
         </div>
       )}
@@ -6893,7 +6986,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={() => setStep(1)} style={btnSecondary}>← Voltar</button>
-            <button onClick={() => { setStep(3); if (!storyboard.length) generateStoryboard() }} disabled={!musicUrl} style={{ ...btnPrimary, opacity: musicUrl ? 1 : 0.4 }}>Próximo: Roteiro Visual →</button>
+            <button onClick={() => { autoSave({ status: 'storyboard', step: 3 }); setStep(3); if (!storyboard.length) generateStoryboard() }} disabled={!musicUrl} style={{ ...btnPrimary, opacity: musicUrl ? 1 : 0.4 }}>Próximo: Roteiro Visual →</button>
           </div>
         </div>
       )}
@@ -6955,7 +7048,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
                   finally { setStoryboardLoading(false) }
                 }} disabled={storyboardLoading} style={{ ...btnPrimary, opacity: storyboardLoading ? 0.6 : 1 }}>{storyboardLoading ? 'Gerando prompts...' : '✨ Aprovar e Gerar Prompts'}</button>
               ) : (
-                <button onClick={() => setStep(4)} style={btnPrimary}>Próximo: Produção →</button>
+                <button onClick={() => { autoSave({ status: 'producing', step: 4 }); setStep(4) }} style={btnPrimary}>Próximo: Produção →</button>
               )}
             </div>
           </>) : (
