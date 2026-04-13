@@ -14,7 +14,6 @@ interface DesignVoiceInput {
   sampleText?: string
   userId: string
   organizationId?: string
-  previewCount?: number
 }
 
 interface DesignVoiceOutput {
@@ -26,7 +25,6 @@ export async function designVoice(
   provider: VoiceProvider,
   input: DesignVoiceInput
 ): Promise<DesignVoiceOutput> {
-  const count = input.previewCount ?? 3
   const clientPrice = await getClientPrice('elevenlabs-clone', 0.05)
 
   // Wallet check
@@ -37,18 +35,9 @@ export async function designVoice(
 
   const sampleText = input.sampleText ?? 'Olá! Eu sou um personagem muito especial e estou aqui para contar histórias incríveis. Vamos compartilhar, cuidar uns dos outros e viver grandes aventuras juntos!'
 
-  // Gera previews
-  const previews: VoicePreview[] = []
-  for (let i = 0; i < count; i++) {
-    try {
-      const preview = await provider.designVoice(input.description, sampleText)
-      console.log(`[designVoice] Preview ${i + 1}: id=${preview.id}, hasAudio=${!!preview.audioUrl}`)
-      previews.push(preview)
-    } catch (err) {
-      console.error(`[designVoice] Preview ${i + 1} failed:`, err)
-      if (i === 0) throw err // se o primeiro falha, propaga
-    }
-  }
+  // Gera previews — uma chamada retorna múltiplos
+  const previews = await provider.designVoice(input.description, sampleText)
+  console.log(`[designVoice] Got ${previews.length} previews`)
 
   // Wallet deduction
   if (input.organizationId) {

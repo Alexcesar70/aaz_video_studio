@@ -55,7 +55,7 @@ export interface VoiceProvider {
   textToSpeech(text: string, voiceId: string, modelId?: string): Promise<Buffer>
 
   /** Cria previews de voz a partir de descrição textual */
-  designVoice(description: string, sampleText: string): Promise<VoicePreview>
+  designVoice(description: string, sampleText: string): Promise<VoicePreview[]>
 
   /** Salva uma voz desenhada como permanente */
   saveDesignedVoice(previewId: string, name: string, description?: string): Promise<string> // returns voiceId

@@ -40,7 +40,7 @@ export class ElevenLabsProvider implements VoiceProvider {
     return Buffer.from(await res.arrayBuffer())
   }
 
-  async designVoice(description: string, sampleText: string): Promise<VoicePreview> {
+  async designVoice(description: string, sampleText: string): Promise<VoicePreview[]> {
     // ElevenLabs exige mínimo 100 caracteres no sample text
     let text = sampleText
     if (text.length < 100) {
@@ -60,15 +60,20 @@ export class ElevenLabsProvider implements VoiceProvider {
       throw new Error(`ElevenLabs Design error ${res.status}: ${err.slice(0, 200)}`)
     }
     const data = await res.json()
-    console.log('[ElevenLabs] designVoice response keys:', Object.keys(data), 'generated_voice_id:', data.generated_voice_id ?? 'MISSING')
-    return {
-      id: data.generated_voice_id ?? data.voice_id ?? '',
-      audioUrl: data.audio_base_64
-        ? `data:audio/mpeg;base64,${data.audio_base_64}`
-        : data.audio
-          ? `data:audio/mpeg;base64,${data.audio}`
-          : data.preview_url ?? data.audio_url ?? '',
+    console.log('[ElevenLabs] designVoice response keys:', Object.keys(data), 'previews count:', data.previews?.length ?? 0)
+
+    // A API retorna { previews: [{ generated_voice_id, audio_base_64 }], text }
+    const results: VoicePreview[] = []
+    for (const p of (data.previews ?? [])) {
+      const voiceId = p.generated_voice_id ?? ''
+      const audio = p.audio_base_64 ?? p.audio ?? ''
+      console.log('[ElevenLabs] preview:', voiceId ? 'hasId' : 'noId', 'audioLen:', audio?.length ?? 0)
+      results.push({
+        id: voiceId,
+        audioUrl: audio ? `data:audio/mpeg;base64,${audio}` : '',
+      })
     }
+    return results
   }
 
   async saveDesignedVoice(previewId: string, name: string, description?: string): Promise<string> {
