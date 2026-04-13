@@ -19,7 +19,7 @@ import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
 
-export const maxDuration = 120
+export const maxDuration = 300
 
 const SUNO_API_BASE = 'https://api.sunoapi.org'
 
@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
     let songTitle = title || 'Cantiga'
     let duration = 0
     let songs: Record<string, unknown>[] = []
-    const maxAttempts = 30
-    const pollInterval = 3000 // 3s
+    const maxAttempts = 50
+    const pollInterval = 5000 // 5s = até 250s total
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       await new Promise(r => setTimeout(r, pollInterval))
@@ -165,7 +165,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!musicUrl) {
-      return NextResponse.json({ error: 'Música não ficou pronta no tempo limite (90s). Tente novamente.' }, { status: 504 })
+      return NextResponse.json({ error: 'Música não ficou pronta no tempo limite (4min). Tente novamente.' }, { status: 504 })
     }
 
     console.log(`[/api/generate-music] Música pronta: ${musicUrl} (${duration}s)`)
