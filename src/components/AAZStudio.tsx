@@ -6598,6 +6598,9 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
   const [style, setStyle] = useState("children's christian song, gentle acoustic guitar, warm female vocals, Brazilian Portuguese")
   const [musicUrl, setMusicUrl] = useState('')
   const [uploadedAudioUrl, setUploadedAudioUrl] = useState('')
+  const [musicDuration, setMusicDuration] = useState('1:30')
+  const [refraoCount, setRefraoCount] = useState(1)
+  const [useRhyme, setUseRhyme] = useState(true)
   const [musicLoading, setMusicLoading] = useState(false)
   const [storyboard, setStoryboard] = useState<{ cena: number; trecho: string; duracao: number; personagens: string[]; cenario: string; acao: string; prompt_en: string }[]>([])
   const [storyboardLoading, setStoryboardLoading] = useState(false)
@@ -6619,7 +6622,15 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
     try {
       const r = await fetch('/api/lyrics-director', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'lyrics', prompt: idea, characters: characters, theme }),
+        body: JSON.stringify({
+          mode: 'lyrics',
+          prompt: idea
+            + `\n\nDuração alvo: ${musicDuration} (ajuste a quantidade de versos para caber nesse tempo)`
+            + `\nO refrão deve aparecer ${refraoCount} vez(es) ao longo da cantiga.`
+            + (useRhyme ? '\nUse rimas consistentes (AABB ou ABAB).' : '\nNão precisa rimar. Priorize naturalidade e fluidez.'),
+          characters,
+          theme,
+        }),
       })
       if (!r.ok) { const d = await r.json().catch(() => ({})); setError(d.error ?? 'Erro'); return }
       const d = await r.json()
@@ -6782,6 +6793,36 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
               </div>
             </div>
           </div>
+          {/* Controles de composição */}
+          <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>TEMPO DA MÚSICA</div>
+              <select value={musicDuration} onChange={e => setMusicDuration(e.target.value)} style={{ ...inputStyle, width: 120 }}>
+                <option value="0:45">~45 segundos</option>
+                <option value="1:00">~1 minuto</option>
+                <option value="1:30">~1min30</option>
+                <option value="2:00">~2 minutos</option>
+                <option value="2:30">~2min30</option>
+                <option value="3:00">~3 minutos</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>REFRÃO (quantas vezes)</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[1, 2, 3].map(n => (
+                  <button key={n} onClick={() => setRefraoCount(n)} style={{ width: 36, height: 36, borderRadius: 8, background: refraoCount >= n ? `${C.gold}30` : C.card, border: `1px solid ${refraoCount >= n ? C.gold : C.border}`, color: refraoCount >= n ? C.gold : C.textDim, fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{n}</button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 6 }}>RIMA</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12, color: C.text }}>
+                <input type="checkbox" checked={useRhyme} onChange={e => setUseRhyme(e.target.checked)} style={{ accentColor: C.gold, width: 16, height: 16 }} />
+                Com rima
+              </label>
+            </div>
+          </div>
+
           <button onClick={generateLyrics} disabled={lyricsLoading || !idea.trim()} style={{ ...btnPrimary, alignSelf: 'flex-start', opacity: lyricsLoading ? 0.6 : 1 }}>{lyricsLoading ? 'Gerando letra...' : '✨ Gerar Letra com IA'}</button>
 
           <div>
