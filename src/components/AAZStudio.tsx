@@ -6850,7 +6850,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
                   <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>Escolha entre 10.000+ vozes</div>
                 </div>
               </div>
-              <button onClick={() => { setVoiceTarget(null) }} style={{ ...btnS, marginTop: 12 }}>← Cancelar</button>
+              <button onClick={() => { setVoiceTarget(null); setVoiceAction(null); setVoiceSuggestion(''); setVoicePreviews([]) }} style={{ ...btnS, marginTop: 12 }}>← Cancelar</button>
             </div>
           )}
         </div>
@@ -6860,13 +6860,16 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
       {subTab === 'voices' && voiceAction === 'describe' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => { setVoiceAction(null) }} style={{ ...btnS, padding: '4px 12px' }}>←</button>
+            <button onClick={() => { setVoiceAction(null); setVoiceTarget(null); setVoiceSuggestion(""); setVoicePreviews([]) }} style={{ ...btnS, padding: "4px 12px" }}>←</button>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Descrever voz · {allChars.find(c => c.id === voiceTarget)?.name}</div>
           </div>
           <div style={{ background: C.surface, borderRadius: 10, padding: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 6 }}>SUGESTÃO DA IA</div>
-            <textarea value={voiceSuggestion} onChange={e => setVoiceSuggestion(e.target.value)} rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
-            <div style={{ fontSize: 10, color: C.textDim, marginTop: 4 }}>Edite livremente. Quanto mais detalhada a descrição, melhor o resultado.</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.gold }}>DESCRIÇÃO DA VOZ</div>
+              <button onClick={() => { if (voiceTarget) suggestVoice(voiceTarget) }} disabled={voiceLoading} style={{ background: 'transparent', border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 10px', fontSize: 10, color: C.gold, cursor: 'pointer', fontFamily: 'inherit' }}>{voiceLoading ? '...' : '✨ Pedir sugestão da IA'}</button>
+            </div>
+            <textarea value={voiceSuggestion} onChange={e => setVoiceSuggestion(e.target.value)} placeholder='Descreva a voz em inglês. Ex: "Perfect audio quality. Young Brazilian boy, 8 years old, warm and enthusiastic tone, slightly high-pitched, São Paulo accent, cheerful personality."' rows={4} style={{ ...inputStyle, resize: 'vertical' }} />
+            <div style={{ fontSize: 10, color: C.textDim, marginTop: 4 }}>Escreva ou edite a descrição da voz. Clique "Pedir sugestão" para a IA preencher automaticamente.</div>
           </div>
           <button onClick={generatePreviews} disabled={voiceLoading || !voiceSuggestion.trim()} style={{ ...btnP, alignSelf: 'flex-start', opacity: voiceLoading ? 0.6 : 1 }}>{voiceLoading ? 'Gerando...' : '🎙 Gerar 3 previews'}</button>
           {voicePreviews.length > 0 && (
@@ -6888,7 +6891,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
       {subTab === 'voices' && voiceAction === 'library' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => { setVoiceAction(null) }} style={{ ...btnS, padding: '4px 12px' }}>←</button>
+            <button onClick={() => { setVoiceAction(null); setVoiceTarget(null); setVoiceSuggestion(""); setVoicePreviews([]) }} style={{ ...btnS, padding: "4px 12px" }}>←</button>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Biblioteca de Vozes</div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -6915,7 +6918,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
       {subTab === 'voices' && voiceAction === 'clone' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button onClick={() => { setVoiceAction(null) }} style={{ ...btnS, padding: '4px 12px' }}>←</button>
+            <button onClick={() => { setVoiceAction(null); setVoiceTarget(null); setVoiceSuggestion(""); setVoicePreviews([]) }} style={{ ...btnS, padding: "4px 12px" }}>←</button>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Clonar voz · {allChars.find(c => c.id === voiceTarget)?.name}</div>
           </div>
           <div style={{ background: C.surface, borderRadius: 10, padding: 16 }}>
