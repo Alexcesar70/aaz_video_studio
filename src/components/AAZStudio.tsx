@@ -6908,7 +6908,10 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
               <div style={{ fontSize: 12, color: C.textDim }}>Dividindo a letra em cenas com prompts otimizados para o Seedance. Aguarde.</div>
             </div>
           ) : storyboard.length > 0 ? (<>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Roteiro Visual — {storyboard.length} cenas</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Roteiro Visual — {storyboard.length} cenas</div>
+              <div style={{ fontSize: 11, color: C.textDim }}>Edite as ações livremente. Os prompts serão gerados a partir do seu texto.</div>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {storyboard.map((s, i) => (
                 <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
@@ -6917,14 +6920,43 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
                     <span style={{ fontSize: 11, color: C.textDim }}>{s.personagens?.join(', ')}</span>
                   </div>
                   <div style={{ fontSize: 12, color: C.purple, fontStyle: 'italic', marginBottom: 6 }}>"{s.trecho}"</div>
-                  <div style={{ fontSize: 12, color: C.text, marginBottom: 4 }}>{s.acao}</div>
-                  <div style={{ fontSize: 10, color: C.textDim, fontFamily: 'monospace', background: C.surface, padding: 8, borderRadius: 6, marginTop: 6 }}>Prompt: {s.prompt_en?.slice(0, 150)}...</div>
+                  <textarea
+                    value={s.acao}
+                    onChange={e => setStoryboard(prev => prev.map((x, j) => j === i ? { ...x, acao: e.target.value } : x))}
+                    rows={3}
+                    style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 6, padding: 8, color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', width: '100%', resize: 'vertical', lineHeight: 1.5 }}
+                  />
+                  {s.prompt_en && (
+                    <div style={{ fontSize: 10, color: C.green, fontFamily: 'monospace', background: C.surface, padding: 8, borderRadius: 6, marginTop: 6, border: `1px solid ${C.green}30` }}>✓ Prompt: {s.prompt_en.slice(0, 150)}...</div>
+                  )}
                 </div>
               ))}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button onClick={() => setStep(2)} style={btnSecondary}>← Voltar</button>
-              <button onClick={() => setStep(4)} style={btnPrimary}>Próximo: Produção →</button>
+              {storyboard.some(s => !s.prompt_en) ? (
+                <button onClick={async () => {
+                  setStoryboardLoading(true); setError('')
+                  try {
+                    const updated = [...storyboard]
+                    for (let i = 0; i < updated.length; i++) {
+                      const s = updated[i]
+                      const r = await fetch('/api/lyrics-director', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ mode: 'generate_prompt', prompt: `Cena ${s.cena}: ${s.acao}\nCenário: ${s.cenario}\nPersonagens: ${s.personagens?.join(', ')}` }),
+                      })
+                      if (r.ok) {
+                        const d = await r.json()
+                        updated[i] = { ...s, prompt_en: d.result?.trim() ?? '' }
+                      }
+                    }
+                    setStoryboard(updated)
+                  } catch { setError('Erro ao gerar prompts') }
+                  finally { setStoryboardLoading(false) }
+                }} disabled={storyboardLoading} style={{ ...btnPrimary, opacity: storyboardLoading ? 0.6 : 1 }}>{storyboardLoading ? 'Gerando prompts...' : '✨ Aprovar e Gerar Prompts'}</button>
+              ) : (
+                <button onClick={() => setStep(4)} style={btnPrimary}>Próximo: Produção →</button>
+              )}
             </div>
           </>) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', padding: 20 }}>

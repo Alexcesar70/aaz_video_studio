@@ -11,7 +11,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { getLyricsDirectorSystem, getStoryboardDirectorSystem } from '@/lib/lyricsDirectorSystem'
+import { getLyricsDirectorSystem, getStoryboardDirectorSystem, getPromptGeneratorSystem } from '@/lib/lyricsDirectorSystem'
 import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
@@ -48,7 +48,9 @@ export async function POST(request: NextRequest) {
 
     const systemPrompt = mode === 'storyboard'
       ? getStoryboardDirectorSystem()
-      : getLyricsDirectorSystem()
+      : mode === 'generate_prompt'
+        ? getPromptGeneratorSystem()
+        : getLyricsDirectorSystem()
 
     let userMessage = prompt.trim()
     if (mode === 'lyrics') {
