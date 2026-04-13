@@ -2597,6 +2597,7 @@ export function AAZStudio() {
   // Filtro "Meus" vs "Equipe" para assets e cenas
   const [assetOwnerFilter, setAssetOwnerFilter] = useState<'mine' | 'team' | 'all'>('mine')
   const [showSheetWizard, setShowSheetWizard] = useState(false)
+  const [cantigaLeaveWarning, setCantigaLeaveWarning] = useState<string | null>(null) // tab destino
 
   /* Sessão atual (quem tá logado) — admin vê aba extra */
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
@@ -4382,7 +4383,14 @@ export function AAZStudio() {
           ['library', 'Assets'],
           ...(isAdminUser ? [['admin', '👑 Admin']] : []),
         ] as [string, string][]).map(([id, lbl]) => (
-          <button key={id} onClick={() => setTab(id)} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${id === 'admin' ? C.gold : C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
+          <button key={id} onClick={() => {
+            // Proteção de rota: avisa se está no meio de uma cantiga
+            if (tab === 'cantigas' && id !== 'cantigas') {
+              setCantigaLeaveWarning(id)
+              return
+            }
+            setTab(id)
+          }} style={{ background: 'transparent', border: 'none', borderBottom: tab === id ? `2px solid ${id === 'admin' ? C.gold : C.purple}` : '2px solid transparent', color: tab === id ? C.text : C.textDim, padding: '13px 20px', cursor: 'pointer', fontSize: 14, fontWeight: tab === id ? 600 : 400, fontFamily: 'inherit', transition: 'all 0.15s' }}>{lbl}</button>
         ))}
       </div>
 
@@ -6137,6 +6145,22 @@ export function AAZStudio() {
         />
       )}
 
+      {/* Modal: Sair da cantiga */}
+      {cantigaLeaveWarning && (
+        <div onClick={() => setCantigaLeaveWarning(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.gold}40`, borderRadius: 14, width: '100%', maxWidth: 420, padding: 24 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 8 }}>Sair da criação da cantiga?</div>
+            <div style={{ fontSize: 13, color: C.textDim, marginBottom: 16, lineHeight: 1.5 }}>
+              Sua cantiga está salva automaticamente. Você pode retomar a qualquer momento em <strong>Cantigas → Minhas Cantigas</strong>.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setCantigaLeaveWarning(null)} style={{ flex: 1, background: C.gold, border: 'none', borderRadius: 8, padding: '10px', color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>Continuar criando</button>
+              <button onClick={() => { setTab(cantigaLeaveWarning); setCantigaLeaveWarning(null) }} style={{ flex: 1, background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px', color: C.textDim, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}>Sair e salvar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Character Sheet Wizard */}
       {showSheetWizard && (
         <CharacterSheetWizard
@@ -6632,6 +6656,46 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
   const [storyboard, setStoryboard] = useState<{ cena: number; trecho: string; duracao: number; personagens: string[]; cenario: string; acao: string; prompt_en: string }[]>([])
   const [storyboardLoading, setStoryboardLoading] = useState(false)
   const [error, setError] = useState('')
+  const [assetsPhase, setAssetsPhase] = useState(false)
+  const [currentAssetIdx, setCurrentAssetIdx] = useState(0)
+
+  // Extrai lista flat de assets necessários do storyboard
+  const neededAssets = useMemo(() => {
+    const assets: { type: 'personagem' | 'cenario' | 'prop'; id: string; nome: string; cenas: number[]; suggestion?: string }[] = []
+    const seen = new Set<string>()
+    for (const s of storyboard) {
+      for (const p of (s.personagens ?? [])) {
+        if (!seen.has(`char_${p}`)) {
+          seen.add(`char_${p}`)
+          assets.push({ type: 'personagem', id: p, nome: p, cenas: [s.cena] })
+        } else {
+          const existing = assets.find(a => a.id === p && a.type === 'personagem')
+          if (existing && !existing.cenas.includes(s.cena)) existing.cenas.push(s.cena)
+        }
+      }
+      if (s.cenario && !seen.has(`cen_${s.cenario}`)) {
+        seen.add(`cen_${s.cenario}`)
+        assets.push({ type: 'cenario', id: s.cenario.toLowerCase().replace(/\s+/g, '_'), nome: s.cenario, cenas: [s.cena] })
+      } else if (s.cenario) {
+        const existing = assets.find(a => a.nome === s.cenario && a.type === 'cenario')
+        if (existing && !existing.cenas.includes(s.cena)) existing.cenas.push(s.cena)
+      }
+    }
+    return assets
+  }, [storyboard])
+
+  // Verifica quais assets já existem — por ora todos começam como pending
+  // O creator marca como "Já tenho" ou cria
+  const [readyAssetIds, setReadyAssetIds] = useState<Set<string>>(new Set())
+  const assetStatus = useMemo(() => {
+    return neededAssets.map(a => ({
+      ...a,
+      ready: readyAssetIds.has(`${a.type}_${a.id}`),
+    }))
+  }, [neededAssets, readyAssetIds])
+
+  const pendingAssets = assetStatus.filter(a => !a.ready)
+  const allAssetsReady = pendingAssets.length === 0
 
   // ── Persistência ──
   const [cantigaId, setCantigaId] = useState<string | null>(null)
@@ -7048,7 +7112,7 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
                   finally { setStoryboardLoading(false) }
                 }} disabled={storyboardLoading} style={{ ...btnPrimary, opacity: storyboardLoading ? 0.6 : 1 }}>{storyboardLoading ? 'Gerando prompts...' : '✨ Aprovar e Gerar Prompts'}</button>
               ) : (
-                <button onClick={() => { autoSave({ status: 'producing', step: 4 }); setStep(4) }} style={btnPrimary}>Próximo: Produção →</button>
+                <button onClick={() => { autoSave({ status: 'assets', step: 3 }); setAssetsPhase(true); setCurrentAssetIdx(0) }} style={btnPrimary}>Próximo: Preparar Assets →</button>
               )}
             </div>
           </>) : (
@@ -7057,6 +7121,88 @@ function CantigasWizard({ currentUser, clientPrices, showBrl, brlRate, onGoToStu
               <button onClick={generateStoryboard} style={btnPrimary}>✨ Gerar Roteiro Visual</button>
               <button onClick={() => setStep(2)} style={btnSecondary}>← Voltar</button>
             </div>
+          )}
+        </div>
+      )}
+
+      {/* PASSO 3.5: Preparação de Assets */}
+      {step === 3 && assetsPhase && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Preparação de Assets · {pendingAssets.length} pendente(s)</div>
+            <div style={{ fontSize: 11, color: C.textDim }}>{assetStatus.filter(a => a.ready).length}/{assetStatus.length} prontos</div>
+          </div>
+
+          {/* Barra de progresso */}
+          <div style={{ height: 6, background: C.card, borderRadius: 3 }}>
+            <div style={{ height: '100%', width: `${assetStatus.length > 0 ? (assetStatus.filter(a => a.ready).length / assetStatus.length) * 100 : 0}%`, background: C.green, borderRadius: 3, transition: 'width 0.3s' }} />
+          </div>
+
+          {allAssetsReady ? (
+            <div style={{ background: `${C.green}10`, border: `1px solid ${C.green}30`, borderRadius: 12, padding: 18, textAlign: 'center' }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: C.green, marginBottom: 6 }}>✓ Todos os assets estão prontos!</div>
+              <button onClick={() => { setAssetsPhase(false); autoSave({ status: 'producing', step: 4 }); setStep(4) }} style={btnPrimary}>Ir para Produção →</button>
+            </div>
+          ) : (
+            <>
+              {/* Asset atual */}
+              {currentAssetIdx < pendingAssets.length && (() => {
+                const asset = pendingAssets[currentAssetIdx]
+                const icon = asset.type === 'personagem' ? '🧑' : asset.type === 'cenario' ? '🏞' : '📦'
+                const typeLabel = asset.type === 'personagem' ? 'Character Sheet' : asset.type === 'cenario' ? 'Cenário' : 'Prop/Item'
+                return (
+                  <div style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 12, padding: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, letterSpacing: '0.5px', marginBottom: 4 }}>ASSET {currentAssetIdx + 1} DE {pendingAssets.length}</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>{icon} {asset.nome}</div>
+                    <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>Tipo: {typeLabel} · Usado na(s) cena(s): {asset.cenas.join(', ')}</div>
+
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      {asset.type === 'personagem' ? (
+                        <button onClick={() => {
+                          setReadyAssetIds(prev => new Set(Array.from(prev).concat(`${asset.type}_${asset.id}`)))
+                          setCurrentAssetIdx(prev => prev + 1)
+                          // TODO: abrir Character Sheet wizard com descrição pré-preenchida
+                        }} style={btnPrimary}>Criar Character Sheet →</button>
+                      ) : (
+                        <button onClick={() => {
+                          // Marca como pronto e avança
+                          // O creator vai ao Atelier criar manualmente
+                          setCurrentAssetIdx(prev => prev + 1)
+                        }} style={{ ...btnPrimary, background: C.purple }}>Criar no Atelier →</button>
+                      )}
+                      <button onClick={() => setCurrentAssetIdx(prev => prev + 1)} style={btnSecondary}>Pular</button>
+                      <button onClick={() => {
+                        setReadyAssetIds(prev => new Set(Array.from(prev).concat(`${asset.type}_${asset.id}`)))
+                        setCurrentAssetIdx(prev => prev + 1)
+                      }} style={btnSecondary}>Já tenho este asset ✓</button>
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Fila de assets */}
+              <div style={{ background: C.card, borderRadius: 10, padding: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, marginBottom: 8, letterSpacing: '0.5px' }}>FILA DE ASSETS</div>
+                {assetStatus.map((a, i) => {
+                  const isPending = !a.ready
+                  const isCurrent = isPending && pendingAssets.indexOf(a as typeof pendingAssets[0]) === currentAssetIdx
+                  const icon = a.type === 'personagem' ? '🧑' : a.type === 'cenario' ? '🏞' : '📦'
+                  return (
+                    <div key={`${a.type}_${a.id}`} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', borderBottom: `1px solid ${C.border}80`, fontSize: 12 }}>
+                      <span style={{ color: a.ready ? C.green : isCurrent ? C.gold : C.textDim }}>{a.ready ? '✓' : isCurrent ? '→' : '○'}</span>
+                      <span>{icon}</span>
+                      <span style={{ color: isCurrent ? C.text : C.textDim, fontWeight: isCurrent ? 600 : 400 }}>{a.nome}</span>
+                      <span style={{ fontSize: 10, color: C.textDim, marginLeft: 'auto' }}>Cena {a.cenas.join(', ')}</span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => { setAssetsPhase(false) }} style={btnSecondary}>← Voltar ao roteiro</button>
+                <button onClick={() => { setAssetsPhase(false); autoSave({ status: 'producing', step: 4 }); setStep(4) }} style={btnSecondary}>Pular preparação →</button>
+              </div>
+            </>
           )}
         </div>
       )}
