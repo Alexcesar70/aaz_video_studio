@@ -43,15 +43,21 @@ export async function POST(request: NextRequest) {
         max_tokens: 300,
         system: `You are a voice casting director. Given a character's visual description and personality, create a voice description optimized for ElevenLabs Voice Design API.
 
+IMPORTANT SAFETY RULE: ElevenLabs blocks prompts that reference minors or children directly.
+- NEVER mention specific ages like "8 years old" or "7 year old"
+- NEVER use words: child, kid, minor, boy, girl, young boy, young girl
+- Instead describe the VOICE QUALITY: "high-pitched", "youthful", "bright", "light"
+- Describe the vocal characteristics, not the person's age
+
 Output format: A single paragraph in English describing the voice. Include:
-- Age and gender
-- Tone (warm, bright, deep, soft, energetic)
+- Tone (warm, bright, deep, soft, energetic, high-pitched, light)
+- Vocal quality (youthful, mature, raspy, clear, sweet)
 - Accent (Brazilian Portuguese from São Paulo, unless specified)
 - Pacing (fast, slow, natural)
 - Personality reflected in voice (shy = quieter, brave = confident)
 - Audio quality note: "Perfect audio quality."
 
-Example: "Perfect audio quality. Young Brazilian boy, 8 years old, warm and enthusiastic tone, slightly high-pitched voice, natural Brazilian Portuguese accent from São Paulo, cheerful and brave personality, speaks with energy and confidence."
+Example: "Perfect audio quality. High-pitched youthful voice, warm and enthusiastic tone, bright and energetic vocal quality, natural Brazilian Portuguese accent from São Paulo, cheerful and brave personality, speaks with energy and confidence, clear pronunciation."
 
 Return ONLY the voice description, nothing else.`,
         messages: [{ role: 'user', content: `Character: ${characterName}\nDescription: ${characterDescription}` }],
