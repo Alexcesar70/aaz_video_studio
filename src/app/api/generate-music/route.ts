@@ -73,6 +73,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`[/api/generate-music] Gerando música: "${title}" (custom=${customMode}, instrumental=${instrumental})`)
 
+    // Passo 1: POST para iniciar geração (retorna taskId)
     const sunoRes = await fetch(`${SUNO_API_BASE}/api/v1/generate`, {
       method: 'POST',
       headers: {
@@ -83,40 +84,67 @@ export async function POST(request: NextRequest) {
     })
 
     if (!sunoRes.ok) {
-      const errData = await sunoRes.json().catch(() => ({}))
-      const errMsg = (errData as Record<string, string>)?.detail ?? (errData as Record<string, string>)?.error ?? `Suno retornou ${sunoRes.status}`
-      console.error('[/api/generate-music] Suno error:', sunoRes.status, errMsg)
+      const errText = await sunoRes.text().catch(() => '')
+      console.error('[/api/generate-music] Suno error:', sunoRes.status, errText.slice(0, 300))
+      let errMsg = `Suno retornou ${sunoRes.status}`
+      try { const d = JSON.parse(errText); errMsg = d.msg ?? d.error ?? d.detail ?? errMsg } catch {}
       return NextResponse.json({ error: errMsg }, { status: sunoRes.status })
     }
 
     const sunoData = await sunoRes.json()
-    console.log('[/api/generate-music] Suno response:', JSON.stringify(sunoData).slice(0, 500))
+    console.log('[/api/generate-music] Suno POST response:', JSON.stringify(sunoData).slice(0, 500))
 
-    // Extrai URLs da resposta (Suno retorna array de 2 variações)
-    const songs = Array.isArray(sunoData?.data)
-      ? sunoData.data
-      : Array.isArray(sunoData)
-        ? sunoData
-        : sunoData?.data ? [sunoData.data] : []
+    const taskId = sunoData?.data?.taskId ?? sunoData?.taskId ?? sunoData?.data?.task_id ?? sunoData?.task_id
+    if (!taskId) {
+      return NextResponse.json({ error: 'Suno não retornou taskId. Resposta: ' + JSON.stringify(sunoData).slice(0, 200) }, { status: 500 })
+    }
 
-    const firstSong = songs[0]
-    const musicUrl = firstSong?.audio_url ?? firstSong?.audioUrl ?? ''
-    const songTitle = firstSong?.title ?? title ?? 'Cantiga'
-    const duration = firstSong?.duration ?? 0
+    // Passo 2: Polling — aguarda até 90s (a geração leva ~20-30s)
+    let musicUrl = ''
+    let songTitle = title || 'Cantiga'
+    let duration = 0
+    let songs: Record<string, unknown>[] = []
+    const maxAttempts = 30
+    const pollInterval = 3000 // 3s
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      await new Promise(r => setTimeout(r, pollInterval))
+
+      try {
+        const pollRes = await fetch(`${SUNO_API_BASE}/api/v1/generate/record-info?taskId=${taskId}`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` },
+        })
+        if (!pollRes.ok) continue
+
+        const pollData = await pollRes.json()
+        const status = pollData?.data?.status ?? pollData?.status
+        console.log(`[/api/generate-music] Poll #${attempt + 1}: status=${status}`)
+
+        if (status === 'SUCCESS' || status === 'success' || status === 'completed') {
+          // Extrai os dados das músicas
+          const responseData = pollData?.data?.response?.data ?? pollData?.data?.data ?? pollData?.data?.response ?? []
+          songs = Array.isArray(responseData) ? responseData : [responseData]
+          const firstSong = songs[0] ?? {}
+          musicUrl = (firstSong.audio_url ?? firstSong.audioUrl ?? '') as string
+          songTitle = (firstSong.title ?? title ?? 'Cantiga') as string
+          duration = (firstSong.duration ?? 0) as number
+          break
+        }
+
+        if (status === 'FAILED' || status === 'failed' || status === 'error') {
+          return NextResponse.json({ error: 'Suno falhou ao gerar a música. Tente novamente.' }, { status: 500 })
+        }
+        // Continua polling...
+      } catch (pollErr) {
+        console.error('[/api/generate-music] Poll error:', pollErr)
+      }
+    }
 
     if (!musicUrl) {
-      // Pode ser async — precisa polling
-      const taskId = sunoData?.task_id ?? sunoData?.id ?? firstSong?.id
-      if (taskId) {
-        // Retorna o taskId para polling no frontend
-        return NextResponse.json({
-          status: 'processing',
-          taskId,
-          message: 'Música em geração. Use o taskId para verificar o status.',
-        })
-      }
-      return NextResponse.json({ error: 'Não foi possível obter a URL da música.' }, { status: 500 })
+      return NextResponse.json({ error: 'Música não ficou pronta no tempo limite (90s). Tente novamente.' }, { status: 504 })
     }
+
+    console.log(`[/api/generate-music] Música pronta: ${musicUrl} (${duration}s)`)
 
     // Custo real (fixo por música)
     const realCost = 0.11
