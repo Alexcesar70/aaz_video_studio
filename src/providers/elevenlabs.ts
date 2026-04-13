@@ -41,12 +41,18 @@ export class ElevenLabsProvider implements VoiceProvider {
   }
 
   async designVoice(description: string, sampleText: string): Promise<VoicePreview> {
+    // ElevenLabs exige mínimo 100 caracteres no sample text
+    let text = sampleText
+    if (text.length < 100) {
+      text = text + ' ' + 'Cada dia é uma nova aventura cheia de descobertas e aprendizados maravilhosos para compartilhar com todos os amigos.'
+    }
+    console.log(`[ElevenLabs] designVoice: desc=${description.slice(0, 80)}... text=${text.length} chars`)
     const res = await fetch(`${BASE_URL}/text-to-voice/design`, {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify({
         voice_description: description,
-        text: sampleText,
+        text,
       }),
     })
     if (!res.ok) {
