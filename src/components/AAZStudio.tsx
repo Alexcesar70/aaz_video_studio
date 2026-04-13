@@ -5339,7 +5339,7 @@ export function AAZStudio() {
       {/* ══════════ SENOIDE — Produção de áudio ══════════ */}
       {tab === 'senoide' && (
         <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <SenoidePanel currentUser={currentUser} clientPrices={clientPrices} showBrl={showBrl} brlRate={brlRate} library={library} atAssets={filteredAtAssets} />
+          <SenoidePanel currentUser={currentUser} clientPrices={clientPrices} showBrl={showBrl} brlRate={brlRate} library={library} atAssets={filteredAtAssets} episodes={episodes} sceneAssets={filteredSceneAssets} />
         </div>
       )}
 
@@ -6639,7 +6639,7 @@ function AddRefModal({
 ═══════════════════════════════════════════════════════════════ */
 
 /* ══════════ SENOIDE PANEL ══════════ */
-function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, atAssets }: {
+function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, atAssets, episodes, sceneAssets }: {
   currentUser: CurrentUser | null
   clientPrices: Record<string, number>
   showBrl?: boolean
@@ -6647,6 +6647,9 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   library: Record<string, any>
   atAssets: Asset[]
+  episodes: Episode[]
+  sceneAssets: SceneAsset[]
+  voiceMap?: Record<string, { voiceId: string; voiceName: string }>
 }) {
   const [subTab, setSubTab] = useState<'learn' | 'voices' | 'dialogues' | 'polyglot'>('voices')
   const [voiceAction, setVoiceAction] = useState<'describe' | 'clone' | 'library' | null>(null)
@@ -6661,6 +6664,14 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
   const [ttsVoiceId, setTtsVoiceId] = useState('')
   const [ttsAudioUrl, setTtsAudioUrl] = useState('')
   const [ttsLoading, setTtsLoading] = useState(false)
+  // Dialogues state
+  const [selEpisode, setSelEpisode] = useState('')
+  const [dialogueData, setDialogueData] = useState<Record<string, Record<string, { text: string; audioUrl: string; loading: boolean }>>>({})
+  // Polyglot state
+  const [polyType, setPolyType] = useState<'cantiga' | 'episode' | null>(null)
+  const [targetLang, setTargetLang] = useState('es')
+  const [polyLoading, setPolyLoading] = useState(false)
+  const [polyResult, setPolyResult] = useState<{ audioUrl?: string; text?: string } | null>(null)
   const [msg, setMsg] = useState('')
   // Voice assignments from Redis (via API)
   const [voiceMap, setVoiceMap] = useState<Record<string, { voiceId: string; voiceName: string }>>({})
@@ -6950,23 +6961,193 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
         </div>
       )}
 
-      {/* ═══ DIÁLOGOS (placeholder) ═══ */}
-      {subTab === 'dialogues' && (
-        <div style={{ color: C.textDim, textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>🎭</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Diálogos</div>
-          <div style={{ fontSize: 13 }}>Em breve — escreva e gere áudio de diálogos por episódio.</div>
-        </div>
-      )}
+      {/* ═══ DIÁLOGOS ═══ */}
+      {subTab === 'dialogues' && (() => {
+        const epScenes = selEpisode ? sceneAssets.filter(s => s.episodeId === selEpisode) : []
 
-      {/* ═══ POLIGLOTA (placeholder) ═══ */}
-      {subTab === 'polyglot' && (
-        <div style={{ color: C.textDim, textAlign: 'center', padding: 40 }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>🌍</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 6 }}>Poliglota</div>
-          <div style={{ fontSize: 13 }}>Em breve — traduza cantigas e episódios para outros idiomas.</div>
-        </div>
-      )}
+        const generateDialogue = async (sceneId: string, charId: string, text: string) => {
+          const voice = voiceMap[charId]
+          if (!voice?.voiceId || !text.trim()) { setMsg(voice ? 'Escreva o diálogo.' : 'Configure a voz primeiro.'); return }
+          setDialogueData(prev => ({ ...prev, [sceneId]: { ...prev[sceneId], [charId]: { text, audioUrl: '', loading: true } } }))
+          try {
+            const r = await fetch('/api/voice/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voiceId: voice.voiceId }) })
+            if (r.ok) { const d = await r.json(); setDialogueData(prev => ({ ...prev, [sceneId]: { ...prev[sceneId], [charId]: { text, audioUrl: d.audioUrl ?? '', loading: false } } })) }
+            else { setDialogueData(prev => ({ ...prev, [sceneId]: { ...prev[sceneId], [charId]: { text, audioUrl: '', loading: false } } })); setMsg('Erro ao gerar áudio') }
+          } catch { setDialogueData(prev => ({ ...prev, [sceneId]: { ...prev[sceneId], [charId]: { text, audioUrl: '', loading: false } } })) }
+        }
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Diálogos por Episódio</div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontSize: 12, color: C.textDim }}>Episódio:</span>
+              <select value={selEpisode} onChange={e => setSelEpisode(e.target.value)} style={inputStyle}>
+                <option value="">Selecione...</option>
+                {episodes.map(ep => <option key={ep.id} value={ep.id}>{ep.name || ep.id}</option>)}
+              </select>
+            </div>
+
+            {selEpisode && epScenes.length === 0 && (
+              <div style={{ color: C.textDim, textAlign: 'center', padding: 20 }}>Nenhuma cena neste episódio.</div>
+            )}
+
+            {epScenes.map((scene, si) => (
+              <div key={scene.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.gold }}>Cena {si + 1} · {scene.duration}s</span>
+                  {scene.videoUrl && <video src={scene.videoUrl} muted playsInline preload="metadata" style={{ width: 80, height: 45, borderRadius: 6, objectFit: 'cover' }} />}
+                </div>
+                {scene.characters.map(charId => {
+                  const char = allChars.find(c => c.id === charId)
+                  const hasVoice = !!voiceMap[charId]
+                  const dialog = dialogueData[scene.id]?.[charId]
+                  return (
+                    <div key={charId} style={{ marginBottom: 10, paddingLeft: 8, borderLeft: `2px solid ${hasVoice ? C.purple : C.border}` }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: hasVoice ? C.purple : C.textDim, marginBottom: 4 }}>
+                        {char?.emoji ?? '🧑'} {char?.name ?? charId} {hasVoice ? '🎙✓' : '⚠ sem voz'}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start' }}>
+                        <textarea
+                          defaultValue={dialog?.text ?? ''}
+                          placeholder={hasVoice ? '(animado) Escreva o diálogo aqui...' : 'Configure a voz primeiro em Vozes'}
+                          disabled={!hasVoice}
+                          rows={2}
+                          style={{ ...inputStyle, flex: 1, resize: 'vertical', fontSize: 12, opacity: hasVoice ? 1 : 0.5 }}
+                          onBlur={e => setDialogueData(prev => ({ ...prev, [scene.id]: { ...prev[scene.id], [charId]: { text: e.target.value, audioUrl: dialog?.audioUrl ?? '', loading: false } } }))}
+                        />
+                        <button
+                          onClick={() => { const txt = dialogueData[scene.id]?.[charId]?.text; if (txt) generateDialogue(scene.id, charId, txt) }}
+                          disabled={!hasVoice || dialog?.loading}
+                          style={{ ...btnP, padding: '8px 12px', fontSize: 11, opacity: hasVoice ? 1 : 0.4 }}
+                        >{dialog?.loading ? '...' : '▶'}</button>
+                      </div>
+                      {dialog?.audioUrl && (
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                          <audio controls src={dialog.audioUrl} style={{ flex: 1, height: 28 }} />
+                          <button onClick={() => generateDialogue(scene.id, charId, dialog.text)} style={{ ...btnS, padding: '4px 8px', fontSize: 10 }}>🔄</button>
+                          <a href={dialog.audioUrl} download style={{ ...btnS, padding: '4px 8px', fontSize: 10, textDecoration: 'none' }}>⬇</a>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+
+            {selEpisode && epScenes.length > 0 && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => {
+                  // Exporta todos os áudios gerados
+                  const audios = Object.entries(dialogueData).flatMap(([sceneId, chars]) =>
+                    Object.entries(chars).filter(([, d]) => d.audioUrl).map(([charId, d]) => ({ sceneId, charId, ...d }))
+                  )
+                  if (!audios.length) { setMsg('Nenhum áudio gerado ainda.'); return }
+                  setMsg(`${audios.length} áudio(s) prontos para download individual.`)
+                }} style={btnS}>⬇ Info dos áudios ({Object.values(dialogueData).reduce((s, chars) => s + Object.values(chars).filter(d => d.audioUrl).length, 0)})</button>
+              </div>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* ═══ POLIGLOTA ═══ */}
+      {subTab === 'polyglot' && (() => {
+        const LANGUAGES = [
+          { id: 'es', name: 'Espanhol' }, { id: 'en', name: 'Inglês' },
+          { id: 'fr', name: 'Francês' }, { id: 'de', name: 'Alemão' },
+          { id: 'it', name: 'Italiano' }, { id: 'ja', name: 'Japonês' },
+          { id: 'ko', name: 'Coreano' }, { id: 'zh', name: 'Chinês' },
+          { id: 'hi', name: 'Hindi' }, { id: 'ar', name: 'Árabe' },
+        ]
+
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Poliglota</div>
+            <div style={{ fontSize: 12, color: C.textDim }}>Traduza suas cantigas e episódios para outros idiomas. A voz original é preservada — só o idioma muda.</div>
+
+            {!polyType && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div onClick={() => setPolyType('cantiga')} style={{ background: C.surface, border: `1px solid ${C.gold}40`, borderRadius: 14, padding: 24, cursor: 'pointer', textAlign: 'center' }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>🎵</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Cantiga</div>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>Traduz o áudio mantendo a mesma voz</div>
+                </div>
+                <div onClick={() => setPolyType('episode')} style={{ background: C.surface, border: `1px solid ${C.purple}40`, borderRadius: 14, padding: 24, cursor: 'pointer', textAlign: 'center' }}>
+                  <div style={{ fontSize: 32, marginBottom: 8 }}>📺</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Episódio</div>
+                  <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>Traduz os diálogos para outro idioma</div>
+                </div>
+              </div>
+            )}
+
+            {polyType === 'cantiga' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <button onClick={() => setPolyType(null)} style={{ ...btnS, alignSelf: 'flex-start', padding: '4px 12px', fontSize: 11 }}>← Voltar</button>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Traduzir Cantiga</div>
+                <div style={{ fontSize: 12, color: C.textDim }}>A tradução usa a API de Dubbing da ElevenLabs. O áudio original é traduzido mantendo a mesma voz.</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: C.textDim }}>Para:</span>
+                  <select value={targetLang} onChange={e => setTargetLang(e.target.value)} style={inputStyle}>
+                    {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </div>
+                <div style={{ background: C.surface, borderRadius: 10, padding: 16 }}>
+                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Cole a URL do áudio da cantiga (MP3 do Suno):</div>
+                  <input id="cantiga-url" placeholder="https://..." style={inputStyle} />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                    <button onClick={async () => {
+                      const url = (document.getElementById('cantiga-url') as HTMLInputElement)?.value
+                      if (!url) { setMsg('Cole a URL do áudio.'); return }
+                      setPolyLoading(true); setPolyResult(null)
+                      try {
+                        // Por enquanto usa TTS com texto traduzido como placeholder
+                        // Dubbing API será integrada quando disponível
+                        setMsg('A tradução por dubbing será integrada em breve. Por enquanto, use o TTS na aba Diálogos com texto traduzido.')
+                        setPolyResult({ text: 'Funcionalidade de dubbing automático em desenvolvimento.' })
+                      } catch { setMsg('Erro') }
+                      finally { setPolyLoading(false) }
+                    }} disabled={polyLoading} style={{ ...btnP, opacity: polyLoading ? 0.6 : 1 }}>{polyLoading ? 'Traduzindo...' : '🌍 Traduzir'}</button>
+                  </div>
+                </div>
+                {polyResult && (
+                  <div style={{ background: `${C.gold}10`, border: `1px solid ${C.gold}30`, borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontSize: 12, color: C.gold }}>{polyResult.text}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {polyType === 'episode' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <button onClick={() => setPolyType(null)} style={{ ...btnS, alignSelf: 'flex-start', padding: '4px 12px', fontSize: 11 }}>← Voltar</button>
+                <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>Traduzir Episódio</div>
+                <div style={{ fontSize: 12, color: C.textDim }}>Os diálogos de cada cena são traduzidos e regenerados com as mesmas vozes dos personagens em outro idioma.</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: C.textDim }}>Episódio:</span>
+                  <select style={inputStyle}>
+                    <option value="">Selecione...</option>
+                    {episodes.map(ep => <option key={ep.id} value={ep.id}>{ep.name || ep.id}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, color: C.textDim }}>Para:</span>
+                  <select value={targetLang} onChange={e => setTargetLang(e.target.value)} style={inputStyle}>
+                    {LANGUAGES.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <label style={{ fontSize: 12, color: C.text, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" defaultChecked style={{ accentColor: C.purple }} /> Diálogos dos personagens</label>
+                  <label style={{ fontSize: 12, color: C.text, display: 'flex', alignItems: 'center', gap: 4 }}><input type="checkbox" defaultChecked style={{ accentColor: C.purple }} /> Gerar legendas (SRT)</label>
+                </div>
+                <div style={{ background: C.surface, borderRadius: 10, padding: 14 }}>
+                  <div style={{ fontSize: 11, color: C.textDim }}>Os vídeos das cenas permanecem iguais. O áudio traduzido é exportado separadamente. Na edição final, substitua a faixa de áudio.</div>
+                </div>
+                <button onClick={() => setMsg('A tradução de episódios será integrada com a API de Dubbing da ElevenLabs em breve. Por enquanto, escreva os diálogos traduzidos na aba Diálogos.')} style={btnP}>🌍 Traduzir episódio</button>
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
