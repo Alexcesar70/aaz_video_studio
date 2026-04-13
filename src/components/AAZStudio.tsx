@@ -7105,21 +7105,39 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
                   </select>
                 </div>
                 <div style={{ background: C.surface, borderRadius: 10, padding: 16 }}>
-                  <div style={{ fontSize: 12, color: C.textDim, marginBottom: 8 }}>Cole a URL do áudio da cantiga (MP3 do Suno):</div>
-                  <input id="cantiga-url" placeholder="https://..." style={inputStyle} />
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.textDim, marginBottom: 8 }}>ORIGEM DO ÁUDIO</div>
+
+                  {/* Opção 1: Upload de arquivo */}
+                  <div style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 12, color: C.textDim, marginBottom: 6 }}>Suba o arquivo de áudio (MP3/WAV):</div>
+                    <input type="file" accept="audio/*" id="poly-audio-upload" style={{ fontSize: 12, color: C.textDim }} onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+                      try {
+                        const formData = new FormData(); formData.append('file', file)
+                        const r = await fetch('/api/blob-upload', { method: 'POST', body: formData })
+                        if (r.ok) {
+                          const d = await r.json()
+                          setPolyResult({ audioUrl: d.url, text: `Arquivo "${file.name}" carregado. Clique Traduzir.` })
+                        }
+                      } catch { setMsg('Erro no upload.') }
+                    }} />
+                    {polyResult?.audioUrl && (
+                      <div style={{ marginTop: 8 }}>
+                        <audio controls src={polyResult.audioUrl} style={{ width: '100%' }} />
+                      </div>
+                    )}
+                  </div>
+
                   <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
                     <button onClick={async () => {
-                      const url = (document.getElementById('cantiga-url') as HTMLInputElement)?.value
-                      if (!url) { setMsg('Cole a URL do áudio.'); return }
-                      setPolyLoading(true); setPolyResult(null)
+                      if (!polyResult?.audioUrl) { setMsg('Suba o arquivo de áudio primeiro.'); return }
+                      setPolyLoading(true)
                       try {
-                        // Por enquanto usa TTS com texto traduzido como placeholder
-                        // Dubbing API será integrada quando disponível
-                        setMsg('A tradução por dubbing será integrada em breve. Por enquanto, use o TTS na aba Diálogos com texto traduzido.')
-                        setPolyResult({ text: 'Funcionalidade de dubbing automático em desenvolvimento.' })
+                        setMsg('A tradução por dubbing será integrada com a API ElevenLabs em breve. O arquivo foi carregado e está pronto para quando a funcionalidade estiver disponível.')
                       } catch { setMsg('Erro') }
                       finally { setPolyLoading(false) }
-                    }} disabled={polyLoading} style={{ ...btnP, opacity: polyLoading ? 0.6 : 1 }}>{polyLoading ? 'Traduzindo...' : '🌍 Traduzir'}</button>
+                    }} disabled={polyLoading || !polyResult?.audioUrl} style={{ ...btnP, opacity: polyLoading || !polyResult?.audioUrl ? 0.6 : 1 }}>{polyLoading ? 'Traduzindo...' : '🌍 Traduzir'}</button>
                   </div>
                 </div>
                 {polyResult && (
