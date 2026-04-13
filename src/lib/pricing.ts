@@ -170,6 +170,9 @@ export async function bootstrapPricingTable(): Promise<void> {
     { engineId: 'scene-director', engineName: 'Scene Director (Claude)', type: 'director', unit: 'call', baseCost: 0.015, marginFactor: m },
     { engineId: 'image-director', engineName: 'Image Director (Claude)', type: 'director', unit: 'call', baseCost: 0.005, marginFactor: m },
     { engineId: 'suno-v4', engineName: 'Suno V4 (Música)', type: 'director', unit: 'call', baseCost: 0.11, marginFactor: m },
+    { engineId: 'elevenlabs-tts', engineName: 'ElevenLabs TTS (Voz)', type: 'director', unit: 'call', baseCost: 0.003, marginFactor: m },
+    { engineId: 'elevenlabs-clone', engineName: 'ElevenLabs Clone (Voz)', type: 'director', unit: 'call', baseCost: 0.05, marginFactor: m },
+    { engineId: 'elevenlabs-dubbing', engineName: 'ElevenLabs Dubbing', type: 'director', unit: 'call', baseCost: 0.10, marginFactor: m },
   ]
 
   const now = new Date().toISOString()
