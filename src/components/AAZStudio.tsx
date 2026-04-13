@@ -6661,12 +6661,14 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
   const [ttsVoiceId, setTtsVoiceId] = useState('')
   const [ttsAudioUrl, setTtsAudioUrl] = useState('')
   const [ttsLoading, setTtsLoading] = useState(false)
-  const [msg, setMsg] = useState('')  // Voice assignments: charId → voiceId (persisted in localStorage for now)
-  const [voiceMap, setVoiceMap] = useState<Record<string, { voiceId: string; voiceName: string }>>(() => {
-    try { return JSON.parse(localStorage.getItem('aaz_voice_map') ?? '{}') } catch { return {} }
-  })
-  const saveVoiceMap = (map: Record<string, { voiceId: string; voiceName: string }>) => {
-    setVoiceMap(map); try { localStorage.setItem('aaz_voice_map', JSON.stringify(map)) } catch {}
+  const [msg, setMsg] = useState('')
+  // Voice assignments from Redis (via API)
+  const [voiceMap, setVoiceMap] = useState<Record<string, { voiceId: string; voiceName: string }>>({})
+  useEffect(() => {
+    fetch('/api/voice/map').then(r => r.json()).then(d => { if (d.map) setVoiceMap(d.map) }).catch(() => {})
+  }, [])
+  const refreshVoiceMap = () => {
+    fetch('/api/voice/map').then(r => r.json()).then(d => { if (d.map) setVoiceMap(d.map) }).catch(() => {})
   }
 
   const fmt = (v: number) => showBrl && brlRate ? `R$${(v * brlRate).toFixed(2)}` : `$${v.toFixed(3)}`
@@ -6699,7 +6701,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
     if (!voiceSuggestion.trim()) return
     setVoiceLoading(true); setVoicePreviews([])
     try {
-      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'design', description: voiceSuggestion }) })
+      const r = await fetch('/api/voice/design', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ description: voiceSuggestion }) })
       if (r.ok) { const d = await r.json(); setVoicePreviews(d.previews ?? []) }
       else setMsg('Erro ao gerar previews')
     } catch { setMsg('Erro de rede') }
@@ -6711,8 +6713,8 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
     const char = allChars.find(c => c.id === voiceTarget)
     setVoiceLoading(true)
     try {
-      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'save_voice', voicePreviewId: previewId, name: char?.name ?? voiceTarget, description: voiceSuggestion }) })
-      if (r.ok) { const d = await r.json(); saveVoiceMap({ ...voiceMap, [voiceTarget]: { voiceId: d.voiceId, voiceName: char?.name ?? '' } }); setMsg('✓ Voz salva!'); setVoiceAction(null); setVoicePreviews([]) }
+      const r = await fetch('/api/voice/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ previewId, characterId: voiceTarget, characterName: char?.name ?? voiceTarget, method: 'designed', description: voiceSuggestion }) })
+      if (r.ok) { const d = await r.json(); refreshVoiceMap(); setMsg('✓ Voz salva!'); setVoiceAction(null); setVoicePreviews([]) }
     } catch { setMsg('Erro ao salvar') }
     finally { setVoiceLoading(false) }
   }
@@ -6720,7 +6722,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
   const searchLibrary = async () => {
     setLibraryLoading(true)
     try {
-      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'list_voices', search: librarySearch }) })
+      const r = await fetch('/api/voice/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ search: librarySearch }) })
       if (r.ok) { const d = await r.json(); setLibraryVoices(d.voices ?? []) }
     } catch {}
     finally { setLibraryLoading(false) }
@@ -6730,7 +6732,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
     if (!ttsText.trim() || !ttsVoiceId) { setMsg('Escreva o texto e selecione uma voz.'); return }
     setTtsLoading(true); setTtsAudioUrl('')
     try {
-      const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'tts', text: ttsText, voiceId: ttsVoiceId }) })
+      const r = await fetch('/api/voice/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: ttsText, voiceId: ttsVoiceId }) })
       if (r.ok) { const d = await r.json(); setTtsAudioUrl(d.audioUrl ?? '') }
       else { const d = await r.json().catch(() => ({})); setMsg(d.error ?? 'Erro ao gerar') }
     } catch { setMsg('Erro de rede') }
@@ -6813,7 +6815,7 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
                         <button onClick={async () => {
                           setTtsLoading(true); setMsg('')
                           try {
-                            const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'tts', text: `Olá! Eu sou ${c.name}.`, voiceId: voiceMap[c.id].voiceId }) })
+                            const r = await fetch('/api/voice/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: `Olá! Eu sou ${c.name}.`, voiceId: voiceMap[c.id].voiceId }) })
                             if (r.ok) { const d = await r.json(); setTtsAudioUrl(d.audioUrl ?? '') }
                             else setMsg('Erro ao gerar áudio')
                           } catch { setMsg('Erro de rede') }
@@ -6906,7 +6908,11 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
                   <div style={{ fontSize: 11, color: C.textDim }}>{v.gender as string} · {v.age as string} · {v.accent as string}</div>
                 </div>
                 {v.previewUrl ? <audio controls src={String(v.previewUrl)} style={{ height: 32 }} /> : null}
-                <button onClick={() => { if (voiceTarget) { saveVoiceMap({ ...voiceMap, [voiceTarget]: { voiceId: v.id as string, voiceName: v.name as string } }); setMsg('✓ Voz vinculada!'); setVoiceAction(null) } }} style={btnP}>Usar ✓</button>
+                <button onClick={async () => { if (voiceTarget) {
+                  const char = allChars.find(c => c.id === voiceTarget)
+                  await fetch('/api/voice/assign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ characterId: voiceTarget, characterName: char?.name, voiceId: v.id, voiceName: v.name, method: 'library' }) })
+                  refreshVoiceMap(); setMsg('✓ Voz vinculada!'); setVoiceAction(null); setVoiceTarget(null)
+                } }} style={btnP}>Usar ✓</button>
               </div>
             ))}
             {libraryVoices.length === 0 && !libraryLoading && <div style={{ color: C.textDim, textAlign: 'center', padding: 20 }}>Busque para encontrar vozes.</div>}
@@ -6933,8 +6939,8 @@ function SenoidePanel({ currentUser, clientPrices, showBrl, brlRate, library, at
                 if (!upRes.ok) { setMsg('Erro no upload'); return }
                 const { url } = await upRes.json()
                 const char = allChars.find(c => c.id === voiceTarget)
-                const r = await fetch('/api/generate-voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'clone', name: char?.name ?? voiceTarget, audioUrl: url }) })
-                if (r.ok) { const d = await r.json(); saveVoiceMap({ ...voiceMap, [voiceTarget]: { voiceId: d.voiceId, voiceName: char?.name ?? '' } }); setMsg('✓ Voz clonada!'); setVoiceAction(null) }
+                const r = await fetch('/api/voice/clone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: char?.name ?? voiceTarget, audioUrl: url }) })
+                if (r.ok) { const d = await r.json(); refreshVoiceMap(); setMsg('✓ Voz clonada!'); setVoiceAction(null) }
                 else setMsg('Erro ao clonar')
               } catch { setMsg('Erro') }
               finally { setVoiceLoading(false) }
