@@ -58,12 +58,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Limpa markdown e tags da letra antes de enviar ao Suno
+    const cleanPrompt = prompt.trim()
+      .replace(/\*\*/g, '')           // remove bold markdown
+      .replace(/\[([^\]]*)\]/g, '')   // remove [Verso 1], [Refrão] etc.
+      .replace(/\n{3,}/g, '\n\n')    // normaliza quebras de linha
+      .trim()
+
+    // Callback URL — Suno exige mesmo que não usemos (usamos polling)
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://aaz-video-studio.vercel.app'
+
     // Chamada ao Suno API
     const sunoPayload: Record<string, unknown> = {
-      prompt: prompt.trim(),
+      prompt: cleanPrompt,
       customMode,
       instrumental,
       model: 'V4',
+      callBackUrl: `${appUrl}/api/webhooks/suno`,
     }
     if (customMode) {
       sunoPayload.title = title || 'Cantiga AAZ'
@@ -93,9 +104,16 @@ export async function POST(request: NextRequest) {
     const sunoData = await sunoRes.json()
     console.log('[/api/generate-music] Suno POST response:', JSON.stringify(sunoData).slice(0, 500))
 
+    // Verifica se a resposta indica erro
+    if (sunoData?.code && sunoData.code !== 200) {
+      console.error('[/api/generate-music] Suno API error:', JSON.stringify(sunoData))
+      return NextResponse.json({ error: sunoData.msg ?? `Suno erro: ${sunoData.code}` }, { status: 400 })
+    }
+
     const taskId = sunoData?.data?.taskId ?? sunoData?.taskId ?? sunoData?.data?.task_id ?? sunoData?.task_id
     if (!taskId) {
-      return NextResponse.json({ error: 'Suno não retornou taskId. Resposta: ' + JSON.stringify(sunoData).slice(0, 200) }, { status: 500 })
+      console.error('[/api/generate-music] Sem taskId:', JSON.stringify(sunoData).slice(0, 500))
+      return NextResponse.json({ error: 'Suno não retornou taskId. Verifique os logs da Vercel.' }, { status: 500 })
     }
 
     // Passo 2: Polling — aguarda até 90s (a geração leva ~20-30s)
