@@ -119,14 +119,21 @@ export async function POST(request: NextRequest) {
         const status = pollData?.data?.status ?? pollData?.status
         console.log(`[/api/generate-music] Poll #${attempt + 1}: status=${status}`)
 
-        if (status === 'SUCCESS' || status === 'success' || status === 'completed') {
-          // Extrai os dados das músicas
-          const responseData = pollData?.data?.response?.data ?? pollData?.data?.data ?? pollData?.data?.response ?? []
+        if (status === 'SUCCESS' || status === 'success' || status === 'completed' || status === 'COMPLETED') {
+          console.log('[/api/generate-music] Poll SUCCESS data:', JSON.stringify(pollData).slice(0, 1000))
+          // Tenta múltiplos caminhos na resposta
+          const responseData = pollData?.data?.response?.sunoData ?? pollData?.data?.response?.data ?? pollData?.data?.sunoData ?? pollData?.data?.data ?? pollData?.data?.response ?? pollData?.data ?? []
           songs = Array.isArray(responseData) ? responseData : [responseData]
           const firstSong = songs[0] ?? {}
-          musicUrl = (firstSong.audio_url ?? firstSong.audioUrl ?? '') as string
+          musicUrl = (firstSong.audio_url ?? firstSong.audioUrl ?? firstSong.stream_audio_url ?? firstSong.streamAudioUrl ?? '') as string
           songTitle = (firstSong.title ?? title ?? 'Cantiga') as string
           duration = (firstSong.duration ?? 0) as number
+          if (!musicUrl) {
+            // Tenta extrair de qualquer campo que contenha URL de áudio
+            const dataStr = JSON.stringify(pollData)
+            const urlMatch = dataStr.match(/"(https?:\/\/[^"]+\.(?:mp3|wav|m4a|ogg)(?:\?[^"]*)?)"/)
+            if (urlMatch) musicUrl = urlMatch[1]
+          }
           break
         }
 
