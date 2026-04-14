@@ -14,7 +14,18 @@ export interface AuthUser {
   email: string
   name: string
   role: UserRole
-  /** ID da organização à qual o usuário pertence (opcional para retrocompat) */
+  /**
+   * ID do workspace ao qual o usuário pertence.
+   *
+   * PR #8: "workspaceId" é a nomenclatura canônica do produto. Código
+   * novo deve preferir esse campo. `organizationId` é mantido como
+   * alias deprecated até PR #9 consolidar.
+   *
+   * Ambos são preenchidos com o mesmo valor — o header `x-org-id`
+   * do middleware (que mapeia ao JWT.organizationId legado).
+   */
+  workspaceId?: string
+  /** @deprecated Use `workspaceId`. Mantido por retrocompat — ADR-0004. */
   organizationId?: string
   /** Granular permissions (Phase 4). Empty = fall back to role defaults. */
   permissions?: string[]
@@ -41,15 +52,27 @@ export function getAuthUser(request: NextRequest): AuthUser | null {
   try { permissions = permissionsRaw ? JSON.parse(permissionsRaw) : undefined } catch { /* ignore */ }
   try { products = productsRaw ? JSON.parse(productsRaw) : undefined } catch { /* ignore */ }
 
+  const workspaceId = organizationId ?? undefined
+
   return {
     id,
     email: email ?? '',
     name: name ?? '',
     role,
-    organizationId: organizationId ?? undefined,
+    workspaceId,
+    organizationId: workspaceId, // alias deprecated — ver ADR-0004
     permissions,
     products,
   }
+}
+
+/**
+ * Retorna o workspaceId efetivo do usuário autenticado.
+ * Null se o usuário não pertence a nenhum workspace (caso no novo fluxo
+ * de signup pré-wizard — flag NEW_SIGNUP_WIZARD).
+ */
+export function getWorkspaceId(request: NextRequest): string | null {
+  return getAuthUser(request)?.workspaceId ?? null
 }
 
 /**

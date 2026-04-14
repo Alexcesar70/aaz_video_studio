@@ -36,3 +36,4 @@ O objetivo é ter **memória do "por quê"** — não só do "o quê".
 | [0001](./0001-module-structure.md) | accepted | Estrutura modular e Clean Architecture aplicada |
 | [0002](./0002-feature-flag-strategy.md) | accepted | Estratégia de feature flags sem staging |
 | [0003](./0003-workspace-as-tenancy.md) | accepted | Workspace como unidade de tenancy; Individual é Workspace com maxUsers=1 |
+| [0004](./0004-incremental-rename-org-to-workspace.md) | accepted | Rename semântico Organization → Workspace é incremental, não big-bang |

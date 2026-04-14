@@ -1,11 +1,16 @@
 /**
  * Modelo de organizações (Organizations) do AAZ Platform.
  *
- * Cada organização agrupa usuários sob um plano, com wallet própria
- * e acesso a um conjunto de produtos. Pode ser individual (1 user)
- * ou team (N users).
+ * ⚠️ CÓDIGO NOVO: prefira importar de `@/modules/workspaces` usando
+ *   a nomenclatura `Workspace` / `createWorkspace` / `getWorkspaceById`.
+ *   As exports deste arquivo permanecem válidos (retrocompat), mas
+ *   estão em deprecação incremental — ver ADR-0004.
  *
- * Redis keys:
+ * Cada organização (workspace) agrupa usuários sob um plano, com
+ * wallet própria e acesso a um conjunto de produtos. Pode ser
+ * individual (1 user) ou team (N users).
+ *
+ * Redis keys (NÃO MUDAM em M1 — ADR-0004):
  *  - aaz:org:{id}          → Organization JSON
  *  - aaz:org_slug:{slug}   → id (índice secundário por slug)
  */

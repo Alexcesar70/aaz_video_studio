@@ -60,7 +60,7 @@ E2E_CREATOR_PASSWORD=...      # opcional
 - [x] **PR #5** — `StyleProfile` como entidade de primeira classe (6 presets globais)
 - [x] **PR #6** — Image Director usa StyleProfile (flag `USE_STYLE_PROFILES`) + `GET /api/style-profiles` público + Moods decouple (narrativas universe-neutral, injections visuais preservadas)
 - [x] **PR #7** — Signup wizard + Workspace creation (flag `NEW_SIGNUP_WIZARD`; `POST /api/workspaces`; ADR-0003)
-- [ ] **PR #8** — Rename semântico Organization → Workspace (code-only)
+- [x] **PR #8** — Rename semântico Organization → Workspace (type aliases; `AuthUser.workspaceId`; ADR-0004 — incremental)
 - [ ] **PR #9** — Consolidação + criação do `PROJECT.md` (universal)
 
 ### Checklist de paridade funcional (roda antes de cada merge)
