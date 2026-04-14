@@ -43,3 +43,8 @@ export {
   resolveSongPromptGeneratorSystem,
 } from './composers/lyricsDirector'
 export type { ResolvedLyricsSystem } from './composers/lyricsDirector'
+export {
+  resolveImageDirectorSystem,
+  buildImageDirectorSystem,
+} from './composers/imageDirector'
+export type { ResolvedImageDirectorSystem } from './composers/imageDirector'

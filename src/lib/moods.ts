@@ -35,13 +35,19 @@ export interface Mood {
   videoPromptInjection: string
 }
 
+// PR #6 (Moods decouple): narratives são agora universe-neutral.
+// Orientação visual (imagePromptInjection / videoPromptInjection) é
+// preservada byte-a-byte — o output técnico das gerações não regride.
+// Apenas as descrições exibidas em UI e injetadas como contexto narrativo
+// deixaram de referenciar elementos específicos do universo AAZ
+// (Clube da Aliança, Theos, cenas bíblicas).
 export const MOODS: Mood[] = [
   {
     id: 'warm',
     label: '☀ Cálido',
     icon: '☀',
     shortLabel: 'Cálido',
-    narrative: 'Dia-a-dia, conversas no Clube da Aliança, acolhimento, família',
+    narrative: 'Dia-a-dia, acolhimento, conversas em família, momentos cotidianos',
     imagePromptInjection:
       'golden hour warm light, soft diffused shadows, ochre/cream/olive palette, warm ambient occlusion, intimate and welcoming atmosphere',
     videoPromptInjection:
@@ -52,7 +58,7 @@ export const MOODS: Mood[] = [
     label: '⚡ Dramático',
     icon: '⚡',
     shortLabel: 'Dramático',
-    narrative: 'Conflito, quebra de regra, tensão antes da resolução',
+    narrative: 'Conflito, tensão antes da resolução, ruptura emocional',
     imagePromptInjection:
       'strong directional side lighting, pronounced shadows, cooler blue tones mixed with warm highlights (teal and orange contrast), tense atmosphere, clear rim light on subject',
     videoPromptInjection:
@@ -63,7 +69,7 @@ export const MOODS: Mood[] = [
     label: '✨ Etéreo',
     icon: '✨',
     shortLabel: 'Etéreo',
-    narrative: 'Presença sutil de Theos, sinais ambientais, revelação, descoberta espiritual',
+    narrative: 'Presença sutil, sinais ambientais, revelação, descoberta contemplativa',
     imagePromptInjection:
       'soft glowing ambient light, suspended dust particles catching sunrays, pale gold and pearl white highlights, ethereal rim light, hint of warm lens flare, contemplative atmosphere',
     videoPromptInjection:
@@ -74,7 +80,7 @@ export const MOODS: Mood[] = [
     label: '🌙 Noturno íntimo',
     icon: '🌙',
     shortLabel: 'Noturno',
-    narrative: 'Fogueira, reflexão antes de dormir, confissão sincera, segredo compartilhado',
+    narrative: 'Noite, reflexão, confissão sincera, segredo compartilhado à luz do fogo',
     imagePromptInjection:
       'night scene, small pools of warm firelight or candlelight against deep blue darkness, deep shadows, golden glow on faces, starlit sky visible, intimate quiet mood',
     videoPromptInjection:
@@ -85,7 +91,7 @@ export const MOODS: Mood[] = [
     label: '🏔 Épico',
     icon: '🏔',
     shortLabel: 'Épico',
-    narrative: 'Cenas bíblicas grandiosas — êxodo, monte, templo, palácio, multidões',
+    narrative: 'Cenas grandiosas — jornadas, montanhas, templos, palácios, multidões',
     imagePromptInjection:
       'vast wide composition, dramatic high-contrast lighting from above, saturated earth tones (ochre/terracotta/deep blue), sense of scale and grandeur, volumetric god rays, cinematic depth',
     videoPromptInjection:
@@ -96,7 +102,7 @@ export const MOODS: Mood[] = [
     label: '🎒 Aventura',
     icon: '🎒',
     shortLabel: 'Aventura',
-    narrative: 'Jornada, exploração, descobrimento, ação enérgica, alegria em movimento',
+    narrative: 'Jornada, exploração, descoberta, ação enérgica, alegria em movimento',
     imagePromptInjection:
       'bright daylight, clear defined shadows, vivid saturated colors, dynamic composition feel, sense of motion and discovery, crisp visibility, joyful energetic atmosphere',
     videoPromptInjection:

@@ -6,6 +6,9 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
+import { isFeatureEnabled } from '@/lib/featureFlags'
+import { resolveImageDirectorSystem } from '@/modules/prompts'
+import { RedisStyleProfileRepository } from '@/modules/library'
 
 /**
  * POST /api/image-director
@@ -70,6 +73,7 @@ export async function POST(request: NextRequest) {
       description?: string
       has_reference?: boolean
       mood?: string
+      style_profile_slug?: string
     }
 
     if (!body.type || !['character', 'scenario', 'item'].includes(body.type)) {
@@ -82,7 +86,38 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'description é obrigatória.' }, { status: 400 })
     }
 
-    const systemPrompt = getImageDirectorSystemPrompt(body.type, body.mood)
+    // Feature flag USE_STYLE_PROFILES (PR #6, ver ADR-0002):
+    //   OFF (default): caminho legado com AAZ_STYLE_BLOCK hardcoded —
+    //     mantém comportamento idêntico ao pré-refactor.
+    //   ON: resolve StyleProfile do DB (workspace override → global →
+    //     fallback AAZ_STYLE_BLOCK). Aceita body.style_profile_slug
+    //     para override explícito do creator. Usa guides style-agnostic.
+    let systemPrompt: string
+    let styleSource: 'legacy' | 'db' | 'fallback' = 'legacy'
+    let styleProfileSlug: string | undefined
+    let styleProfileVersion: number | undefined
+    if (
+      isFeatureEnabled('USE_STYLE_PROFILES', {
+        userId: earlyAuth?.id,
+        workspaceId: earlyAuth?.organizationId,
+      })
+    ) {
+      const resolved = await resolveImageDirectorSystem(
+        { repo: new RedisStyleProfileRepository() },
+        {
+          assetType: body.type,
+          moodId: body.mood,
+          styleProfileSlug: body.style_profile_slug,
+          workspaceId: earlyAuth?.organizationId ?? null,
+        },
+      )
+      systemPrompt = resolved.prompt
+      styleSource = resolved.source
+      styleProfileSlug = resolved.slug
+      styleProfileVersion = resolved.version
+    } else {
+      systemPrompt = getImageDirectorSystemPrompt(body.type, body.mood)
+    }
 
     const userMessage = [
       `Asset type: ${body.type}`,
@@ -202,6 +237,9 @@ export async function POST(request: NextRequest) {
             costSource,
             claudeCostUsd: cost,
             walletDeducted,
+            styleSource,
+            styleProfileSlug,
+            styleProfileVersion,
           },
         },
       }).catch(() => {})
