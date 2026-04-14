@@ -13,6 +13,7 @@
 | Flag | PR | Backend | Frontend | Risco | Observabilidade |
 |---|---|---|---|---|---|
 | `USE_ASYNC_GENERATION` | M2-PR2 | sim | sim (Studio) | **ALTO** (fluxo de geração) | Inngest dashboard + `GET /api/jobs/:id` |
+| `USE_REFERENCE_ASSETS` | M2-PR4 | sim (`/api/blob-upload`) | sim (Picker) | baixo | Redis `aaz:reference:*`, count por user |
 
 ---
 
@@ -94,6 +95,38 @@ FF_USE_ASYNC_GENERATION=off  # volta ao síncrono global
 
 ---
 
+## Rollout — `USE_REFERENCE_ASSETS` (M2-PR4)
+
+Flag independente. Liga o **auto-registro** de uploads como
+`ReferenceAsset` no módulo `references` (ver M2-PR3). O componente
+`ReferenceAssetPicker` já está no bundle — só começa a ter dados úteis
+quando esta flag está ligada.
+
+**Por que é baixo risco:** o fallback para clientes legados é o
+contrato antigo (`{ url, pathname }`). O campo `referenceId` só
+aparece na resposta quando a flag está ON; código que não espera o
+campo ignora silenciosamente. Um erro na criação do Ref não bloqueia
+o upload — logado e seguido.
+
+```bash
+# Passo 1 — canário
+FF_USE_REFERENCE_ASSETS_USERS=alexandre
+
+# Validar:
+# - Upload de imagem no Atelier → DevTools mostra response com { url, pathname, referenceId }.
+# - GET /api/references?mediaType=image retorna o item recém criado.
+# - Em um componente que use <ReferenceAssetPicker />, o item aparece.
+# - Upload com outro user (sem flag) continua retornando só { url, pathname }.
+
+# Passo 2 — global após 3-7 dias
+FF_USE_REFERENCE_ASSETS=on
+
+# Rollback
+FF_USE_REFERENCE_ASSETS=off  # uploads deixam de criar Refs (histórico anterior permanece)
+```
+
+---
+
 ## Passo 3 — Consolidação (futuro M2-PR8)
 
 Após 30+ dias em `on` sem incidente:
@@ -113,14 +146,16 @@ Após 30+ dias em `on` sem incidente:
 
 ## Ordem de expansão do M2 (posterior a esta flag)
 
-| PR | Escopo | Depende de |
-|---|---|---|
-| M2-PR3 | ReferenceAsset como entidade | M2-PR1 |
-| M2-PR4 | Asset Picker unificado | M2-PR3 |
-| M2-PR5 | Character como entidade + versionamento | — |
-| M2-PR6 | StyleProfile versionamento (UI) | M1-PR5 |
-| M2-PR7 | Decomposição `AAZStudio.tsx` | — |
-| M2-PR8 | Consolidação + Sentry | M2-PR2..PR7 |
+| PR | Escopo | Status | Depende de |
+|---|---|---|---|
+| M2-PR1 | Job tracking foundation | ✅ | — |
+| M2-PR2 | Inngest + async generation | ✅ | M2-PR1 |
+| M2-PR3 | ReferenceAsset entity | ✅ | — |
+| M2-PR4 | Asset Picker unificado + auto-register | ✅ | M2-PR3 |
+| M2-PR5 | Character como entidade + versionamento | pendente | — |
+| M2-PR6 | StyleProfile versionamento (UI) | pendente | M1-PR5 |
+| M2-PR7 | Decomposição `AAZStudio.tsx` | pendente | — |
+| M2-PR8 | Consolidação + Sentry | pendente | M2-PR2..PR7 |
 
 Cada PR terá sua própria seção nesta doc quando for entregue.
 

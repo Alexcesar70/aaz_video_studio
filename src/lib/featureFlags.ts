@@ -26,6 +26,7 @@ export type FeatureFlag =
   | 'USE_STYLE_PROFILES'      // PR #5 — StyleProfile como entidade
   | 'NEW_SIGNUP_WIZARD'       // PR #7 — wizard de workspace na primeira sessão
   | 'USE_ASYNC_GENERATION'    // M2-PR2 — /api/generate enfileira via Inngest
+  | 'USE_REFERENCE_ASSETS'    // M2-PR4 — /api/blob-upload auto-registra ReferenceAsset + picker UI
   | 'PROMPT_PLAYBOOKS'        // Fase 2 — Team Leader cria playbooks com Claude
 
 export interface FeatureFlagContext {
@@ -86,6 +87,7 @@ export function resolveAllFlags(
     'USE_STYLE_PROFILES',
     'NEW_SIGNUP_WIZARD',
     'USE_ASYNC_GENERATION',
+    'USE_REFERENCE_ASSETS',
     'PROMPT_PLAYBOOKS',
   ]
   return all.reduce(
