@@ -1,164 +1,121 @@
-# AAZ com Jesus · Production Studio
+# Creative Studio
 
-Studio interno de produção de cenas para o projeto de animação cristã infantil **AAZ com Jesus**, usando Seedance 2.0 via Segmind.
+Multi-tenant SaaS de produção audiovisual com IA — vídeo, imagem, voz
+e música — com workspaces colaborativos, bibliotecas reutilizáveis
+(personagens, estilos, referências) e governança transparente de custo.
 
-**Time:** Alexandre
+> **Status:** Milestone 1 (Agnostic Core) entregue na branch `universal`.
+> Versão pré-refactor congelada na tag [`v0.0.1`](https://github.com/Alexcesar70/aaz_video_studio/releases/tag/v0.0.1).
+> O **AAZ com Jesus** segue funcionando como tenant configurado da plataforma — ver `docs/history/AAZ_STUDIO_PRE_REFACTOR.md`.
+
+---
+
+## Onde começar
+
+| Quero entender o produto | [`PROJECT.md`](./PROJECT.md) |
+|---|---|
+| Quero contribuir / regras de trabalho | [`CLAUDE.md`](./CLAUDE.md) |
+| Quero entender decisões estruturais | [`docs/adr/`](./docs/adr/) |
+| Quero ativar features do M1 em produção | [`docs/m1-rollout-checklist.md`](./docs/m1-rollout-checklist.md) |
 
 ---
 
 ## Stack
 
-- **Next.js 14** — App Router + TypeScript
-- **Vercel** — Deploy + KV (biblioteca de character sheets compartilhada)
-- **Segmind** — Seedance 2.0 (geração de vídeo + character sheets)
-- **Anthropic Claude** — Scene Director trilíngue (PT-BR + ES + EN)
-- **Auth** — Middleware com cookie JWT + senha única em `.env.local`
+- **Next.js 14** (App Router + TypeScript)
+- **Vercel** (deploy + KV/Redis + Blob storage)
+- **Anthropic Claude** (Scene/Image/Lyrics Directors)
+- **Segmind** (Seedance, Kling, Veo, Wan, Nano Banana Pro, Flux, Imagen)
+- **ElevenLabs** (TTS, voice design, cloning)
+- **Suno** (geração de música)
+- **Vitest + Playwright** (unit + smoke E2E)
 
 ---
 
 ## Setup local
 
-### 1. Clone e instale
-
 ```bash
-git clone https://github.com/seu-org/aaz-studio.git
-cd aaz-studio
+git clone https://github.com/Alexcesar70/aaz_video_studio.git
+cd aaz_video_studio
 npm install
+cp .env.example .env.local   # se existir; senão preencha à mão
+npm run dev                  # → http://localhost:3000
 ```
 
-### 2. Configure as variáveis de ambiente
-
-```bash
-cp .env.example .env.local
-```
-
-Edite `.env.local` com os valores reais:
+### Variáveis de ambiente
 
 | Variável | Descrição |
-|----------|-----------|
-| `SITE_PASSWORD` | Senha de acesso ao estúdio (compartilhada entre Raphael, Marco, Carpes) |
-| `SESSION_SECRET` | String aleatória ≥ 32 chars — gere com `openssl rand -base64 32` |
-| `SEGMIND_API_KEY` | API Key Segmind — [segmind.com/dashboard](https://segmind.com/dashboard/api-keys) |
-| `ANTHROPIC_API_KEY` | API Key Anthropic — [console.anthropic.com](https://console.anthropic.com/api-keys) |
-| `KV_*` | Preenchido automaticamente ao conectar Vercel KV (Fase 3) |
+|---|---|
+| `SESSION_SECRET` | JWT secret — gere com `openssl rand -base64 32` |
+| `SITE_PASSWORD` | Senha do admin bootstrap (primeira inicialização) |
+| `SEGMIND_API_KEY` | API Key Segmind |
+| `SEGMIND_VIDEO_ENDPOINT` | Endpoint Segmind padrão (Seedance 2.0) |
+| `ANTHROPIC_API_KEY` | Claude API |
+| `ANTHROPIC_MODEL` | Default `claude-sonnet-4-20250514` |
+| `ELEVENLABS_API_KEY` | Voice design + TTS + cloning |
+| `SUNO_API_KEY` | Geração de música (sunoapi.org) |
+| `KV_*` / `REDIS_URL` | Vercel KV (preenchido auto ao conectar storage) |
+| `BLOB_READ_WRITE_TOKEN` | Vercel Blob (uploads) |
+| `NEXT_PUBLIC_APP_URL` | Ex.: `http://localhost:3000` |
 
-### 3. Rode localmente
+### Feature flags do M1 (todas default OFF)
+
+| Flag | PR | O que liga |
+|---|---|---|
+| `FF_USE_DB_PROMPTS` | #3 | Directors leem do PromptTemplate em vez de constantes |
+| `FF_USE_DB_ONLY_CHARACTERS` | #4 | `/api/assets` puramente DB-scoped (sem merge legado) |
+| `FF_USE_STYLE_PROFILES` | #6 | Image Director usa StyleProfile entity |
+| `FF_NEW_SIGNUP_WIZARD` | #7 | Login mostra wizard de criação de workspace |
+
+Cada flag aceita rollout targetado:
+- `FF_<FLAG>_USERS=id1,id2` — só esses usuários
+- `FF_<FLAG>_WORKSPACES=ws1,ws2` — só esses workspaces
+- `FF_<FLAG>=on` — global
+
+Plano de rollout completo em [`docs/m1-rollout-checklist.md`](./docs/m1-rollout-checklist.md).
+
+---
+
+## Testes
 
 ```bash
-npm run dev
+npm run test           # Vitest — unitários do domínio (rápido)
+npm run test:watch     # Vitest watch
+npm run test:e2e       # Playwright smoke (requer dev server + env vars E2E_*)
+npm run typecheck      # tsc --noEmit
 ```
 
-Acesse `http://localhost:3000` → redireciona para `/login` → use a senha do `.env.local`.
+**163 testes unitários** garantem o módulo de prompts, library
+(characters + style profiles), workspaces e feature flags.
 
 ---
 
-## Estrutura do projeto
+## Deploy
+
+Push em `universal` (após M1 mergear) dispara deploy automático na
+Vercel. Pré-merge em `main`, validar com a checklist de paridade
+funcional listada no [`CLAUDE.md`](./CLAUDE.md).
+
+`vercel.json` mantém timeout de 300s para rotas pesadas de geração.
+
+---
+
+## Convenção de commits
 
 ```
-src/
-├── app/
-│   ├── layout.tsx              # Root layout
-│   ├── page.tsx                # Redirect → /studio
-│   ├── globals.css
-│   ├── studio/
-│   │   └── page.tsx            # Página principal (protegida)
-│   ├── login/
-│   │   └── page.tsx            # Página de login
-│   └── api/
-│       ├── auth/
-│       │   ├── login/route.ts  # POST — verifica senha, seta cookie JWT
-│       │   └── logout/route.ts # POST — apaga cookie
-│       ├── generate/
-│       │   └── route.ts        # POST — proxy Segmind vídeo (Fase 2)
-│       ├── generate-sheet/
-│       │   └── route.ts        # POST — proxy Segmind character sheet (Fase 2)
-│       └── scene-director/
-│           └── route.ts        # POST — Claude trilíngue (Fase 4)
-├── components/
-│   └── AAZStudio.tsx           # Componente principal ('use client')
-├── lib/
-│   └── (utilities Fase 3+)
-└── middleware.ts               # Auth por cookie em todas as rotas
+<type>(<escopo>): <descrição curta>
+
+[contexto opcional do "porquê"]
+
+[lista opcional de mudanças]
+
+[caminho de rollout / como ligar feature flag]
 ```
 
----
-
-## Fases de desenvolvimento
-
-| Fase | Responsável | Status | Descrição |
-|------|------------|--------|-----------|
-| 1 | Alexandre | ✅ Completa | Scaffolding Next.js, auth middleware, página login |
-| 2 | Alexandre | ⬜ Pendente | Implementar `/api/generate` e `/api/generate-sheet` |
-| 3 | Alexandre | ⬜ Pendente | Vercel KV para biblioteca compartilhada |
-| 4 | Alexandre | ⬜ Pendente | Scene Director — Claude API + SKILL.md |
-| 5 | Alexandre | ⬜ Pendente | Deploy Vercel + env vars + KV connect |
+Tipos: `feat`, `refactor`, `fix`, `chore`, `docs`, `test`, `perf`.
 
 ---
 
-## Deploy no Vercel (Fase 5)
+## Licença
 
-```bash
-# 1. Push para o GitHub
-git push origin main
-
-# 2. No painel Vercel: Import Project → seleciona o repo
-
-# 3. Adicionar as variáveis de ambiente no painel Vercel
-#    Settings → Environment Variables → adicionar todas do .env.example
-
-# 4. Conectar Vercel KV
-#    Storage → Create Database → KV → conectar ao projeto
-#    (as variáveis KV_* são preenchidas automaticamente)
-
-# 5. Deploy automático em cada push para main
-```
-
-### Timeout das funções
-
-Configurado em `vercel.json`:
-- `/api/generate` — 120s (Segmind pode demorar para vídeos longos)
-- `/api/generate-sheet` — 120s
-- `/api/scene-director` — 30s
-
----
-
-## Auth
-
-O middleware em `src/middleware.ts` intercepta **todas** as rotas exceto `/login` e `/api/auth/*`.
-
-- Verifica o cookie `aaz_session` (JWT assinado com `SESSION_SECRET`)
-- Cookie expira em 7 dias
-- Em produção o cookie é `httpOnly + secure + sameSite=lax`
-- Logout em qualquer tela pelo botão "Sair" no header
-
----
-
-## Personagens canônicos
-
-| ID | Nome | Aparência |
-|----|------|-----------|
-| `abraao` | Abraão | Cabelo laranja-avermelhado, pele clara, sardas, olhos verde-avelã |
-| `abigail` | Abigail | Cabelo cacheado escuro em puffs, pele morena, olhos castanhos grandes |
-| `zaqueu` | Zaqueu | Mini-dreads, pele escura uniforme, o mais alto dos três |
-| `tuba` | Tuba | Cachorro âmbar-laranja, pelo textura argila, sobrancelhas expressivas |
-| `theos` | Theos | NUNCA aparece em cena — age apenas pelo ambiente |
-| `miriam` | Miriã | Adulta, cabelo cacheado, avental, olhos acolhedores |
-| `elias` | Elias | Adulto, barba curta, mãos grandes, presença calma |
-
----
-
-## Vocabulário bloqueado no Seedance
-
-Os seguintes termos causam erro `"may contain restricted content"`. **Nunca incluir nos prompts gerados:**
-
-| Bloqueado | Substituir por |
-|-----------|---------------|
-| angel, angels | winged boy, winged figure |
-| God, Lord, Jesus | (omitir no prompt — usar apenas no Audio) |
-| pray, prayer | hands folded, eyes closed (física apenas) |
-| church | building, large hall |
-| Bible | book, old book |
-| cross | wooden structure |
-| heaven | sky, star-filled sky |
-| miracle | unexpected event |
-| blessed, sacred | warm, luminous, glowing |
+Privado — uso interno.

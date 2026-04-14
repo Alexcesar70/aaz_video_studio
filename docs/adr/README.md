@@ -3,6 +3,9 @@
 Cada decisão arquitetural significativa é registrada aqui como um ADR numerado.
 O objetivo é ter **memória do "por quê"** — não só do "o quê".
 
+> Visão de produto e arquitetura completa: [`PROJECT.md`](../../PROJECT.md).
+> Regras operacionais: [`CLAUDE.md`](../../CLAUDE.md).
+
 ## Quando criar um ADR
 
 - Decisão estruturante que afeta +1 módulo (ex.: escolha de ORM, estratégia de tenancy).

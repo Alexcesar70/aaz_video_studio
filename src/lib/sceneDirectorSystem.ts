@@ -230,8 +230,3 @@ ${moodChanged
 
   return prompt
 }
-
-/**
- * @deprecated Use getSceneDirectorSystem(moodId, chainFrom) — kept para backcompat.
- */
-export const SCENE_DIRECTOR_SYSTEM = SCENE_DIRECTOR_BASE

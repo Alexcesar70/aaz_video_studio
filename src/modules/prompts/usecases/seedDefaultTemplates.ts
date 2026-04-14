@@ -1,4 +1,4 @@
-import { SCENE_DIRECTOR_SYSTEM } from '@/lib/sceneDirectorSystem'
+import { SCENE_DIRECTOR_BASE } from '@/lib/sceneDirectorSystem'
 import {
   getLyricsDirectorSystem,
   getStoryboardDirectorSystem,
@@ -38,7 +38,7 @@ function collectDefaults(): SeedEntry[] {
     {
       slug: 'scene_director_base',
       kind: 'scene_director',
-      content: SCENE_DIRECTOR_SYSTEM,
+      content: SCENE_DIRECTOR_BASE,
       description:
         'Base do Scene Director (PT-BR + EN). Mood e chain context são aplicados dinamicamente em cima desta base.',
     },
