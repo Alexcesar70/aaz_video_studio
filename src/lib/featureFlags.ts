@@ -21,10 +21,11 @@
  */
 
 export type FeatureFlag =
-  | 'USE_DB_PROMPTS'        // PR #3 — directors leem do PromptTemplate
-  | 'USE_STYLE_PROFILES'    // PR #5 — StyleProfile como entidade
-  | 'NEW_SIGNUP_WIZARD'     // PR #7 — wizard de workspace na primeira sessão
-  | 'PROMPT_PLAYBOOKS'      // Fase 2 — Team Leader cria playbooks com Claude
+  | 'USE_DB_PROMPTS'          // PR #3 — directors leem do PromptTemplate
+  | 'USE_DB_ONLY_CHARACTERS'  // PR #4 — /api/assets ignora LEAD_CHARACTERS const
+  | 'USE_STYLE_PROFILES'      // PR #5 — StyleProfile como entidade
+  | 'NEW_SIGNUP_WIZARD'       // PR #7 — wizard de workspace na primeira sessão
+  | 'PROMPT_PLAYBOOKS'        // Fase 2 — Team Leader cria playbooks com Claude
 
 export interface FeatureFlagContext {
   userId?: string
@@ -80,6 +81,7 @@ export function resolveAllFlags(
 ): Record<FeatureFlag, boolean> {
   const all: FeatureFlag[] = [
     'USE_DB_PROMPTS',
+    'USE_DB_ONLY_CHARACTERS',
     'USE_STYLE_PROFILES',
     'NEW_SIGNUP_WIZARD',
     'PROMPT_PLAYBOOKS',

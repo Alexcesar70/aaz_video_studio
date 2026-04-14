@@ -13,6 +13,7 @@ import {
 import { getAuthUser } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
+import { isFeatureEnabled } from '@/lib/featureFlags'
 
 /**
  * GET /api/assets
@@ -76,40 +77,67 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── Leads ──
-    // Se o filtro for "character" ou ausente, incluímos os 7 leads no topo
-    let leads: Asset[] = []
-    if (!type || type === 'character') {
-      // Se algum lead tem refs salvas no Redis (via POST), mesclamos
-      // as imageUrls — leads não são deletáveis mas podem ganhar refs extras.
-      leads = LEAD_CHARACTERS.map(lead => {
-        const override = customAssets.find(a => a.id === lead.id && a.type === 'character')
-        if (override) {
-          return {
-            ...lead,
-            imageUrls: [...lead.imageUrls, ...override.imageUrls],
-            tags: override.tags ?? lead.tags,
+    // ── Assembling final list ──
+    //
+    // Feature flag USE_DB_ONLY_CHARACTERS (PR #4, ver ADR-0002):
+    //   OFF (default): comportamento legado — mescla o const LEAD_CHARACTERS
+    //     com customAssets, garantindo que usuários AAZ vejam os 7 leads
+    //     mesmo se o seed do DB não rodou.
+    //   ON: caminho novo, puramente DB, workspace-scoped. Assume que o
+    //     POST /api/admin/characters/seed rodou na org aaz-com-jesus.
+    //     Novos workspaces (universos diferentes) veem só seus próprios
+    //     personagens, sem contaminação AAZ.
+    //
+    // Quando PR #9 consolidar, o caminho legado e o const LEAD_CHARACTERS
+    // desaparecem e a flag é removida.
+    const dbOnlyMode = isFeatureEnabled('USE_DB_ONLY_CHARACTERS', {
+      userId: authUser?.id,
+      workspaceId: orgId,
+    })
+
+    let all: Asset[]
+    if (dbOnlyMode) {
+      all = [...customAssets]
+      all.sort((a, b) => {
+        if (a.isOfficial && !b.isOfficial) return -1
+        if (!a.isOfficial && b.isOfficial) return 1
+        return (b.createdAt || '').localeCompare(a.createdAt || '')
+      })
+    } else {
+      // ── Legacy merge ──
+      let leads: Asset[] = []
+      if (!type || type === 'character') {
+        // Se algum lead tem refs salvas no Redis (via POST), mesclamos
+        // as imageUrls — leads não são deletáveis mas podem ganhar refs extras.
+        leads = LEAD_CHARACTERS.map(lead => {
+          const override = customAssets.find(a => a.id === lead.id && a.type === 'character')
+          if (override) {
+            return {
+              ...lead,
+              imageUrls: [...lead.imageUrls, ...override.imageUrls],
+              tags: override.tags ?? lead.tags,
+            }
           }
-        }
-        return lead
+          return lead
+        })
+      }
+
+      // Remove do customAssets os que já foram mesclados com lead
+      const leadIds = new Set(LEAD_CHARACTERS.map(c => c.id))
+      const filteredCustoms = customAssets.filter(
+        a => !(a.type === 'character' && leadIds.has(a.id))
+      )
+
+      all = [...leads, ...filteredCustoms]
+      all.sort((a, b) => {
+        // Leads primeiro, depois por data desc
+        if (a.isOfficial && !b.isOfficial) return -1
+        if (!a.isOfficial && b.isOfficial) return 1
+        return (b.createdAt || '').localeCompare(a.createdAt || '')
       })
     }
 
-    // Remove do customAssets os que já foram mesclados com lead
-    const leadIds = new Set(LEAD_CHARACTERS.map(c => c.id))
-    const filteredCustoms = customAssets.filter(
-      a => !(a.type === 'character' && leadIds.has(a.id))
-    )
-
-    const all = [...leads, ...filteredCustoms]
-    all.sort((a, b) => {
-      // Leads primeiro, depois por data desc
-      if (a.isOfficial && !b.isOfficial) return -1
-      if (!a.isOfficial && b.isOfficial) return 1
-      return (b.createdAt || '').localeCompare(a.createdAt || '')
-    })
-
-    return NextResponse.json({ assets: all, drafts })
+    return NextResponse.json({ assets: all, drafts, source: dbOnlyMode ? 'db' : 'merge' })
   } catch (err) {
     console.error('[/api/assets GET]', err)
     return NextResponse.json({ error: 'Erro ao carregar assets.' }, { status: 500 })
