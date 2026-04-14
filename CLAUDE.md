@@ -59,7 +59,7 @@ E2E_CREATOR_PASSWORD=...      # opcional
 - [x] **PR #4** — Characters migrados para registros de DB (flag `USE_DB_ONLY_CHARACTERS`, seed em `POST /api/admin/characters/seed`)
 - [x] **PR #5** — `StyleProfile` como entidade de primeira classe (6 presets globais)
 - [x] **PR #6** — Image Director usa StyleProfile (flag `USE_STYLE_PROFILES`) + `GET /api/style-profiles` público + Moods decouple (narrativas universe-neutral, injections visuais preservadas)
-- [ ] **PR #7** — Signup wizard + Workspace criation
+- [x] **PR #7** — Signup wizard + Workspace creation (flag `NEW_SIGNUP_WIZARD`; `POST /api/workspaces`; ADR-0003)
 - [ ] **PR #8** — Rename semântico Organization → Workspace (code-only)
 - [ ] **PR #9** — Consolidação + criação do `PROJECT.md` (universal)
 

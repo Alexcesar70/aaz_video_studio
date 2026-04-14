@@ -12,6 +12,7 @@ import {
 import { bootstrapDefaultOrg } from '@/lib/organizations'
 import { emitEvent } from '@/lib/activity'
 import { checkLoginRateLimit, recordLoginAttempt } from '@/lib/rateLimit'
+import { isFeatureEnabled } from '@/lib/featureFlags'
 
 const SESSION_COOKIE = 'aaz_session'
 
@@ -72,11 +73,24 @@ export async function POST(request: NextRequest) {
       console.log('[auth/login] Lead admin promovido para super_admin')
     }
 
-    // Migração: associa user sem org à org padrão "aaz-com-jesus"
-    if (user && !user.organizationId) {
+    // Feature flag NEW_SIGNUP_WIZARD (PR #7):
+    //   OFF (default): comportamento legado — usuário sem org é
+    //     automaticamente associado a 'aaz-com-jesus'. Zero risco.
+    //   ON: usuário sem org NÃO é auto-assinalado. A resposta
+    //     inclui `needsWorkspaceSetup: true` e o client deve mostrar
+    //     o wizard que chama POST /api/workspaces.
+    //
+    // A flag é resolvida ANTES do user existir (só precisamos do email),
+    // então o canário funciona por email via FF_NEW_SIGNUP_WIZARD_USERS
+    // (que aceita id OU email) ou global com FF_NEW_SIGNUP_WIZARD=on.
+    const wizardEnabled = isFeatureEnabled('NEW_SIGNUP_WIZARD', {
+      userId: user?.id,
+    })
+
+    if (user && !user.organizationId && !wizardEnabled) {
       await updateUser(user.id, { organizationId: 'aaz-com-jesus' })
       user = { ...user, organizationId: 'aaz-com-jesus' }
-      console.log(`[auth/login] User ${user.id} associado à org aaz-com-jesus`)
+      console.log(`[auth/login] User ${user.id} associado à org aaz-com-jesus (legacy path)`)
     }
 
     if (!user) {
@@ -142,8 +156,13 @@ export async function POST(request: NextRequest) {
       .setExpirationTime('7d')
       .sign(getSecret())
 
+    // Se o wizard está ativo e o user ainda não tem workspace, sinaliza
+    // pro frontend mostrar o passo de setup antes de redirecionar pro studio.
+    const needsWorkspaceSetup = wizardEnabled && !user.organizationId
+
     const response = NextResponse.json({
       ok: true,
+      needsWorkspaceSetup,
       user: {
         id: user.id,
         email: user.email,

@@ -25,6 +25,7 @@ import { getRedis } from './redis'
 export type ActivityType =
   | 'login'
   | 'user_created'
+  | 'workspace_created'
   | 'scene_generated'
   | 'scene_status_changed'
   | 'scene_deleted'
