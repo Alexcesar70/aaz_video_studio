@@ -8,6 +8,74 @@ Desenvolvedor: **Alexandre** (solo).
 
 ---
 
+## 🔧 REFACTOR UNIVERSAL EM ANDAMENTO (branch `universal`)
+
+**Contexto.** O produto está sendo generalizado de "studio AAZ com Jesus" para
+**Creative Studio SaaS universal** — agnóstico de universo narrativo. Base
+criada como tag `v0.0.1` (snapshot pré-refactor). Toda evolução nova acontece
+em sub-branches `refactor/m1-*` que abrem PR contra `universal`.
+
+### Regras do refactor (vale para todo PR do M1+)
+
+1. **Paridade funcional obrigatória.** AAZ Studio continua funcionando idêntico
+   enquanto o refactor acontece. Nenhum PR pode regredir fluxo existente.
+2. **Feature flags em tudo que é risco.** Default OFF. Liga primeiro para o
+   próprio dono via `FF_{FLAG}_USERS=<userId>`, depois canário, depois global.
+   Sistema em `src/lib/featureFlags.ts`. Ver [ADR-0002](./docs/adr/0002-feature-flag-strategy.md).
+3. **PRs pequenos (< 400 linhas).** Se estoura, quebra em dois.
+4. **Sem migração big bang.** Redis continua como está no M1. Postgres só no M2.
+5. **Estrutura modular em Clean Arch.** Código novo vai para `src/modules/<contexto>/`
+   seguindo `domain/ usecases/ ports/ infra/`. `src/lib/` é read-only para
+   código novo. Ver [ADR-0001](./docs/adr/0001-module-structure.md).
+6. **Toda decisão estruturante vira ADR** em `docs/adr/`.
+7. **Testes antes do refactor.** Vitest (unit) + Playwright (smoke) rodam
+   antes de qualquer mudança em rota crítica.
+
+### Comandos de teste
+
+```bash
+npm run test           # Vitest — testes unitários do domínio
+npm run test:watch     # Vitest em watch mode
+npm run test:e2e       # Playwright — smoke tests (requer dev server + env vars)
+npm run test:e2e:ui    # Playwright em modo interativo
+```
+
+### Variáveis de ambiente para E2E
+
+```bash
+# .env.test ou exportar no shell
+E2E_BASE_URL=http://localhost:3000
+E2E_ADMIN_EMAIL=...
+E2E_ADMIN_PASSWORD=...
+E2E_CREATOR_EMAIL=...         # opcional
+E2E_CREATOR_PASSWORD=...      # opcional
+```
+
+### Roadmap dos PRs do M1 — Agnostic Core
+
+- [x] **PR #1** — Guardrails (Vitest + Playwright + feature flags + ADRs)
+- [ ] **PR #2** — Módulo `prompts` + `PromptTemplate` entity
+- [ ] **PR #3** — Directors leem do repositório (flag `USE_DB_PROMPTS`)
+- [ ] **PR #4** — Characters migrados para registros de DB
+- [ ] **PR #5** — `StyleProfile` como entidade de primeira classe
+- [ ] **PR #6** — Moods decouple (visual-only)
+- [ ] **PR #7** — Signup wizard + Workspace criation
+- [ ] **PR #8** — Rename semântico Organization → Workspace (code-only)
+- [ ] **PR #9** — Consolidação + criação do `PROJECT.md` (universal)
+
+### Checklist de paridade funcional (roda antes de cada merge)
+
+- [ ] Login admin (Alexandre) funciona
+- [ ] Login creator existente funciona
+- [ ] Gerar vídeo Seedance com Abraão → output clay, consistente
+- [ ] Gerar imagem Nano Banana → output AAZ style
+- [ ] Scene Director retorna PT/ES/EN válidos
+- [ ] Criar scene, salvar, listar no histórico
+- [ ] Wallet deduz valor correto
+- [ ] Admin dashboard carrega KPIs
+
+---
+
 ## STATUS ATUAL DAS FASES
 
 ### Fase 1 — Scaffolding + Auth (COMPLETA)
