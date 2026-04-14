@@ -9,6 +9,22 @@ import { LEAD_CHARACTERS, slugify, isLeadId, defaultEmoji } from '@/lib/assets'
 import { MOODS, DEFAULT_MOOD_ID, getMood, type MoodId } from '@/lib/moods'
 import { PERMISSIONS, PERMISSION_LABELS, PRODUCTS, PRODUCT_LABELS, hasPermission, type Permission, type Product } from '@/lib/permissions'
 import { pollJobUntilDone, type JobPollingView } from '@/lib/jobPolling'
+import { C } from './studio/theme'
+import { Pill, Label, Divider, Input } from './studio/atoms'
+import type {
+  CurrentUser,
+  Character,
+  RefItem,
+  LibraryEntry,
+  ScenarioEntry,
+  Project,
+  Episode,
+  SceneStatus,
+  SceneAsset,
+  HistoryItem,
+} from './studio/types'
+import { MoveSceneModal } from './studio/modals/MoveSceneModal'
+import { MoveEpisodeModal } from './studio/modals/MoveEpisodeModal'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -16,23 +32,7 @@ import { pollJobUntilDone, type JobPollingView } from '@/lib/jobPolling'
    API keys nunca expostas no browser
 ═══════════════════════════════════════════════════════════════ */
 
-const C = {
-  bg: '#13131a', surface: '#1a1a24', card: '#22222e', border: '#2e2e3e',
-  borderHi: '#3a3a4e', gold: '#C9A84C', goldLight: '#E8C96A', goldDim: '#6A5828',
-  goldGlow: '#C9A84C30', blue: '#5B8DEF', blueGlow: '#5B8DEF20',
-  green: '#4ADE80', greenGlow: '#4ADE8020', red: '#F87171', purple: '#A78BFA',
-  purpleGlow: '#A78BFA20', text: '#E8E8F0', textDim: '#9898B0',
-}
-
-/** Shape of the current logged-in user from /api/auth/me (Phase 4: + permissions/products) */
-type CurrentUser = {
-  id: string
-  email: string
-  name: string
-  role: 'super_admin' | 'admin' | 'creator'
-  permissions?: string[]
-  products?: string[]
-}
+/* Palette, types and atoms extraídos para src/components/studio/* (M2-PR7). */
 
 const CHARACTERS = [
   { id: 'abraao', name: 'Abraão', emoji: '👴', color: '#C9A84C', desc: '8 year old boy, messy orange-red hair, fair skin with freckles, hazel-green eyes, slightly protruding ears, pink vest over teal t-shirt, gray cargo shorts, green-mint canvas sneakers' },
@@ -55,31 +55,7 @@ const DURATIONS = [4, 5, 8, 10, 12, 15]
 
 /* ── Storage — biblioteca de sheets compartilhada via Vercel KV ── */
 
-/* ── Types ── */
-interface Character { id: string; name: string; emoji: string; color: string; desc: string }
-interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
-interface LibraryEntry { charId: string; name: string; emoji: string; images: string[]; createdAt: string; createdBy?: string }
-interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
-interface Project { id: string; name: string; createdAt: string; createdBy?: string; memberIds?: string[] }
-interface Episode { id: string; name: string; projectId?: string | null; createdAt: string; createdBy?: string; finalVideoUrl?: string; finalVideoSizeMB?: number; finalVideoUploadedAt?: string; finalVideoUploadedBy?: string; finalStatus?: 'none' | 'pending_review' | 'approved' | 'needs_changes'; reviewNote?: string; reviewedAt?: string; reviewedBy?: string; creatorNote?: string }
-type SceneStatus = 'draft' | 'approved' | 'rejected'
-interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus; mood?: MoodId; setting?: string; emotion?: string; createdBy?: string }
-interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
-
-/* ── Atoms ── */
-const Pill = ({ children, color = C.gold, style = {} }: { children: React.ReactNode; color?: string; style?: React.CSSProperties }) => (
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: `${color}18`, color, border: `1px solid ${color}35`, whiteSpace: 'nowrap', ...style }}>{children}</span>
-)
-
-const Label = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '0.5px', marginBottom: 10 }}>{children}</div>
-)
-
-const Divider = () => <div style={{ borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />
-
-const Input = ({ style = {}, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box', ...style }} {...props} />
-)
+/* Types, atoms, e palette: ver imports acima em studio/* (M2-PR7). */
 
 /* ═══════════════════════════════════════════════════════════════
    HistoryTab — aba Histórico
@@ -8095,79 +8071,4 @@ function CharacterSheetWizard({ onClose, onSaved, clientPrices, showBrl, brlRate
   )
 }
 
-function MoveSceneModal({ scene, projects, episodes, onClose, onConfirm }: { scene: SceneAsset; projects: Project[]; episodes: Episode[]; onClose: () => void; onConfirm: (episodeId: string | null, projectId: string | null) => void | Promise<void> }) {
-  const [projId, setProjId] = useState<string>(scene.projectId ?? '')
-  const [epId, setEpId] = useState<string>(scene.episodeId ?? '')
-
-  // Filtra episódios pelo projeto selecionado
-  const availableEps = projId ? episodes.filter(e => e.projectId === projId) : episodes.filter(e => !e.projectId)
-
-  // Se trocar de projeto, reset do episódio
-  useEffect(() => {
-    if (epId && !availableEps.some(e => e.id === epId)) setEpId('')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projId])
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>Mover cena</h2>
-          <div style={{ fontSize: 12, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scene.prompt}</div>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Projeto</div>
-          <select value={projId} onChange={e => setProjId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
-            <option value="">— Sem projeto —</option>
-            {projects.map(p => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Episódio</div>
-          <select value={epId} onChange={e => setEpId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
-            <option value="">— Sem episódio (órfã) —</option>
-            {availableEps.map(ep => <option key={ep.id} value={ep.id}>🎬 {ep.name?.trim() || '(sem nome)'}</option>)}
-          </select>
-          {projId && availableEps.length === 0 && (
-            <div style={{ fontSize: 11, color: C.textDim, marginTop: 6 }}>Nenhum episódio neste projeto. A cena vai para o projeto sem episódio.</div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 18px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}>Cancelar</button>
-          <button onClick={() => onConfirm(epId || null, projId || null)} style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Mover</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function MoveEpisodeModal({ episode, projects, onClose, onConfirm }: { episode: Episode; projects: Project[]; onClose: () => void; onConfirm: (projectId: string | null) => void | Promise<void> }) {
-  const [projId, setProjId] = useState<string>(episode.projectId ?? '')
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>Mover episódio</h2>
-          <div style={{ fontSize: 13, color: C.textDim }}>🎬 {episode.name?.trim() || '(sem nome)'}</div>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Projeto de destino</div>
-          <select value={projId} onChange={e => setProjId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
-            <option value="">— Sem projeto (avulso) —</option>
-            {projects.map(p => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
-          </select>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 18px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}>Cancelar</button>
-          <button onClick={() => onConfirm(projId || null)} style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Mover</button>
-        </div>
-      </div>
-    </div>
-  )
-}
+/* MoveSceneModal e MoveEpisodeModal extraídos para studio/modals/* (M2-PR7) — ver imports no topo. */
