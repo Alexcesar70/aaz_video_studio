@@ -35,6 +35,7 @@ export { RedisStyleProfileRepository } from './styleProfiles/infra/RedisStylePro
 export { InMemoryStyleProfileRepository } from './styleProfiles/infra/InMemoryStyleProfileRepository'
 
 export { getStyleProfile } from './styleProfiles/usecases/getStyleProfile'
+export { getStyleProfileVersions } from './styleProfiles/usecases/getStyleProfileVersions'
 export {
   listStyleProfiles,
   listStyleProfilesVisibleTo,
