@@ -34,6 +34,7 @@ import {
 } from '@/modules/jobs'
 import { createProductionJobRunner } from '@/inngest/runner'
 import type { VideoGenerationJobInput } from '@/inngest/functions/videoGeneration'
+import { reportError } from '@/lib/errorReporter'
 
 export const maxDuration = 300
 
@@ -140,6 +141,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: err.message }, { status: err.statusCode })
     }
 
+    reportError(err, {
+      tags: { feature: 'video_generation', stage: 'route_handler' },
+    })
     console.error('[/api/generate]', err)
     const message = err instanceof Error ? err.message : 'Erro interno.'
     return NextResponse.json({ error: message }, { status: 500 })

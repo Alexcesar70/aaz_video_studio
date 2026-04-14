@@ -28,6 +28,7 @@ import {
   markCompleted,
   markFailed,
 } from '@/modules/jobs'
+import { reportError } from '@/lib/errorReporter'
 import { inngest } from '../client'
 import { JOB_EVENT_NAMES } from '../events'
 
@@ -99,6 +100,12 @@ export const videoGenerationJobFunction = inngest.createFunction(
       const code =
         err instanceof Error && err.name ? err.name : 'ProviderError'
       logger.error('[video-generation-job] failed', { jobId, message })
+
+      reportError(err, {
+        tags: { feature: 'video_generation', stage: 'inngest_function' },
+        extra: { jobId, engineId: (input.request as { engineId?: string })?.engineId },
+        fingerprint: ['video-generation-job', code],
+      })
 
       // Best-effort: marca failed mesmo se Inngest for re-tentar (no pior
       // caso o retry sobrescreve). Se markFailed lançar, propagamos para

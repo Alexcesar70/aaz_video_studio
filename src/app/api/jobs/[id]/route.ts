@@ -23,6 +23,7 @@ import {
   JobAccessDeniedError,
   RedisJobRepository,
 } from '@/modules/jobs'
+import { reportError } from '@/lib/errorReporter'
 
 export const dynamic = 'force-dynamic'
 
@@ -54,6 +55,10 @@ export async function GET(
     if (err instanceof JobAccessDeniedError) {
       return NextResponse.json({ error: 'Acesso negado.' }, { status: 403 })
     }
+    reportError(err, {
+      tags: { feature: 'jobs', stage: 'get_route' },
+      extra: { jobId: params.id },
+    })
     console.error('[/api/jobs/:id GET]', err)
     const message = err instanceof Error ? err.message : 'Erro interno.'
     return NextResponse.json({ error: message }, { status: 500 })

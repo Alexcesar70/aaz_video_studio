@@ -152,10 +152,15 @@ Após 30+ dias em `on` sem incidente:
 | M2-PR2 | Inngest + async generation | ✅ | M2-PR1 |
 | M2-PR3 | ReferenceAsset entity | ✅ | — |
 | M2-PR4 | Asset Picker unificado + auto-register | ✅ | M2-PR3 |
-| M2-PR5 | Character como entidade + versionamento | pendente | — |
-| M2-PR6 | StyleProfile versionamento (UI) | pendente | M1-PR5 |
-| M2-PR7 | Decomposição `AAZStudio.tsx` | pendente | — |
-| M2-PR8 | Consolidação + Sentry | pendente | M2-PR2..PR7 |
+| M2-PR5 | Character como entidade + versionamento | ✅ | — |
+| M2-PR6 | StyleProfile versionamento | ✅ | M1-PR5 |
+| M2-PR7 | Decomposição inicial `AAZStudio.tsx` | ✅ (fase 1) | — |
+| M2-PR8 | Consolidação + error reporter | ✅ | M2-PR2..PR7 |
+
+**M2 code-complete.** Veja também:
+- [ADR-0005 Jobs + Async Generation](./adr/0005-m2-jobs-and-async-generation.md)
+- Consolidação pós-rollout (remoção dos caminhos legados) é PR futuro,
+  após 30+ dias com as flags globais sem incidente.
 
 Cada PR terá sua própria seção nesta doc quando for entregue.
 
