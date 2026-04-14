@@ -28,3 +28,11 @@ next-env.d.ts
 # OS
 .DS_Store
 Thumbs.db
+
+# Testing
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/coverage/
+.env.test
+.env.test.local
