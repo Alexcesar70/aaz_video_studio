@@ -57,7 +57,7 @@ E2E_CREATOR_PASSWORD=...      # opcional
 - [x] **PR #2** — Módulo `prompts` + `PromptTemplate` entity (seed via `POST /api/admin/prompts/seed`)
 - [x] **PR #3** — Directors leem do repositório (flag `USE_DB_PROMPTS`, paridade validada)
 - [x] **PR #4** — Characters migrados para registros de DB (flag `USE_DB_ONLY_CHARACTERS`, seed em `POST /api/admin/characters/seed`)
-- [ ] **PR #5** — `StyleProfile` como entidade de primeira classe
+- [x] **PR #5** — `StyleProfile` como entidade de primeira classe (6 presets globais via `POST /api/admin/style-profiles/seed`; wiring no image-director fica para PR #5b/#6)
 - [ ] **PR #6** — Moods decouple (visual-only)
 - [ ] **PR #7** — Signup wizard + Workspace criation
 - [ ] **PR #8** — Rename semântico Organization → Workspace (code-only)

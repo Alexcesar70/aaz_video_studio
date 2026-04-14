@@ -7,7 +7,13 @@
 import type { AssetType } from './assets'
 import { getMood } from './moods'
 
-const AAZ_STYLE_BLOCK = `3D character/prop/environment with clay texture and handcrafted look. Smooth clay surface with slightly rough handmade finish suggesting hand-sculpted figures, large expressive eyes with subtle clay sheen, rounded proportions with soft edges, warm palette (ochre, cream, teal, soft pink, olive green), soft ambient occlusion, volumetric lighting, cinematic depth of field. Pixar/DreamWorks look.`
+/**
+ * AAZ_STYLE_BLOCK é exportado para ser consumido pelo seed do módulo
+ * library/styleProfiles (PR #5). Quando a flag USE_STYLE_PROFILES for
+ * promovida e o PR #9 consolidar, este constante desaparece — o DB vira
+ * fonte da verdade.
+ */
+export const AAZ_STYLE_BLOCK = `3D character/prop/environment with clay texture and handcrafted look. Smooth clay surface with slightly rough handmade finish suggesting hand-sculpted figures, large expressive eyes with subtle clay sheen, rounded proportions with soft edges, warm palette (ochre, cream, teal, soft pink, olive green), soft ambient occlusion, volumetric lighting, cinematic depth of field. Pixar/DreamWorks look.`
 
 // Jesus IS a canonical character of the AAZ com Jesus universe and CAN be named
 // directly when referenced as a character. God/Lord/Holy Spirit stay blocked
