@@ -3,15 +3,22 @@
  *
  * Controller — responsável APENAS por:
  * 1. Extrair dados do request HTTP
- * 2. Delegar ao use case
+ * 2. Delegar ao use case (síncrono) OU enfileirar como Job (assíncrono)
  * 3. Mapear resultado/erro para resposta HTTP
  *
  * Zero business logic. Zero acesso a providers.
- * Toda lógica está em src/usecases/video/generateVideo.ts
+ *
+ * Modo síncrono (padrão): chama `generateVideo` inline e retorna
+ * `VideoGenerationResult`. É o comportamento histórico.
+ *
+ * Modo assíncrono (flag USE_ASYNC_GENERATION ligada): enfileira o
+ * job via `enqueueJob` e retorna imediatamente `{ jobId, status: 'queued' }`.
+ * O frontend consulta `GET /api/jobs/[id]` para polling.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
+import { isFeatureEnabled } from '@/lib/featureFlags'
 import { createVideoProvider } from '@/providers/segmind'
 import { createVideoStorage } from '@/providers/blobStorage'
 import { generateVideo } from '@/usecases/video/generateVideo'
@@ -21,6 +28,12 @@ import {
   InsufficientBalanceError,
   ProviderError,
 } from '@/domain/videoGeneration'
+import {
+  enqueueJob,
+  RedisJobRepository,
+} from '@/modules/jobs'
+import { createProductionJobRunner } from '@/inngest/runner'
+import type { VideoGenerationJobInput } from '@/inngest/functions/videoGeneration'
 
 export const maxDuration = 300
 
@@ -36,36 +49,79 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Request body inválido.' }, { status: 413 })
     }
 
+    const videoRequest = {
+      prompt: body.prompt,
+      duration: body.duration,
+      aspectRatio: body.aspect_ratio,
+      resolution: body.resolution,
+      engineId: body.engineId,
+      generateAudio: body.generate_audio,
+      mode: body.mode,
+      referenceImages: body.reference_images,
+      referenceVideos: body.reference_videos,
+      referenceAudios: body.reference_audios,
+      firstFrameUrl: body.first_frame_url,
+      lastFrameUrl: body.last_frame_url,
+    }
+
+    const userSnapshot = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      organizationId: user.organizationId,
+      permissions: user.permissions,
+    }
+
+    // ── Modo assíncrono (flag ON) — enfileira e devolve jobId ──
+    if (
+      isFeatureEnabled('USE_ASYNC_GENERATION', {
+        userId: user.id,
+        workspaceId: user.organizationId,
+      })
+    ) {
+      const repo = new RedisJobRepository()
+      const runner = createProductionJobRunner()
+
+      const jobInput: VideoGenerationJobInput = {
+        request: videoRequest,
+        user: userSnapshot,
+      }
+
+      const job = await enqueueJob(
+        { repo, runner },
+        {
+          kind: 'video_generation',
+          input: jobInput,
+          userId: user.id,
+          workspaceId: user.organizationId ?? null,
+          metadata: {
+            engineId: videoRequest.engineId,
+            duration: videoRequest.duration,
+          },
+        },
+      )
+
+      return NextResponse.json(
+        {
+          jobId: job.id,
+          status: job.status,
+          async: true,
+        },
+        { status: 202 },
+      )
+    }
+
+    // ── Modo síncrono (flag OFF) — comportamento histórico intacto ──
     const provider = createVideoProvider()
     const storage = createVideoStorage()
 
     const result = await generateVideo(provider, storage, {
-      request: {
-        prompt: body.prompt,
-        duration: body.duration,
-        aspectRatio: body.aspect_ratio,
-        resolution: body.resolution,
-        engineId: body.engineId,
-        generateAudio: body.generate_audio,
-        mode: body.mode,
-        referenceImages: body.reference_images,
-        referenceVideos: body.reference_videos,
-        referenceAudios: body.reference_audios,
-        firstFrameUrl: body.first_frame_url,
-        lastFrameUrl: body.last_frame_url,
-      },
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        organizationId: user.organizationId,
-        permissions: user.permissions,
-      },
+      request: videoRequest,
+      user: userSnapshot,
     })
 
     return NextResponse.json(result)
-
   } catch (err) {
     if (err instanceof ValidationError) {
       return NextResponse.json({ error: err.message }, { status: 400 })

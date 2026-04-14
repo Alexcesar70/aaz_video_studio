@@ -25,6 +25,7 @@ export type FeatureFlag =
   | 'USE_DB_ONLY_CHARACTERS'  // PR #4 — /api/assets ignora LEAD_CHARACTERS const
   | 'USE_STYLE_PROFILES'      // PR #5 — StyleProfile como entidade
   | 'NEW_SIGNUP_WIZARD'       // PR #7 — wizard de workspace na primeira sessão
+  | 'USE_ASYNC_GENERATION'    // M2-PR2 — /api/generate enfileira via Inngest
   | 'PROMPT_PLAYBOOKS'        // Fase 2 — Team Leader cria playbooks com Claude
 
 export interface FeatureFlagContext {
@@ -84,6 +85,7 @@ export function resolveAllFlags(
     'USE_DB_ONLY_CHARACTERS',
     'USE_STYLE_PROFILES',
     'NEW_SIGNUP_WIZARD',
+    'USE_ASYNC_GENERATION',
     'PROMPT_PLAYBOOKS',
   ]
   return all.reduce(

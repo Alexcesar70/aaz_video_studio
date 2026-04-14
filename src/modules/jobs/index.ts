@@ -47,6 +47,11 @@ export type {
 export { RedisJobRepository } from './infra/RedisJobRepository'
 export { InMemoryJobRepository } from './infra/InMemoryJobRepository'
 export { NoopJobRunner, RecordingJobRunner } from './infra/NoopJobRunner'
+export { InngestJobRunner } from './infra/InngestJobRunner'
+export type {
+  InngestLikeClient,
+  EventNameResolver,
+} from './infra/InngestJobRunner'
 
 // Use cases
 export { enqueueJob } from './usecases/enqueueJob'

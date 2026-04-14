@@ -8,6 +8,7 @@ import type { Asset, AssetType } from '@/lib/assets'
 import { LEAD_CHARACTERS, slugify, isLeadId, defaultEmoji } from '@/lib/assets'
 import { MOODS, DEFAULT_MOOD_ID, getMood, type MoodId } from '@/lib/moods'
 import { PERMISSIONS, PERMISSION_LABELS, PRODUCTS, PRODUCT_LABELS, hasPermission, type Permission, type Product } from '@/lib/permissions'
+import { pollJobUntilDone, type JobPollingView } from '@/lib/jobPolling'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -4083,11 +4084,26 @@ export function AAZStudio() {
         body: JSON.stringify(body),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
-      // Servidor agora retorna { videoUrl } — URL permanente no Vercel Blob
-      const data = await res.json() as { videoUrl?: string }
+      // Servidor retorna { videoUrl } no modo síncrono OU
+      // { jobId, status:'queued', async:true } quando USE_ASYNC_GENERATION está ligada.
+      const data = await res.json() as { videoUrl?: string; jobId?: string; async?: boolean }
       console.log('[/api/generate] resposta:', data)
-      if (!data.videoUrl) throw new Error('Servidor não retornou videoUrl. Resposta: ' + JSON.stringify(data))
-      const url = data.videoUrl
+
+      let url = data.videoUrl ?? ''
+      if (!url && data.jobId) {
+        setStatusMsg('Processando em background (job ' + data.jobId.slice(0, 8) + ')...')
+        const finished = await pollJobUntilDone<{ videoUrl?: string }>(data.jobId, {
+          onUpdate: (job: JobPollingView<{ videoUrl?: string }>) => {
+            if (job.status === 'running') {
+              const pct = typeof job.progress === 'number' ? ` ${job.progress}%` : ''
+              setStatusMsg('Gerando vídeo...' + pct)
+            }
+          },
+        })
+        url = finished.output?.videoUrl ?? ''
+      }
+
+      if (!url) throw new Error('Servidor não retornou videoUrl. Resposta: ' + JSON.stringify(data))
       setResultUrl(url); setLastResult(url); setStatus('success'); setStatusMsg('Vídeo gerado!')
       loadMyBudget() // atualiza barra de budget no header
       loadMyWallet() // atualiza saldo da wallet no header
