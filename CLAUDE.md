@@ -55,7 +55,7 @@ E2E_CREATOR_PASSWORD=...      # opcional
 
 - [x] **PR #1** — Guardrails (Vitest + Playwright + feature flags + ADRs)
 - [x] **PR #2** — Módulo `prompts` + `PromptTemplate` entity (seed via `POST /api/admin/prompts/seed`)
-- [ ] **PR #3** — Directors leem do repositório (flag `USE_DB_PROMPTS`)
+- [x] **PR #3** — Directors leem do repositório (flag `USE_DB_PROMPTS`, paridade validada)
 - [ ] **PR #4** — Characters migrados para registros de DB
 - [ ] **PR #5** — `StyleProfile` como entidade de primeira classe
 - [ ] **PR #6** — Moods decouple (visual-only)

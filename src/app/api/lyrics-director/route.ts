@@ -15,6 +15,14 @@ import { getLyricsDirectorSystem, getStoryboardDirectorSystem, getPromptGenerato
 import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
+import { isFeatureEnabled } from '@/lib/featureFlags'
+import {
+  resolveLyricsDirectorSystem,
+  resolveStoryboardDirectorSystem,
+  resolveSongPromptGeneratorSystem,
+  RedisPromptTemplateRepository,
+  type ResolvedLyricsSystem,
+} from '@/modules/prompts'
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,11 +54,39 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const systemPrompt = mode === 'storyboard'
-      ? getStoryboardDirectorSystem()
-      : mode === 'generate_prompt'
-        ? getPromptGeneratorSystem()
-        : getLyricsDirectorSystem()
+    // Feature flag USE_DB_PROMPTS (ver ADR-0002):
+    //   OFF (default): usa os system prompts hardcoded legados.
+    //   ON: resolve via repositório com fallback transparente se seed
+    //   não rodou.
+    let systemPrompt: string
+    let promptSource: 'legacy' | 'db' | 'fallback' = 'legacy'
+    let promptVersion: number | undefined
+    if (
+      isFeatureEnabled('USE_DB_PROMPTS', {
+        userId: authUser.id,
+        workspaceId: authUser.organizationId,
+      })
+    ) {
+      const repo = new RedisPromptTemplateRepository()
+      const ws = authUser.organizationId ?? null
+      let resolved: ResolvedLyricsSystem
+      if (mode === 'storyboard') {
+        resolved = await resolveStoryboardDirectorSystem({ repo }, { workspaceId: ws })
+      } else if (mode === 'generate_prompt') {
+        resolved = await resolveSongPromptGeneratorSystem({ repo }, { workspaceId: ws })
+      } else {
+        resolved = await resolveLyricsDirectorSystem({ repo }, { workspaceId: ws })
+      }
+      systemPrompt = resolved.prompt
+      promptSource = resolved.source
+      promptVersion = resolved.version
+    } else {
+      systemPrompt = mode === 'storyboard'
+        ? getStoryboardDirectorSystem()
+        : mode === 'generate_prompt'
+          ? getPromptGeneratorSystem()
+          : getLyricsDirectorSystem()
+    }
 
     let userMessage = prompt.trim()
     if (mode === 'lyrics') {
@@ -114,7 +150,12 @@ export async function POST(request: NextRequest) {
       meta: {
         cost: clientPrice,
         label: `Lyrics Director (${mode})`,
-        extra: { claudeCostUsd: realCost, walletDeducted },
+        extra: {
+          claudeCostUsd: realCost,
+          walletDeducted,
+          promptSource,
+          promptVersion,
+        },
       },
     }).catch(() => {})
 

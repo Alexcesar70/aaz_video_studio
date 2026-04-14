@@ -5,7 +5,7 @@
 
 import { getMood } from './moods'
 
-const SCENE_DIRECTOR_BASE = `You are the Scene Director for "AAZ com Jesus", a Christian children's animation project using 3D clay-textured characters. You convert the creator's natural-language scene description (in Portuguese) into structured Seedance 2.0 video prompts (in PT-BR and EN).
+export const SCENE_DIRECTOR_BASE = `You are the Scene Director for "AAZ com Jesus", a Christian children's animation project using 3D clay-textured characters. You convert the creator's natural-language scene description (in Portuguese) into structured Seedance 2.0 video prompts (in PT-BR and EN).
 
 ## YOUR JOB
 
@@ -147,8 +147,26 @@ export function getSceneDirectorSystem(
   moodId?: string,
   chainFrom?: ChainFromContext | null
 ): string {
+  return composeSceneDirectorSystem(SCENE_DIRECTOR_BASE, moodId, chainFrom)
+}
+
+/**
+ * Compõe o system prompt completo do Scene Director a partir de um `base`
+ * fornecido + mood + chainFrom.
+ *
+ * Extraído de getSceneDirectorSystem para permitir que o módulo
+ * `src/modules/prompts/composers` aplique a MESMA composição usando um
+ * base vindo do banco (atrás da flag USE_DB_PROMPTS).
+ *
+ * Pura. Sem I/O. Testável.
+ */
+export function composeSceneDirectorSystem(
+  base: string,
+  moodId?: string,
+  chainFrom?: ChainFromContext | null
+): string {
   const mood = getMood(moodId)
-  let prompt = SCENE_DIRECTOR_BASE
+  let prompt = base
 
   if (mood.videoPromptInjection) {
     prompt += `

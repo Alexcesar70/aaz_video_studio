@@ -33,3 +33,13 @@ export { listPromptTemplates } from './usecases/listPromptTemplates'
 export { upsertPromptTemplate } from './usecases/upsertPromptTemplate'
 export { seedDefaultTemplates } from './usecases/seedDefaultTemplates'
 export type { SeedResult } from './usecases/seedDefaultTemplates'
+
+// Composers (aplicam composição mood/chain em cima do base do DB)
+export { resolveSceneDirectorSystem } from './composers/sceneDirector'
+export type { ResolvedSceneDirectorSystem } from './composers/sceneDirector'
+export {
+  resolveLyricsDirectorSystem,
+  resolveStoryboardDirectorSystem,
+  resolveSongPromptGeneratorSystem,
+} from './composers/lyricsDirector'
+export type { ResolvedLyricsSystem } from './composers/lyricsDirector'
