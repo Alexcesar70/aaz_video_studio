@@ -54,7 +54,7 @@ E2E_CREATOR_PASSWORD=...      # opcional
 ### Roadmap dos PRs do M1 — Agnostic Core
 
 - [x] **PR #1** — Guardrails (Vitest + Playwright + feature flags + ADRs)
-- [ ] **PR #2** — Módulo `prompts` + `PromptTemplate` entity
+- [x] **PR #2** — Módulo `prompts` + `PromptTemplate` entity (seed via `POST /api/admin/prompts/seed`)
 - [ ] **PR #3** — Directors leem do repositório (flag `USE_DB_PROMPTS`)
 - [ ] **PR #4** — Characters migrados para registros de DB
 - [ ] **PR #5** — `StyleProfile` como entidade de primeira classe
