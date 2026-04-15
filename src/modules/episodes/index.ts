@@ -23,6 +23,13 @@ export {
   rowToEpisode,
   episodeToInsert,
 } from './infra/PostgresEpisodeRepository'
+export {
+  RedisEpisodeRepository,
+  LEGACY_WORKSPACE_ID as EPISODES_LEGACY_WORKSPACE_ID,
+} from './infra/RedisEpisodeRepository'
+
+// Composer (M5-PR1)
+export { selectEpisodeRepo } from './composer'
 
 export {
   getEpisode,

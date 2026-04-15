@@ -31,6 +31,8 @@ export type FeatureFlag =
   | 'USE_POSTGRES_WORKSPACES' // M4-PR3 — Workspaces via Postgres
   | 'USE_POSTGRES_WALLET'     // M4-PR4 — Wallet via Postgres (precedido de dual-write)
   | 'USE_POSTGRES_WALLET_DUAL_WRITE' // M4-PR4 — escreve em Postgres em paralelo ao Redis
+  | 'USE_POSTGRES_PROJECTS'   // M5-PR1 — Projects via Postgres
+  | 'USE_POSTGRES_EPISODES'   // M5-PR1 — Episodes via Postgres
   | 'PROMPT_PLAYBOOKS'        // Fase 2 — Team Leader cria playbooks com Claude
 
 export interface FeatureFlagContext {
@@ -96,6 +98,8 @@ export function resolveAllFlags(
     'USE_POSTGRES_WORKSPACES',
     'USE_POSTGRES_WALLET',
     'USE_POSTGRES_WALLET_DUAL_WRITE',
+    'USE_POSTGRES_PROJECTS',
+    'USE_POSTGRES_EPISODES',
     'PROMPT_PLAYBOOKS',
   ]
   return all.reduce(
