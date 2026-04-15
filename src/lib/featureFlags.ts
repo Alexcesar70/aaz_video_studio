@@ -25,6 +25,14 @@ export type FeatureFlag =
   | 'USE_DB_ONLY_CHARACTERS'  // PR #4 — /api/assets ignora LEAD_CHARACTERS const
   | 'USE_STYLE_PROFILES'      // PR #5 — StyleProfile como entidade
   | 'NEW_SIGNUP_WIZARD'       // PR #7 — wizard de workspace na primeira sessão
+  | 'USE_ASYNC_GENERATION'    // M2-PR2 — /api/generate enfileira via Inngest
+  | 'USE_REFERENCE_ASSETS'    // M2-PR4 — /api/blob-upload auto-registra ReferenceAsset + picker UI
+  | 'USE_POSTGRES_USERS'      // M4-PR1 — Users via Postgres em vez de Redis
+  | 'USE_POSTGRES_WORKSPACES' // M4-PR3 — Workspaces via Postgres
+  | 'USE_POSTGRES_WALLET'     // M4-PR4 — Wallet via Postgres (precedido de dual-write)
+  | 'USE_POSTGRES_WALLET_DUAL_WRITE' // M4-PR4 — escreve em Postgres em paralelo ao Redis
+  | 'USE_POSTGRES_PROJECTS'   // M5-PR1 — Projects via Postgres
+  | 'USE_POSTGRES_EPISODES'   // M5-PR1 — Episodes via Postgres
   | 'PROMPT_PLAYBOOKS'        // Fase 2 — Team Leader cria playbooks com Claude
 
 export interface FeatureFlagContext {
@@ -84,6 +92,14 @@ export function resolveAllFlags(
     'USE_DB_ONLY_CHARACTERS',
     'USE_STYLE_PROFILES',
     'NEW_SIGNUP_WIZARD',
+    'USE_ASYNC_GENERATION',
+    'USE_REFERENCE_ASSETS',
+    'USE_POSTGRES_USERS',
+    'USE_POSTGRES_WORKSPACES',
+    'USE_POSTGRES_WALLET',
+    'USE_POSTGRES_WALLET_DUAL_WRITE',
+    'USE_POSTGRES_PROJECTS',
+    'USE_POSTGRES_EPISODES',
     'PROMPT_PLAYBOOKS',
   ]
   return all.reduce(

@@ -4,6 +4,7 @@ import type { StyleProfileRepository } from '../ports/StyleProfileRepository'
 
 export class InMemoryStyleProfileRepository implements StyleProfileRepository {
   private store = new Map<string, StyleProfile>()
+  private history = new Map<string, StyleProfile[]>()
 
   private key(slug: string, workspaceId: string | null): string {
     return `${workspaceId ?? '__global__'}::${slug}`
@@ -60,15 +61,33 @@ export class InMemoryStyleProfileRepository implements StyleProfileRepository {
 
   async upsert(profile: StyleProfile): Promise<StyleProfile> {
     const validated = validateStyleProfile(profile)
-    this.store.set(this.key(validated.slug, validated.workspaceId), validated)
+    const k = this.key(validated.slug, validated.workspaceId)
+
+    const existing = this.store.get(k)
+    if (existing && existing.version !== validated.version) {
+      const versions = this.history.get(k) ?? []
+      versions.unshift(existing)
+      this.history.set(k, versions)
+    }
+
+    this.store.set(k, validated)
     return validated
   }
 
   async remove(slug: string, workspaceId: string | null): Promise<void> {
     this.store.delete(this.key(slug, workspaceId))
+    // histórico é preservado propositalmente — registros imutáveis
+  }
+
+  async listVersions(
+    slug: string,
+    workspaceId: string | null,
+  ): Promise<StyleProfile[]> {
+    return this.history.get(this.key(slug, workspaceId)) ?? []
   }
 
   clear(): void {
     this.store.clear()
+    this.history.clear()
   }
 }

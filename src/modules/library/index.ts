@@ -35,6 +35,7 @@ export { RedisStyleProfileRepository } from './styleProfiles/infra/RedisStylePro
 export { InMemoryStyleProfileRepository } from './styleProfiles/infra/InMemoryStyleProfileRepository'
 
 export { getStyleProfile } from './styleProfiles/usecases/getStyleProfile'
+export { getStyleProfileVersions } from './styleProfiles/usecases/getStyleProfileVersions'
 export {
   listStyleProfiles,
   listStyleProfilesVisibleTo,
@@ -44,3 +45,42 @@ export {
   seedDefaultStyleProfiles,
   type StyleProfileSeedResult,
 } from './styleProfiles/usecases/seedDefaultStyleProfiles'
+
+// ── Characters (entidade de primeira classe + versionamento, M2-PR5) ──
+export type {
+  Character,
+  CharacterEditablePatch,
+} from './characters/domain/Character'
+export {
+  validateCharacter,
+  bumpCharacterVersion,
+  forkCharacter,
+  InvalidCharacterError,
+} from './characters/domain/Character'
+
+export type {
+  CharacterRepository,
+  CharacterListFilter,
+} from './characters/ports/CharacterRepository'
+
+export { RedisCharacterRepository } from './characters/infra/RedisCharacterRepository'
+export { InMemoryCharacterRepository } from './characters/infra/InMemoryCharacterRepository'
+
+export {
+  getCharacter,
+  getCharacterOrThrow,
+  CharacterNotFoundError,
+} from './characters/usecases/getCharacter'
+export {
+  listCharacters,
+  listCharactersVisibleTo,
+} from './characters/usecases/listCharacters'
+export {
+  upsertCharacter,
+  CharacterConflictError,
+} from './characters/usecases/upsertCharacter'
+export type {
+  UpsertCharacterInput,
+  UpsertCharacterResult,
+} from './characters/usecases/upsertCharacter'
+export { getCharacterVersions } from './characters/usecases/getCharacterVersions'

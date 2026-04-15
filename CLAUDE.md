@@ -82,15 +82,69 @@ Vercel KV, Vercel Blob).
 **Plano de rollout das 4 feature flags do M1:** ver
 [`docs/m1-rollout-checklist.md`](./docs/m1-rollout-checklist.md).
 
-### Milestone 2 — Próximo (escopo a ser detalhado)
+### Milestone 2 — Async generation + library entities ✅ COMPLETO
 
-Áreas previstas (ordem de prioridade):
+- [x] **M2-PR1** — Jobs module foundation (domain + Redis/InMemory adapters)
+- [x] **M2-PR2** — Inngest adapter + `/api/generate` async (flag `USE_ASYNC_GENERATION`)
+- [x] **M2-PR3** — `ReferenceAsset` como entidade (`@/modules/references`)
+- [x] **M2-PR4** — Asset Picker + auto-register no upload (flag `USE_REFERENCE_ASSETS`)
+- [x] **M2-PR5** — `Character` como entidade + versionamento + histórico
+- [x] **M2-PR6** — `StyleProfile` versionamento (admin route `/api/admin/style-profiles/[slug]/versions`)
+- [x] **M2-PR7** — Decomposição inicial de `AAZStudio.tsx` (theme, types, atoms, modals)
+- [x] **M2-PR8** — `errorReporter` abstrato + ADR-0005
 
-1. **Postgres + Drizzle** para User, Workspace, Project, Wallet, Transaction.
-2. **Inngest** para gerações longas (sai do timeout 300s da Vercel).
-3. **ReferenceAsset** como entidade de primeira classe.
-4. **Versionamento** de Character e StyleProfile.
-5. **Sentry + Axiom + PostHog** para observabilidade real.
+**Rollout:** ver [`docs/m2-rollout-checklist.md`](./docs/m2-rollout-checklist.md).
+
+### Milestone 3 — Postgres + observability ✅ CODE-COMPLETE
+
+- [x] **M3-PR1** — Drizzle setup + schemas + migrations iniciais (ADR-0006)
+- [x] **M3-PR2** — `users` module (Postgres adapter + InMemory + usecases)
+- [x] **M3-PR3** — `workspaces` Postgres adapter
+- [x] **M3-PR4** — `projects` + `episodes` modules
+- [x] **M3-PR5** — `wallet` + transactions ACID (Postgres `db.transaction()` + row lock)
+- [x] **M3-PR6** — Sentry adapter (concretiza `ErrorReporter` do M2-PR8)
+- [x] **M3-PR7** — Consolidação: backfill scripts + rollout checklist
+
+**Rollout:** ver [`docs/m3-rollout-checklist.md`](./docs/m3-rollout-checklist.md).
+Backfill scripts em `scripts/backfill/`.
+
+### Milestone 4 — Wiring + Observability + Decomposition ✅ CODE-COMPLETE
+
+- [x] **M4-PR1** — `RedisUserRepository` + `selectUserRepo` + lazy DB resolution
+- [x] **M4-PR2** — Wire `/api/users` (GET) ao composer (flag `USE_POSTGRES_USERS`)
+- [x] **M4-PR3** — `RedisWorkspaceRepository` + `selectWorkspaceRepo` + wire `/api/admin/organizations/[id]` (GET)
+- [x] **M4-PR4** — `RedisWalletRepository` + `DualWriteWalletRepository` + `selectWalletRepo` + wire `/api/me/wallet` (GET) — flags `USE_POSTGRES_WALLET` e `USE_POSTGRES_WALLET_DUAL_WRITE`
+- [x] **M4-PR5** — `analytics` abstraction + PostHog adapter
+- [x] **M4-PR6** — Decomposição contínua de `AAZStudio.tsx` (KpiCard, NewUserCredsModal)
+- [x] **M4-PR7** — Consolidação: `docs/m4-rollout-checklist.md` + CLAUDE.md update
+
+**Rollout:** ver [`docs/m4-rollout-checklist.md`](./docs/m4-rollout-checklist.md).
+
+### Milestone 5 — Wiring expansion + Playbooks ✅ CODE-COMPLETE
+
+- [x] **M5-PR1** — `RedisProjectRepository` + `RedisEpisodeRepository` + composers (flags `USE_POSTGRES_PROJECTS`, `USE_POSTGRES_EPISODES`)
+- [x] **M5-PR2** — Wire `/api/projects` + `/api/episodes` (GET) ao composer com fallback de legacy data via sentinel `__legacy__`
+- [x] **M5-PR3** — Wire wallet writes: admin `add_credits` + `generateVideo` spend via `composedSpendCredits` (helper em `src/lib/walletWiring.ts`)
+- [x] **M5-PR4** — Wallet reconciliation script + Vercel Cron diário (`/api/cron/reconcile-wallets`)
+- [x] **M5-PR5** — Módulo `playbooks` (entidade + Redis/InMemory + use cases + versionamento + clone)
+- [x] **M5-PR6** — Decomposição `AAZStudio.tsx`: extrai `HistoryTab` + `SceneCard` + `EpisodeHeader` + `EpisodeDeliveryCard` (-285 linhas)
+- [x] **M5-PR7** — Consolidação: ADR-0007 (composer pattern) + `docs/m5-rollout-checklist.md` + CLAUDE.md
+
+**Rollout:** ver [`docs/m5-rollout-checklist.md`](./docs/m5-rollout-checklist.md).
+**Padrão de migração:** ver [ADR-0007](./docs/adr/0007-composer-pattern-for-storage-migration.md).
+
+### Milestone 6 — Notifications + Webhooks ✅ CODE-COMPLETE
+
+- [x] **M6-PR1** — Backfill scripts: workspaces + projects + episodes (com sentinel `__legacy__` resolution via createdBy.organizationId)
+- [x] **M6-PR2** — Módulo `notifications` foundation (12 kinds, 3 levels, Redis layout otimizado)
+- [x] **M6-PR3** — Email channel: `EmailNotificationSender` + `ResendEmailDeliverer` + Inngest fan-out function
+- [x] **M6-PR4** — Wire em pontos críticos: `wallet_topped_up`, `episode_approved`/`needs_changes`, `job_failed`
+- [x] **M6-PR5** — Outbound webhooks HMAC-signed (módulo `webhooks` + `WebhookNotificationSender` + auto-pause em falhas)
+- [x] **M6-PR6** — Decomposição: extrai `InviteUserModal` (-117 linhas)
+- [x] **M6-PR7** — Consolidação: ADR-0008 (event-driven notifications) + `docs/m6-rollout-checklist.md` + CLAUDE.md
+
+**Rollout:** ver [`docs/m6-rollout-checklist.md`](./docs/m6-rollout-checklist.md).
+**Arquitetura:** ver [ADR-0008](./docs/adr/0008-event-driven-notifications.md).
 
 ---
 

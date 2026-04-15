@@ -29,7 +29,8 @@ import {
 } from '@/domain/videoGeneration'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { checkBudget } from '@/lib/budget'
-import { checkWalletBalance, spendCredits } from '@/lib/wallet'
+import { checkWalletBalance } from '@/lib/wallet'
+import { composedSpendCredits } from '@/lib/walletWiring'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
 import { emitEvent } from '@/lib/activity'
 import {
@@ -115,9 +116,17 @@ export async function generateVideo(
   }
 
   if (walletId && cost.clientChargeUsd > 0) {
-    await spendCredits(walletId, cost.clientChargeUsd, `Cena ${req.duration}s · ${engine.name}`, {
-      generationType: 'video', engineId: engine.id, userId: user.id,
-    }).catch(err => console.error('[generateVideo] Wallet deduction error:', err))
+    // M5-PR3: spend via composer (Redis | DualWrite | Postgres por flag).
+    await composedSpendCredits({
+      walletId,
+      amountUsd: cost.clientChargeUsd,
+      reason: `Cena ${req.duration}s · ${engine.name}`,
+      metadata: { generationType: 'video', engineId: engine.id, userId: user.id },
+      actorUserId: user.id,
+      workspaceId: user.organizationId ?? null,
+    }).catch((err) =>
+      console.error('[generateVideo] Wallet deduction error:', err),
+    )
   }
 
   // ── 11. Evento de atividade ──

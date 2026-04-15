@@ -6,7 +6,10 @@ import {
   suspendOrganization,
   reactivateOrganization,
 } from '@/lib/organizations'
+import { selectWorkspaceRepo } from '@/modules/workspaces'
 import { getWallet, addCredits, getTransactions } from '@/lib/wallet'
+import { selectWalletRepo, topUpWallet } from '@/modules/wallet'
+import { notifyAndQueueEmail } from '@/lib/notificationsWiring'
 import { getUsersByOrganization, listUsers, updateUser } from '@/lib/users'
 import { getPlanById } from '@/lib/plans'
 import { queryEvents } from '@/lib/activity'
@@ -20,9 +23,14 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    requireSuperAdmin(request)
+    const admin = requireSuperAdmin(request)
 
-    const org = await getOrgById(params.id)
+    // M4-PR3: leitura via composer; default OFF mantém Redis (idêntico ao legado).
+    const wsRepo = selectWorkspaceRepo({
+      userId: admin.id,
+      workspaceId: admin.organizationId,
+    })
+    const org = await wsRepo.findById(params.id)
     if (!org) {
       return NextResponse.json({ error: 'Organização não encontrada.' }, { status: 404 })
     }
@@ -146,14 +154,48 @@ export async function POST(
         if (!org.walletId) {
           return NextResponse.json({ error: 'Organização sem wallet.' }, { status: 400 })
         }
-        const txn = await addCredits(
-          org.walletId,
-          body.amount,
-          body.description || `Créditos adicionados por ${admin.name}`,
-          { userId: admin.id }
+        // M5-PR3: topUp via composer. Quando dual-write está on, escreve
+        // em Redis E Postgres atomicamente (best-effort no shadow).
+        const walletRepo = selectWalletRepo({
+          userId: admin.id,
+          workspaceId: org.id,
+        })
+        const result = await topUpWallet(
+          { repo: walletRepo },
+          {
+            walletId: org.walletId,
+            amountUsd: body.amount,
+            reason:
+              body.description || `Créditos adicionados por ${admin.name}`,
+            createdBy: admin.id,
+          },
         )
-        const wallet = await getWallet(org.walletId)
-        return NextResponse.json({ ok: true, transaction: txn, newBalance: wallet?.balanceUsd ?? 0 })
+        // M6-PR4: notifica owner do workspace que créditos foram adicionados.
+        if (org.ownerId && org.ownerId !== admin.id) {
+          notifyAndQueueEmail({
+            kind: 'wallet_topped_up',
+            level: 'info',
+            userId: org.ownerId,
+            workspaceId: org.id,
+            title: `Créditos adicionados à wallet de "${org.name}"`,
+            body: `${admin.name} adicionou $${body.amount.toFixed(2)} à sua wallet. Saldo atual: $${result.wallet.balanceUsd.toFixed(2)}.`,
+            link: { href: '/admin/wallet', label: 'Ver wallet' },
+            metadata: {
+              walletId: org.walletId,
+              amount: body.amount,
+              addedBy: admin.id,
+              transactionId: result.transaction.id,
+            },
+          }).catch((err) =>
+            console.error('[admin/orgs add_credits] notify error:', err),
+          )
+        }
+
+        return NextResponse.json({
+          ok: true,
+          transaction: result.transaction,
+          newBalance: result.wallet.balanceUsd,
+        })
       }
 
       case 'suspend': {

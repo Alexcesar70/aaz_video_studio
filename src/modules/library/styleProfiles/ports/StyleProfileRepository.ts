@@ -33,4 +33,18 @@ export interface StyleProfileRepository {
   upsert(profile: StyleProfile): Promise<StyleProfile>
 
   remove(slug: string, workspaceId: string | null): Promise<void>
+
+  /**
+   * Retorna versões anteriores arquivadas, ordem desc (mais recente
+   * primeiro). Não inclui a versão corrente (essa vem de `findBySlug`).
+   *
+   * Implementação:
+   *   - upsert() com mesmo slug+workspaceId e version diferente deve
+   *     empurrar a versão anterior para este histórico.
+   *   - remove() NÃO limpa o histórico — registros ficam imutáveis.
+   */
+  listVersions(
+    slug: string,
+    workspaceId: string | null,
+  ): Promise<StyleProfile[]>
 }

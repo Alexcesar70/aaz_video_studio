@@ -52,3 +52,26 @@ export type {
   CreateWorkspaceDeps,
   CreateWorkspaceResult,
 } from './usecases/createWorkspaceForUser'
+
+// ── Postgres adapters + port (M3-PR3) ──
+// Foundation para migração Redis→Postgres. Zero wiring nas rotas
+// ainda — composição acontece num PR futuro atrás de flag.
+export type {
+  WorkspaceRepository,
+  WorkspaceListFilter,
+} from './ports/WorkspaceRepository'
+export { InMemoryWorkspaceRepository } from './infra/InMemoryWorkspaceRepository'
+export {
+  PostgresWorkspaceRepository,
+  rowToWorkspace,
+  workspaceToInsert,
+} from './infra/PostgresWorkspaceRepository'
+export { RedisWorkspaceRepository } from './infra/RedisWorkspaceRepository'
+export {
+  getWorkspace,
+  getWorkspaceOrThrow,
+  WorkspaceNotFoundError,
+} from './usecases/getWorkspace'
+
+// Composer (M4-PR3)
+export { selectWorkspaceRepo } from './composer'

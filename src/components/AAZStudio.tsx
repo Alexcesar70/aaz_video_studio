@@ -8,6 +8,27 @@ import type { Asset, AssetType } from '@/lib/assets'
 import { LEAD_CHARACTERS, slugify, isLeadId, defaultEmoji } from '@/lib/assets'
 import { MOODS, DEFAULT_MOOD_ID, getMood, type MoodId } from '@/lib/moods'
 import { PERMISSIONS, PERMISSION_LABELS, PRODUCTS, PRODUCT_LABELS, hasPermission, type Permission, type Product } from '@/lib/permissions'
+import { pollJobUntilDone, type JobPollingView } from '@/lib/jobPolling'
+import { C } from './studio/theme'
+import { Pill, Label, Divider, Input } from './studio/atoms'
+import type {
+  CurrentUser,
+  Character,
+  RefItem,
+  LibraryEntry,
+  ScenarioEntry,
+  Project,
+  Episode,
+  SceneStatus,
+  SceneAsset,
+  HistoryItem,
+} from './studio/types'
+import { MoveSceneModal } from './studio/modals/MoveSceneModal'
+import { MoveEpisodeModal } from './studio/modals/MoveEpisodeModal'
+import { NewUserCredsModal } from './studio/modals/NewUserCredsModal'
+import { KpiCard } from './studio/widgets/KpiCard'
+import { HistoryTab } from './studio/tabs/HistoryTab'
+import { InviteUserModal } from './studio/modals/InviteUserModal'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -15,23 +36,7 @@ import { PERMISSIONS, PERMISSION_LABELS, PRODUCTS, PRODUCT_LABELS, hasPermission
    API keys nunca expostas no browser
 ═══════════════════════════════════════════════════════════════ */
 
-const C = {
-  bg: '#13131a', surface: '#1a1a24', card: '#22222e', border: '#2e2e3e',
-  borderHi: '#3a3a4e', gold: '#C9A84C', goldLight: '#E8C96A', goldDim: '#6A5828',
-  goldGlow: '#C9A84C30', blue: '#5B8DEF', blueGlow: '#5B8DEF20',
-  green: '#4ADE80', greenGlow: '#4ADE8020', red: '#F87171', purple: '#A78BFA',
-  purpleGlow: '#A78BFA20', text: '#E8E8F0', textDim: '#9898B0',
-}
-
-/** Shape of the current logged-in user from /api/auth/me (Phase 4: + permissions/products) */
-type CurrentUser = {
-  id: string
-  email: string
-  name: string
-  role: 'super_admin' | 'admin' | 'creator'
-  permissions?: string[]
-  products?: string[]
-}
+/* Palette, types and atoms extraídos para src/components/studio/* (M2-PR7). */
 
 const CHARACTERS = [
   { id: 'abraao', name: 'Abraão', emoji: '👴', color: '#C9A84C', desc: '8 year old boy, messy orange-red hair, fair skin with freckles, hazel-green eyes, slightly protruding ears, pink vest over teal t-shirt, gray cargo shorts, green-mint canvas sneakers' },
@@ -54,321 +59,11 @@ const DURATIONS = [4, 5, 8, 10, 12, 15]
 
 /* ── Storage — biblioteca de sheets compartilhada via Vercel KV ── */
 
-/* ── Types ── */
-interface Character { id: string; name: string; emoji: string; color: string; desc: string }
-interface RefItem { url: string; label: string; name: string; fromLib?: boolean; charId?: string }
-interface LibraryEntry { charId: string; name: string; emoji: string; images: string[]; createdAt: string; createdBy?: string }
-interface ScenarioEntry { id: string; name: string; imageUrl: string; createdAt: string }
-interface Project { id: string; name: string; createdAt: string; createdBy?: string; memberIds?: string[] }
-interface Episode { id: string; name: string; projectId?: string | null; createdAt: string; createdBy?: string; finalVideoUrl?: string; finalVideoSizeMB?: number; finalVideoUploadedAt?: string; finalVideoUploadedBy?: string; finalStatus?: 'none' | 'pending_review' | 'approved' | 'needs_changes'; reviewNote?: string; reviewedAt?: string; reviewedBy?: string; creatorNote?: string }
-type SceneStatus = 'draft' | 'approved' | 'rejected'
-interface SceneAsset { id: string; episodeId: string | null; sceneNumber: number; title?: string; prompt: string; videoUrl: string; lastFrameUrl: string; characters: string[]; duration: number; cost: string; createdAt: string; projectId?: string | null; status?: SceneStatus; mood?: MoodId; setting?: string; emotion?: string; createdBy?: string }
-interface HistoryItem { id: number; prompt: string; chars: string; mode: string; ratio: string; duration: number; cost: string; url: string; timestamp: string }
+/* Types, atoms, e palette: ver imports acima em studio/* (M2-PR7). */
 
-/* ── Atoms ── */
-const Pill = ({ children, color = C.gold, style = {} }: { children: React.ReactNode; color?: string; style?: React.CSSProperties }) => (
-  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '4px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: `${color}18`, color, border: `1px solid ${color}35`, whiteSpace: 'nowrap', ...style }}>{children}</span>
-)
-
-const Label = ({ children }: { children: React.ReactNode }) => (
-  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '0.5px', marginBottom: 10 }}>{children}</div>
-)
-
-const Divider = () => <div style={{ borderTop: `1px solid ${C.border}`, margin: '10px 0' }} />
-
-const Input = ({ style = {}, ...props }: React.InputHTMLAttributes<HTMLInputElement>) => (
-  <input style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box', ...style }} {...props} />
-)
-
-/* ═══════════════════════════════════════════════════════════════
-   HistoryTab — aba Histórico
-   Declarado fora do AAZStudio para não ser recriado a cada render.
-═══════════════════════════════════════════════════════════════ */
-
-interface HistoryTabProps {
-  scenes: SceneAsset[]
-  projects: Project[]
-  episodes: Episode[]
-  currentUser: CurrentUser | null
-  onPlay: (scene: SceneAsset) => void
-  onDownload: (url: string, filename: string) => void
-  onDelete: (id: string) => void
-  onMoveScene: (scene: SceneAsset) => void
-  onMoveEpisode: (episode: Episode) => void
-  onDeleteEpisode: (episode: Episode) => void
-  onPlayEpisodeSequential: (episode: Episode) => void
-  onPlayProjectSequential: (project: Project) => void
-  onSetSceneStatus: (sceneId: string, status: SceneStatus) => void
-  onRenameEpisode: (episodeId: string, newName: string) => void
-  onOpenDelivery: (episode: Episode) => void
-}
-
-function SceneCard({ scene, onPlay, onDownload, onDelete, onMoveScene, onSetStatus }: { scene: SceneAsset; onPlay: (s: SceneAsset) => void; onDownload: (url: string, filename: string) => void; onDelete: (id: string) => void; onMoveScene: (s: SceneAsset) => void; onSetStatus: (sceneId: string, status: SceneStatus) => void }) {
-  const d = new Date(scene.createdAt)
-  const dateStr = d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-  const status = scene.status ?? 'draft'
-  const statusColor = status === 'approved' ? C.green : status === 'rejected' ? C.red : C.gold
-  const statusLabel = status === 'approved' ? 'Aprovada' : status === 'rejected' ? 'Rejeitada' : 'Rascunho'
-  const cardOpacity = status === 'rejected' ? 0.55 : 1
-  return (
-    <div style={{ background: C.card, border: `1px solid ${status === 'approved' ? `${C.green}60` : C.border}`, borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', opacity: cardOpacity, transition: 'opacity 0.2s' }}>
-      <div style={{ position: 'relative', aspectRatio: '16/9', background: '#000', cursor: 'pointer' }} onClick={() => onPlay(scene)}>
-        <video src={scene.videoUrl} muted playsInline preload="metadata" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onMouseEnter={e => (e.currentTarget as HTMLVideoElement).play().catch(() => {})} onMouseLeave={e => { const v = e.currentTarget as HTMLVideoElement; v.pause(); v.currentTime = 0 }} />
-        <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.25)', opacity: 0.9 }}>
-          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(167,139,250,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: '#fff' }}>▶</div>
-        </div>
-        {/* Badge de status no canto superior esquerdo */}
-        <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(0,0,0,0.6)', borderRadius: 20, padding: '3px 9px', backdropFilter: 'blur(6px)' }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor }} />
-          <span style={{ fontSize: 10, fontWeight: 600, color: '#fff', letterSpacing: '0.3px' }}>{statusLabel}</span>
-        </div>
-      </div>
-      <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {/* Título da cena (se houver) + número */}
-        {(scene.title || scene.sceneNumber > 0) && (
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text, lineHeight: 1.3 }}>
-            {scene.sceneNumber > 0 && <span style={{ color: C.purple }}>#{scene.sceneNumber}</span>}
-            {scene.title && <span style={{ marginLeft: scene.sceneNumber > 0 ? 6 : 0 }}>— {scene.title}</span>}
-          </div>
-        )}
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          <Pill color={C.blue}>{scene.duration}s</Pill>
-          <Pill color={C.green}>${scene.cost}</Pill>
-        </div>
-        <div title={scene.prompt} style={{ fontSize: 12, color: C.textDim, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{scene.prompt}</div>
-        <div style={{ fontSize: 11, color: C.textDim }}>{dateStr}</div>
-
-        {/* Botões de status */}
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button
-            onClick={() => onSetStatus(scene.id, status === 'approved' ? 'draft' : 'approved')}
-            title={status === 'approved' ? 'Clique para voltar a rascunho' : 'Marcar como aprovada'}
-            style={{ flex: 1, background: status === 'approved' ? C.green : `${C.green}15`, border: `1px solid ${status === 'approved' ? C.green : `${C.green}40`}`, borderRadius: 8, padding: '6px', cursor: 'pointer', color: status === 'approved' ? '#fff' : C.green, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
-          >✓ Aprovar</button>
-          <button
-            onClick={() => onSetStatus(scene.id, status === 'rejected' ? 'draft' : 'rejected')}
-            title={status === 'rejected' ? 'Clique para voltar a rascunho' : 'Marcar como rejeitada (some dos players)'}
-            style={{ flex: 1, background: status === 'rejected' ? C.red : `${C.red}15`, border: `1px solid ${status === 'rejected' ? C.red : `${C.red}40`}`, borderRadius: 8, padding: '6px', cursor: 'pointer', color: status === 'rejected' ? '#fff' : C.red, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}
-          >⊘ Rejeitar</button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button onClick={() => onPlay(scene)} style={{ flex: 1, background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 8, padding: '7px', cursor: 'pointer', color: C.purple, fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }}>▶ Assistir</button>
-          <button onClick={() => onMoveScene(scene)} title="Mover para outro episódio/projeto" style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.gold, fontSize: 12, fontFamily: 'inherit' }}>⇄</button>
-          <button onClick={() => onDownload(scene.videoUrl, `aaz-${scene.id}.mp4`)} title="Baixar MP4" style={{ background: C.blueGlow, border: `1px solid ${C.blue}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.blue, fontSize: 12, fontFamily: 'inherit' }}>↓</button>
-          <button onClick={() => onDelete(scene.id)} title="Remover do histórico" style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '7px 10px', cursor: 'pointer', color: C.red, fontSize: 12, fontFamily: 'inherit' }}>×</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function EpisodeHeader({ episode, count, onMove, onDelete, onPlaySequential, onRename }: { episode: Episode; count: number; onMove: (e: Episode) => void; onDelete: (e: Episode) => void; onPlaySequential?: (e: Episode) => void; onRename: (episodeId: string, newName: string) => void }) {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  const name = episode.name?.trim() || '(sem nome)'
-
-  const commit = () => {
-    if (draft.trim()) onRename(episode.id, draft)
-    setEditing(false)
-  }
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-      {editing ? (
-        <Input
-          autoFocus
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={e => {
-            if (e.key === 'Enter') commit()
-            else if (e.key === 'Escape') setEditing(false)
-          }}
-          style={{ maxWidth: 260, padding: '6px 10px', fontSize: 13 }}
-        />
-      ) : (
-        <>
-          <h3 style={{ fontSize: 14, fontWeight: 600, color: C.textDim, margin: 0 }}>🎬 {name} <span style={{ opacity: 0.6 }}>({count})</span></h3>
-          <button onClick={() => { setDraft(episode.name?.trim() || ''); setEditing(true) }} title="Renomear episódio" style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textDim, fontSize: 12, padding: 2, fontFamily: 'inherit' }}>✎</button>
-        </>
-      )}
-      {onPlaySequential && count >= 2 && (
-        <button onClick={() => onPlaySequential(episode)} title="Assistir todas as cenas do episódio em sequência" style={{ background: C.purpleGlow, border: `1px solid ${C.purple}50`, borderRadius: 6, padding: '3px 10px', cursor: 'pointer', color: C.purple, fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }}>▶ Assistir episódio</button>
-      )}
-      <button onClick={() => onMove(episode)} title="Mover episódio para outro projeto" style={{ background: `${C.gold}15`, border: `1px solid ${C.gold}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.gold, fontSize: 11, fontFamily: 'inherit' }}>⇄ Mover</button>
-      <button onClick={() => onDelete(episode)} title="Deletar episódio (e todas as cenas dele)" style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 6, padding: '3px 8px', cursor: 'pointer', color: C.red, fontSize: 11, fontFamily: 'inherit' }}>× Deletar</button>
-    </div>
-  )
-}
-
-/** Card de entrega final do episódio — upload MP4 do CapCut/Premiere */
-function EpisodeDeliveryCard({ episode, onOpen }: { episode: Episode; onOpen: (e: Episode) => void }) {
-  const status = episode.finalStatus ?? 'none'
-  const hasDelivery = !!episode.finalVideoUrl
-  const statusColor = status === 'approved' ? C.green : status === 'needs_changes' ? C.gold : status === 'pending_review' ? C.purple : C.textDim
-  const statusLabel = status === 'approved' ? '✓ Aprovado' : status === 'needs_changes' ? '🟠 Precisa ajustes' : status === 'pending_review' ? '🟡 Aguardando revisão' : 'Sem entrega'
-  const uploadedWhen = episode.finalVideoUploadedAt ? new Date(episode.finalVideoUploadedAt).toLocaleDateString('pt-BR') + ' ' + new Date(episode.finalVideoUploadedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''
-
-  return (
-    <div style={{
-      background: hasDelivery ? `${statusColor}10` : C.card,
-      border: `1px solid ${hasDelivery ? statusColor + '60' : C.border}`,
-      borderRadius: 10,
-      padding: '14px 16px',
-      marginTop: 10,
-      display: 'flex',
-      alignItems: 'center',
-      gap: 14,
-      flexWrap: 'wrap',
-    }}>
-      {hasDelivery && episode.finalVideoUrl ? (
-        <video src={episode.finalVideoUrl} muted playsInline preload="metadata" style={{ width: 80, height: 48, borderRadius: 6, objectFit: 'cover', background: '#000', border: `1px solid ${statusColor}40`, flexShrink: 0 }} />
-      ) : (
-        <div style={{ width: 80, height: 48, borderRadius: 6, background: C.card, border: `1px dashed ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>📹</div>
-      )}
-
-      <div style={{ flex: 1, minWidth: 180 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 2 }}>
-          ENTREGA FINAL
-        </div>
-        {hasDelivery ? (
-          <>
-            <div style={{ fontSize: 13, fontWeight: 600, color: statusColor }}>{statusLabel}</div>
-            <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
-              {episode.finalVideoSizeMB ? `${episode.finalVideoSizeMB} MB · ` : ''}Enviado {uploadedWhen}
-            </div>
-            {episode.reviewNote && (
-              <div style={{ fontSize: 11, color: C.text, marginTop: 6, fontStyle: 'italic', background: C.card, padding: '6px 10px', borderRadius: 6, border: `1px solid ${statusColor}30`, maxWidth: 500 }}>
-                <strong style={{ color: statusColor }}>Admin:</strong> "{episode.reviewNote}"
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={{ fontSize: 12, color: C.textDim }}>
-            Depois de montar o episódio no CapCut/Premiere, envie o MP4 final pra revisão do admin.
-          </div>
-        )}
-      </div>
-
-      <button
-        onClick={() => onOpen(episode)}
-        style={{
-          background: hasDelivery ? 'transparent' : C.purple,
-          border: `1px solid ${hasDelivery ? C.border : C.purple}`,
-          borderRadius: 8,
-          padding: '9px 16px',
-          cursor: 'pointer',
-          color: hasDelivery ? C.text : '#fff',
-          fontSize: 12,
-          fontWeight: 700,
-          fontFamily: 'inherit',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {hasDelivery ? '📤 Reenviar / ver' : '📤 Enviar episódio final'}
-      </button>
-    </div>
-  )
-}
-
-function HistoryTab({ scenes, projects, episodes, currentUser, onPlay, onDownload, onDelete, onMoveScene, onMoveEpisode, onDeleteEpisode, onPlayEpisodeSequential, onPlayProjectSequential, onSetSceneStatus, onRenameEpisode, onOpenDelivery }: HistoryTabProps) {
-  const total = scenes.length
-  const orphans = scenes.filter(s => !s.episodeId)
-  const episodesWithScenes = episodes.filter(ep => scenes.some(s => s.episodeId === ep.id))
-  const projectsWithContent = projects.filter(p => episodesWithScenes.some(ep => ep.projectId === p.id))
-  const standaloneEpisodes = episodesWithScenes.filter(ep => !ep.projectId)
-  const sceneGrid = (arr: SceneAsset[]) => (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 14 }}>
-      {arr.map(s => <SceneCard key={s.id} scene={s} onPlay={onPlay} onDownload={onDownload} onDelete={onDelete} onMoveScene={onMoveScene} onSetStatus={onSetSceneStatus} />)}
-    </div>
-  )
-
-  return (
-    <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, marginTop: 4 }}>
-        <h1 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>🎬 Cenas ({total})</h1>
-      </div>
-
-      {total === 0 ? (
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '48px', textAlign: 'center', color: C.textDim }}>
-          <div style={{ fontSize: 42, marginBottom: 10 }}>🎬</div>
-          <div style={{ fontSize: 14 }}>Nenhuma cena gerada ainda. Volte ao Estúdio e crie a primeira.</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-          {/* Projetos */}
-          {projectsWithContent.map(proj => {
-            const projEps = episodesWithScenes.filter(ep => ep.projectId === proj.id)
-            const projScenesCount = scenes.filter(s => projEps.some(e => e.id === s.episodeId)).length
-            return (
-              <section key={proj.id}>
-                {/* Card do projeto com nome + botão de destaque */}
-                <div style={{ background: `linear-gradient(135deg, ${C.purple}14, ${C.purple}06)`, border: `1px solid ${C.purple}40`, borderRadius: 12, padding: '16px 20px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-                  <div>
-                    <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0 }}>📁 {proj.name}</h2>
-                    <div style={{ fontSize: 12, color: C.textDim, marginTop: 4 }}>
-                      {projEps.length} episódio{projEps.length !== 1 ? 's' : ''} · {projScenesCount} cena{projScenesCount !== 1 ? 's' : ''}
-                    </div>
-                  </div>
-                  {projScenesCount >= 2 && (
-                    <button
-                      onClick={() => onPlayProjectSequential(proj)}
-                      title="Assistir todas as cenas do projeto em sequência"
-                      style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 14, fontWeight: 700, fontFamily: 'inherit', boxShadow: `0 4px 14px ${C.purple}40`, whiteSpace: 'nowrap' }}
-                    >▶ Assistir projeto inteiro</button>
-                  )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 18, paddingLeft: 12, borderLeft: `2px solid ${C.border}` }}>
-                  {projEps.map(ep => {
-                    const epScenes = scenes.filter(s => s.episodeId === ep.id)
-                    return (
-                      <div key={ep.id}>
-                        <div style={{ marginLeft: 8 }}><EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} onRename={onRenameEpisode} /></div>
-                        <div style={{ marginLeft: 8 }}>{sceneGrid(epScenes)}</div>
-                        <div style={{ marginLeft: 8 }}>
-                          <EpisodeDeliveryCard episode={ep} onOpen={onOpenDelivery} />
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            )
-          })}
-
-          {/* Episódios avulsos */}
-          {standaloneEpisodes.length > 0 && (
-            <section>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, marginBottom: 12 }}>🎬 Episódios Avulsos</h2>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-                {standaloneEpisodes.map(ep => {
-                  const epScenes = scenes.filter(s => s.episodeId === ep.id)
-                  return (
-                    <div key={ep.id}>
-                      <EpisodeHeader episode={ep} count={epScenes.length} onMove={onMoveEpisode} onDelete={onDeleteEpisode} onPlaySequential={onPlayEpisodeSequential} onRename={onRenameEpisode} />
-                      {sceneGrid(epScenes)}
-                      <EpisodeDeliveryCard episode={ep} onOpen={onOpenDelivery} />
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
-          )}
-
-          {/* Cenas órfãs (sem episódio) */}
-          {orphans.length > 0 && (
-            <section>
-              <h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>🎞 Cenas sem episódio</h2>
-              <div style={{ fontSize: 12, color: C.textDim, marginBottom: 12 }}>Cenas geradas sem um episódio selecionado</div>
-              {sceneGrid(orphans)}
-            </section>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
+/* HistoryTab + SceneCard + EpisodeHeader + EpisodeDeliveryCard
+   extraídos para studio/tabs/HistoryTab.tsx + studio/widgets/* (M5-PR6).
+   HistoryTabProps agora é exportado de studio/tabs/HistoryTab.tsx. */
 
 /* ═══════════════════════════════════════════════════════════════
    AtelierLibraryView — grid de assets (leads + criados)
@@ -2126,15 +1821,7 @@ function WalletExtratoModal({ showBrl, brlRate, onClose }: {
 }
 
 /* Card KPI — usado no dashboard do admin */
-function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
-  return (
-    <div style={{ background: C.surface, border: `1px solid ${color}40`, borderRadius: 12, padding: 18 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 6 }}>{label.toUpperCase()}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: color, fontFamily: 'monospace' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{sub}</div>}
-    </div>
-  )
-}
+/* KpiCard extraído para studio/widgets/KpiCard.tsx (M4-PR6). */
 
 /* Linha de atividade no feed do dashboard */
 function ActivityRow({ event, onClickUser, showBrl, brlRate }: { event: ActivityEventView; onClickUser?: () => void; showBrl?: boolean; brlRate?: number | null }) {
@@ -2213,125 +1900,7 @@ function relativeTime(date: Date): string {
 }
 
 /* Modal: Convidar criador */
-function InviteUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: (creds: { email: string; name: string; password: string }) => void }) {
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [role, setRole] = useState<'admin' | 'creator'>('creator')
-  const [budget, setBudget] = useState('')
-  const [selPermissions, setSelPermissions] = useState<string[]>([])
-  const [selProducts, setSelProducts] = useState<string[]>([])
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-
-  const togglePermission = (p: string) => setSelPermissions(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
-  const toggleProduct = (p: string) => setSelProducts(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p])
-
-  const submit = async () => {
-    if (!name.trim() || !email.trim()) { setError('Nome e email são obrigatórios.'); return }
-    setLoading(true); setError('')
-    try {
-      const res = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          role,
-          monthlyBudgetUsd: budget ? parseFloat(budget) : undefined,
-          permissions: selPermissions.length > 0 ? selPermissions : undefined,
-          products: selProducts.length > 0 ? selProducts : undefined,
-        }),
-      })
-      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
-      const data = await res.json()
-      onCreated({ email: data.user.email, name: data.user.name, password: data.plainPassword })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao criar.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const allPerms = Object.values(PERMISSIONS) as Permission[]
-  const allProducts = Object.values(PRODUCTS) as Product[]
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, width: '100%', maxWidth: 500, padding: 24, maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 4 }}>Convidar criador</div>
-        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 20 }}>Uma senha será gerada automaticamente. Envie por WhatsApp/Slack.</div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>NOME COMPLETO</div>
-            <Input value={name} onChange={e => setName(e.target.value)} placeholder="Maria Silva" />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>EMAIL</div>
-            <Input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="maria@example.com" />
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>ROLE</div>
-            <select value={role} onChange={e => setRole(e.target.value as 'admin' | 'creator')} style={{ width: '100%', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, fontFamily: 'inherit', outline: 'none' }}>
-              <option value="creator">Creator -- cria cenas/assets</option>
-              <option value="admin">Admin -- ve tudo, gerencia tudo</option>
-            </select>
-          </div>
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 5, letterSpacing: '0.5px' }}>BUDGET MENSAL (OPCIONAL, USD)</div>
-            <Input type="number" value={budget} onChange={e => setBudget(e.target.value)} placeholder="50" step="10" />
-          </div>
-
-          {/* Permissions (Phase 4) — only shown for creator role */}
-          {role === 'creator' && (
-            <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 8, letterSpacing: '0.5px' }}>PERMISSOES (OPCIONAL — SEM SELECAO = TODAS DO ROLE)</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {allPerms.map(p => (
-                  <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0', fontSize: 13, color: C.text }}>
-                    <input
-                      type="checkbox"
-                      checked={selPermissions.includes(p)}
-                      onChange={() => togglePermission(p)}
-                      style={{ accentColor: C.purple, width: 16, height: 16 }}
-                    />
-                    {PERMISSION_LABELS[p]}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Products (Phase 4) */}
-          <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, marginBottom: 8, letterSpacing: '0.5px' }}>PRODUTOS (OPCIONAL — SEM SELECAO = TODOS)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {allProducts.map(p => (
-                <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 0', fontSize: 13, color: C.text }}>
-                  <input
-                    type="checkbox"
-                    checked={selProducts.includes(p)}
-                    onChange={() => toggleProduct(p)}
-                    style={{ accentColor: C.blue, width: 16, height: 16 }}
-                  />
-                  {PRODUCT_LABELS[p]}
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {error && <div style={{ background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, padding: '9px 12px', fontSize: 12, color: C.red }}>{error}</div>}
-          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button onClick={onClose} style={{ flex: 1, background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Cancelar</button>
-            <button onClick={submit} disabled={loading} style={{ flex: 1, background: loading ? C.card : C.gold, border: `1px solid ${C.gold}`, borderRadius: 10, padding: '12px', cursor: loading ? 'wait' : 'pointer', color: loading ? C.textDim : '#000', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
-              {loading ? '⟳ Criando...' : 'Gerar senha e criar'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
+/* InviteUserModal extraído para studio/modals/InviteUserModal.tsx (M6-PR6). */
 
 /* Modal: entrega final de episódio — upload MP4 ou review */
 function EpisodeDeliveryModal({
@@ -2542,51 +2111,7 @@ function EpisodeDeliveryModal({
 }
 
 /* Modal: exibe credenciais one-time após criar user */
-function NewUserCredsModal({ creds, onClose }: { creds: { email: string; name: string; password: string }; onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
-  const fullText = `Email: ${creds.email}\nSenha: ${creds.password}`
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(fullText)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {}
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 101, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
-      <div style={{ background: C.bg, border: `2px solid ${C.green}60`, borderRadius: 14, width: '100%', maxWidth: 500, padding: 28 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: C.green, marginBottom: 4 }}>✓ {creds.name} foi criado</div>
-        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 20 }}>Copie as credenciais e envie pro novo criador — a senha não vai aparecer de novo.</div>
-
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, fontFamily: 'monospace', fontSize: 14, marginBottom: 14 }}>
-          <div style={{ marginBottom: 8 }}>
-            <span style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.5px' }}>EMAIL</span>
-            <div style={{ color: C.text }}>{creds.email}</div>
-          </div>
-          <div>
-            <span style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.5px' }}>SENHA</span>
-            <div style={{ color: C.gold, fontSize: 16, letterSpacing: 1 }}>{creds.password}</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={copy} style={{ flex: 1, background: copied ? C.green : C.purple, border: `1px solid ${copied ? C.green : C.purple}`, borderRadius: 10, padding: '12px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
-            {copied ? '✓ Copiado!' : '📋 Copiar credenciais'}
-          </button>
-          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 24px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-            Fechar
-          </button>
-        </div>
-
-        <div style={{ fontSize: 10, color: C.gold, marginTop: 14, fontStyle: 'italic', textAlign: 'center' }}>
-          ⚠ Esta senha só aparece agora. Se fechar sem copiar, use "Reset senha" depois.
-        </div>
-      </div>
-    </div>
-  )
-}
+/* NewUserCredsModal extraído para studio/modals/NewUserCredsModal.tsx (M4-PR6). */
 
 export function AAZStudio() {
   const router = useRouter()
@@ -4083,11 +3608,26 @@ export function AAZStudio() {
         body: JSON.stringify(body),
       })
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e?.error || `Erro ${res.status}`) }
-      // Servidor agora retorna { videoUrl } — URL permanente no Vercel Blob
-      const data = await res.json() as { videoUrl?: string }
+      // Servidor retorna { videoUrl } no modo síncrono OU
+      // { jobId, status:'queued', async:true } quando USE_ASYNC_GENERATION está ligada.
+      const data = await res.json() as { videoUrl?: string; jobId?: string; async?: boolean }
       console.log('[/api/generate] resposta:', data)
-      if (!data.videoUrl) throw new Error('Servidor não retornou videoUrl. Resposta: ' + JSON.stringify(data))
-      const url = data.videoUrl
+
+      let url = data.videoUrl ?? ''
+      if (!url && data.jobId) {
+        setStatusMsg('Processando em background (job ' + data.jobId.slice(0, 8) + ')...')
+        const finished = await pollJobUntilDone<{ videoUrl?: string }>(data.jobId, {
+          onUpdate: (job: JobPollingView<{ videoUrl?: string }>) => {
+            if (job.status === 'running') {
+              const pct = typeof job.progress === 'number' ? ` ${job.progress}%` : ''
+              setStatusMsg('Gerando vídeo...' + pct)
+            }
+          },
+        })
+        url = finished.output?.videoUrl ?? ''
+      }
+
+      if (!url) throw new Error('Servidor não retornou videoUrl. Resposta: ' + JSON.stringify(data))
       setResultUrl(url); setLastResult(url); setStatus('success'); setStatusMsg('Vídeo gerado!')
       loadMyBudget() // atualiza barra de budget no header
       loadMyWallet() // atualiza saldo da wallet no header
@@ -8079,79 +7619,4 @@ function CharacterSheetWizard({ onClose, onSaved, clientPrices, showBrl, brlRate
   )
 }
 
-function MoveSceneModal({ scene, projects, episodes, onClose, onConfirm }: { scene: SceneAsset; projects: Project[]; episodes: Episode[]; onClose: () => void; onConfirm: (episodeId: string | null, projectId: string | null) => void | Promise<void> }) {
-  const [projId, setProjId] = useState<string>(scene.projectId ?? '')
-  const [epId, setEpId] = useState<string>(scene.episodeId ?? '')
-
-  // Filtra episódios pelo projeto selecionado
-  const availableEps = projId ? episodes.filter(e => e.projectId === projId) : episodes.filter(e => !e.projectId)
-
-  // Se trocar de projeto, reset do episódio
-  useEffect(() => {
-    if (epId && !availableEps.some(e => e.id === epId)) setEpId('')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projId])
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>Mover cena</h2>
-          <div style={{ fontSize: 12, color: C.textDim, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{scene.prompt}</div>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Projeto</div>
-          <select value={projId} onChange={e => setProjId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
-            <option value="">— Sem projeto —</option>
-            {projects.map(p => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
-          </select>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Episódio</div>
-          <select value={epId} onChange={e => setEpId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
-            <option value="">— Sem episódio (órfã) —</option>
-            {availableEps.map(ep => <option key={ep.id} value={ep.id}>🎬 {ep.name?.trim() || '(sem nome)'}</option>)}
-          </select>
-          {projId && availableEps.length === 0 && (
-            <div style={{ fontSize: 11, color: C.textDim, marginTop: 6 }}>Nenhum episódio neste projeto. A cena vai para o projeto sem episódio.</div>
-          )}
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 18px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}>Cancelar</button>
-          <button onClick={() => onConfirm(epId || null, projId || null)} style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Mover</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function MoveEpisodeModal({ episode, projects, onClose, onConfirm }: { episode: Episode; projects: Project[]; onClose: () => void; onConfirm: (projectId: string | null) => void | Promise<void> }) {
-  const [projId, setProjId] = useState<string>(episode.projectId ?? '')
-
-  return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: 24, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 16 }}>
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, marginBottom: 4 }}>Mover episódio</h2>
-          <div style={{ fontSize: 13, color: C.textDim }}>🎬 {episode.name?.trim() || '(sem nome)'}</div>
-        </div>
-
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 6 }}>Projeto de destino</div>
-          <select value={projId} onChange={e => setProjId(e.target.value)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 14px', color: C.text, fontSize: 14, outline: 'none', fontFamily: 'inherit', width: '100%', boxSizing: 'border-box' }}>
-            <option value="">— Sem projeto (avulso) —</option>
-            {projects.map(p => <option key={p.id} value={p.id}>📁 {p.name}</option>)}
-          </select>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
-          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 18px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}>Cancelar</button>
-          <button onClick={() => onConfirm(projId || null)} style={{ background: C.purple, border: `1px solid ${C.purple}`, borderRadius: 10, padding: '10px 20px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>Mover</button>
-        </div>
-      </div>
-    </div>
-  )
-}
+/* MoveSceneModal e MoveEpisodeModal extraídos para studio/modals/* (M2-PR7) — ver imports no topo. */

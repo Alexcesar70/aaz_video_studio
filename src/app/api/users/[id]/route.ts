@@ -4,21 +4,33 @@ import {
   updateUser,
   resetPassword,
   revokeUser,
-  toPublicUser,
+  toPublicUser as toPublicUserLegacy,
   LEAD_ADMIN_ID,
   type UserRole,
   type UserStatus,
 } from '@/lib/users'
+import {
+  selectUserRepo,
+  getUserById as getUserByIdUseCase,
+  toPublicUser,
+} from '@/modules/users'
 import { requireAdmin, AuthError } from '@/lib/auth'
 
 /**
  * GET /api/users/[id]
  * Retorna um usuário específico. Admin only.
+ *
+ * M4-PR2: lê via `selectUserRepo()` — Postgres atrás de
+ * USE_POSTGRES_USERS, Redis caso contrário.
  */
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    requireAdmin(request)
-    const user = await getUserById(params.id)
+    const admin = requireAdmin(request)
+    const repo = selectUserRepo({
+      userId: admin.id,
+      workspaceId: admin.organizationId,
+    })
+    const user = await getUserByIdUseCase({ repo }, params.id)
     if (!user) {
       return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 })
     }
@@ -97,7 +109,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     if (!user) {
       return NextResponse.json({ error: 'Usuário não encontrado.' }, { status: 404 })
     }
-    return NextResponse.json({ ok: true, user: toPublicUser(user), plainPassword })
+    return NextResponse.json({ ok: true, user: toPublicUserLegacy(user), plainPassword })
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status })

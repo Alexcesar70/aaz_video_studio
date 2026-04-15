@@ -7,19 +7,32 @@ import { getRedis } from '@/lib/redis'
  * RedisStyleProfileRepository
  *
  * Layout de chaves:
- *   aaz:style_profile:global:{slug}             → preset do sistema
- *   aaz:style_profile:ws:{workspaceId}:{slug}   → override do workspace
- *   aaz:style_profile:index                     → Set de "scope::slug"
+ *   aaz:style_profile:global:{slug}                     → preset do sistema (current)
+ *   aaz:style_profile:ws:{workspaceId}:{slug}           → override do workspace (current)
+ *   aaz:style_profile:history:global:{slug}             → List (LPUSH) de versões arquivadas
+ *   aaz:style_profile:history:ws:{workspaceId}:{slug}   → Idem para workspace
+ *   aaz:style_profile:index                             → Set de "scope::slug"
+ *
+ * Histórico (M2-PR6): cada upsert com `version` diferente da corrente
+ * empurra a versão antiga para a List de histórico (mais recente no topo).
  */
 
 const GLOBAL_PREFIX = 'aaz:style_profile:global:'
 const WS_PREFIX = 'aaz:style_profile:ws:'
+const HISTORY_GLOBAL_PREFIX = 'aaz:style_profile:history:global:'
+const HISTORY_WS_PREFIX = 'aaz:style_profile:history:ws:'
 const INDEX_KEY = 'aaz:style_profile:index'
 
 function buildKey(slug: string, workspaceId: string | null): string {
   return workspaceId
     ? `${WS_PREFIX}${workspaceId}:${slug}`
     : `${GLOBAL_PREFIX}${slug}`
+}
+
+function historyKey(slug: string, workspaceId: string | null): string {
+  return workspaceId
+    ? `${HISTORY_WS_PREFIX}${workspaceId}:${slug}`
+    : `${HISTORY_GLOBAL_PREFIX}${slug}`
 }
 
 function indexMember(slug: string, workspaceId: string | null): string {
@@ -108,6 +121,23 @@ export class RedisStyleProfileRepository implements StyleProfileRepository {
     const validated = validateStyleProfile(profile)
     const redis = await getRedis()
     const key = buildKey(validated.slug, validated.workspaceId)
+
+    // Se já existe e a versão mudou, arquiva o raw antigo antes de sobrescrever.
+    const existingRaw = await redis.get(key)
+    if (existingRaw) {
+      try {
+        const existing = JSON.parse(existingRaw) as StyleProfile
+        if (existing.version !== validated.version) {
+          await redis.lPush(
+            historyKey(validated.slug, validated.workspaceId),
+            existingRaw,
+          )
+        }
+      } catch {
+        // ignora entradas corrompidas — não bloqueia o upsert
+      }
+    }
+
     await redis.set(key, JSON.stringify(validated))
     await redis.sAdd(INDEX_KEY, indexMember(validated.slug, validated.workspaceId))
     return validated
@@ -117,5 +147,23 @@ export class RedisStyleProfileRepository implements StyleProfileRepository {
     const redis = await getRedis()
     await redis.del(buildKey(slug, workspaceId))
     await redis.sRem(INDEX_KEY, indexMember(slug, workspaceId))
+    // histórico preservado intencionalmente
+  }
+
+  async listVersions(
+    slug: string,
+    workspaceId: string | null,
+  ): Promise<StyleProfile[]> {
+    const redis = await getRedis()
+    const raws = await redis.lRange(historyKey(slug, workspaceId), 0, -1)
+    const out: StyleProfile[] = []
+    for (const r of raws) {
+      try {
+        out.push(JSON.parse(r) as StyleProfile)
+      } catch {
+        // ignora entradas corrompidas
+      }
+    }
+    return out
   }
 }
