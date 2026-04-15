@@ -4,6 +4,7 @@ import { getAuthUser, requireAdmin, AuthError } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { del as blobDel } from '@vercel/blob'
+import { notifyAndQueueEmail } from '@/lib/notificationsWiring'
 
 type FinalStatus = 'none' | 'pending_review' | 'approved' | 'needs_changes'
 
@@ -124,6 +125,41 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
             newStatus: updates.finalStatus,
           },
         }).catch(() => {})
+
+        // M6-PR4: notifica creator do episódio sobre a decisão.
+        // Quem submeteu (finalVideoUploadedBy) ou criou o episódio.
+        const recipientId =
+          current.finalVideoUploadedBy || current.createdBy
+        if (recipientId && recipientId !== authUser.id) {
+          const isApproved = updates.finalStatus === 'approved'
+          notifyAndQueueEmail({
+            kind: isApproved ? 'episode_approved' : 'episode_needs_changes',
+            level: isApproved ? 'info' : 'warning',
+            userId: recipientId,
+            workspaceId: authUser.organizationId ?? null,
+            title: isApproved
+              ? `Episódio "${current.name}" aprovado`
+              : `Episódio "${current.name}" precisa de ajustes`,
+            body: isApproved
+              ? `Seu episódio foi aprovado pelo admin${
+                  updates.reviewNote ? `. Comentário: "${updates.reviewNote}"` : '.'
+                }`
+              : `O admin pediu ajustes na entrega final${
+                  updates.reviewNote ? `: "${updates.reviewNote}"` : '.'
+                }`,
+            link: {
+              href: `/studio?episode=${current.id}`,
+              label: 'Abrir episódio',
+            },
+            metadata: {
+              episodeId: current.id,
+              reviewedBy: authUser.id,
+              newStatus: updates.finalStatus,
+            },
+          }).catch((err) =>
+            console.error('[episodes/review] notify error:', err),
+          )
+        }
       }
       return NextResponse.json(updated)
     }

@@ -29,6 +29,7 @@ import {
   markFailed,
 } from '@/modules/jobs'
 import { reportError } from '@/lib/errorReporter'
+import { notifyAndQueueEmail } from '@/lib/notificationsWiring'
 import { inngest } from '../client'
 import { JOB_EVENT_NAMES } from '../events'
 
@@ -114,6 +115,22 @@ export const videoGenerationJobFunction = inngest.createFunction(
         await markFailed({ repo }, {
           id: jobId,
           error: { message, code },
+        })
+      })
+
+      // M6-PR4: notifica o user que iniciou a geração.
+      await step.run('notify-user-failed', async () => {
+        await notifyAndQueueEmail({
+          kind: 'job_failed',
+          level: 'critical',
+          userId: input.user.id,
+          workspaceId: input.user.organizationId ?? null,
+          title: 'Geração de vídeo falhou',
+          body:
+            `Sua geração com ${(input.request as { engineId?: string }).engineId ?? 'engine'} ` +
+            `de ${(input.request as { duration?: number }).duration ?? '?'}s falhou: ${message.slice(0, 200)}`,
+          link: { href: '/studio', label: 'Tentar de novo' },
+          metadata: { jobId, code },
         })
       })
       throw err

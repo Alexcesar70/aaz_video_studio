@@ -9,6 +9,7 @@ import {
 import { selectWorkspaceRepo } from '@/modules/workspaces'
 import { getWallet, addCredits, getTransactions } from '@/lib/wallet'
 import { selectWalletRepo, topUpWallet } from '@/modules/wallet'
+import { notifyAndQueueEmail } from '@/lib/notificationsWiring'
 import { getUsersByOrganization, listUsers, updateUser } from '@/lib/users'
 import { getPlanById } from '@/lib/plans'
 import { queryEvents } from '@/lib/activity'
@@ -169,6 +170,27 @@ export async function POST(
             createdBy: admin.id,
           },
         )
+        // M6-PR4: notifica owner do workspace que créditos foram adicionados.
+        if (org.ownerId && org.ownerId !== admin.id) {
+          notifyAndQueueEmail({
+            kind: 'wallet_topped_up',
+            level: 'info',
+            userId: org.ownerId,
+            workspaceId: org.id,
+            title: `Créditos adicionados à wallet de "${org.name}"`,
+            body: `${admin.name} adicionou $${body.amount.toFixed(2)} à sua wallet. Saldo atual: $${result.wallet.balanceUsd.toFixed(2)}.`,
+            link: { href: '/admin/wallet', label: 'Ver wallet' },
+            metadata: {
+              walletId: org.walletId,
+              amount: body.amount,
+              addedBy: admin.id,
+              transactionId: result.transaction.id,
+            },
+          }).catch((err) =>
+            console.error('[admin/orgs add_credits] notify error:', err),
+          )
+        }
+
         return NextResponse.json({
           ok: true,
           transaction: result.transaction,
