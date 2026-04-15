@@ -11,6 +11,15 @@
     },
     "src/app/api/scene-director/route.ts": {
       "maxDuration": 60
+    },
+    "src/app/api/cron/reconcile-wallets/route.ts": {
+      "maxDuration": 120
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/reconcile-wallets",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }
