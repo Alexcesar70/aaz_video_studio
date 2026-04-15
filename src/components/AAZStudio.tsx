@@ -25,6 +25,8 @@ import type {
 } from './studio/types'
 import { MoveSceneModal } from './studio/modals/MoveSceneModal'
 import { MoveEpisodeModal } from './studio/modals/MoveEpisodeModal'
+import { NewUserCredsModal } from './studio/modals/NewUserCredsModal'
+import { KpiCard } from './studio/widgets/KpiCard'
 
 /* ═══════════════════════════════════════════════════════════════
    AAZ COM JESUS · PRODUCTION STUDIO v2 — Next.js Edition
@@ -2103,15 +2105,7 @@ function WalletExtratoModal({ showBrl, brlRate, onClose }: {
 }
 
 /* Card KPI — usado no dashboard do admin */
-function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
-  return (
-    <div style={{ background: C.surface, border: `1px solid ${color}40`, borderRadius: 12, padding: 18 }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: '0.5px', marginBottom: 6 }}>{label.toUpperCase()}</div>
-      <div style={{ fontSize: 26, fontWeight: 800, color: color, fontFamily: 'monospace' }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{sub}</div>}
-    </div>
-  )
-}
+/* KpiCard extraído para studio/widgets/KpiCard.tsx (M4-PR6). */
 
 /* Linha de atividade no feed do dashboard */
 function ActivityRow({ event, onClickUser, showBrl, brlRate }: { event: ActivityEventView; onClickUser?: () => void; showBrl?: boolean; brlRate?: number | null }) {
@@ -2519,51 +2513,7 @@ function EpisodeDeliveryModal({
 }
 
 /* Modal: exibe credenciais one-time após criar user */
-function NewUserCredsModal({ creds, onClose }: { creds: { email: string; name: string; password: string }; onClose: () => void }) {
-  const [copied, setCopied] = useState(false)
-  const fullText = `Email: ${creds.email}\nSenha: ${creds.password}`
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(fullText)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {}
-  }
-
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 101, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}>
-      <div style={{ background: C.bg, border: `2px solid ${C.green}60`, borderRadius: 14, width: '100%', maxWidth: 500, padding: 28 }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: C.green, marginBottom: 4 }}>✓ {creds.name} foi criado</div>
-        <div style={{ fontSize: 12, color: C.textDim, marginBottom: 20 }}>Copie as credenciais e envie pro novo criador — a senha não vai aparecer de novo.</div>
-
-        <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 18, fontFamily: 'monospace', fontSize: 14, marginBottom: 14 }}>
-          <div style={{ marginBottom: 8 }}>
-            <span style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.5px' }}>EMAIL</span>
-            <div style={{ color: C.text }}>{creds.email}</div>
-          </div>
-          <div>
-            <span style={{ color: C.textDim, fontSize: 10, fontWeight: 700, letterSpacing: '0.5px' }}>SENHA</span>
-            <div style={{ color: C.gold, fontSize: 16, letterSpacing: 1 }}>{creds.password}</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={copy} style={{ flex: 1, background: copied ? C.green : C.purple, border: `1px solid ${copied ? C.green : C.purple}`, borderRadius: 10, padding: '12px', cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
-            {copied ? '✓ Copiado!' : '📋 Copiar credenciais'}
-          </button>
-          <button onClick={onClose} style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 24px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontWeight: 600, fontFamily: 'inherit' }}>
-            Fechar
-          </button>
-        </div>
-
-        <div style={{ fontSize: 10, color: C.gold, marginTop: 14, fontStyle: 'italic', textAlign: 'center' }}>
-          ⚠ Esta senha só aparece agora. Se fechar sem copiar, use "Reset senha" depois.
-        </div>
-      </div>
-    </div>
-  )
-}
+/* NewUserCredsModal extraído para studio/modals/NewUserCredsModal.tsx (M4-PR6). */
 
 export function AAZStudio() {
   const router = useRouter()
