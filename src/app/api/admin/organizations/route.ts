@@ -46,7 +46,12 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/admin/organizations
  * Create a new organization (with wallet + optional initial credits).
- * Body: { name, plan, ownerId, type, maxUsers, products, billingEmail, leaderCanCreate?, initialCredits? }
+ * Body: { name, plan, ownerId?, type, maxUsers, products, billingEmail, leaderCanCreate?, initialCredits? }
+ *
+ * `ownerId` é opcional — se omitido, usa o admin autenticado como owner
+ * (comportamento esperado quando super_admin cria uma org "pra alguém"
+ * via UI antes de saber o user-alvo final). Admin pode transferir
+ * ownership depois via PATCH.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -64,9 +69,12 @@ export async function POST(request: NextRequest) {
       initialCredits?: number
     }
 
-    if (!body.name || !body.plan || !body.ownerId || !body.type || !body.billingEmail) {
+    // Fallback: usa admin como owner se não veio ownerId explícito
+    const ownerId = body.ownerId?.trim() || admin.id
+
+    if (!body.name || !body.plan || !ownerId || !body.type || !body.billingEmail) {
       return NextResponse.json(
-        { error: 'name, plan, ownerId, type e billingEmail são obrigatórios.' },
+        { error: 'name, plan, type e billingEmail são obrigatórios.' },
         { status: 400 }
       )
     }
@@ -74,7 +82,7 @@ export async function POST(request: NextRequest) {
     const org = await createOrganization({
       name: body.name,
       plan: body.plan,
-      ownerId: body.ownerId,
+      ownerId,
       type: body.type,
       maxUsers: body.maxUsers ?? (body.type === 'individual' ? 1 : 10),
       products: body.products ?? ['aaz_studio'],
