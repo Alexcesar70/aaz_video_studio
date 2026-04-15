@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getRedis } from '@/lib/redis'
 import { getAuthUser } from '@/lib/auth'
 import { emitEvent } from '@/lib/activity'
+import {
+  selectProjectRepo,
+  PROJECTS_LEGACY_WORKSPACE_ID,
+} from '@/modules/projects'
 
 const PREFIX = 'aaz:project:'
 
@@ -16,27 +20,52 @@ interface Project {
   organizationId?: string
 }
 
+/**
+ * GET /api/projects — M5-PR2: lê via composer.
+ *
+ * Default OFF: comportamento idêntico ao histórico (Redis com filtro
+ * de orgId + legacy data sem orgId). Com USE_POSTGRES_PROJECTS=on,
+ * lê do Postgres (sem legacy — backfill deve ter assinado os
+ * orphans antes).
+ */
 export async function GET(request: NextRequest) {
   try {
     const authUser = getAuthUser(request)
     const orgId = authUser?.organizationId
 
-    const redis = await getRedis()
-    const keys = await redis.keys(`${PREFIX}*`)
-    if (keys.length === 0) return NextResponse.json([])
-    const projects: Project[] = []
-    for (const key of keys) {
-      const val = await redis.get(key)
-      if (val) projects.push(JSON.parse(val))
-    }
+    const repo = selectProjectRepo({
+      userId: authUser?.id,
+      workspaceId: orgId,
+    })
 
-    // Multi-tenant filtering: users in an org see their org's data + legacy data
-    const filtered = orgId
-      ? projects.filter(p => p.organizationId === orgId || !p.organizationId)
-      : projects
+    const projectsForOrg = orgId
+      ? await repo.list({ workspaceId: orgId })
+      : await repo.list()
 
-    filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    return NextResponse.json(filtered)
+    // Compatibilidade legado: itens sem orgId (sentinel '__legacy__')
+    // ficam visíveis a todos. No Postgres não há sentinel — backfill
+    // assinou orphans à org correta.
+    const legacyVisible = orgId
+      ? await repo.list({ workspaceId: PROJECTS_LEGACY_WORKSPACE_ID })
+      : []
+
+    const merged = [...projectsForOrg, ...legacyVisible]
+    merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+
+    // Mapeia ao shape legado pro client (omit workspaceId='__legacy__'
+    // → organizationId: undefined).
+    const out: Project[] = merged.map((p) => ({
+      id: p.id,
+      name: p.name,
+      createdAt: p.createdAt,
+      createdBy: p.createdBy,
+      memberIds: p.memberIds,
+      organizationId:
+        p.workspaceId === PROJECTS_LEGACY_WORKSPACE_ID
+          ? undefined
+          : p.workspaceId,
+    }))
+    return NextResponse.json(out)
   } catch (err) {
     console.error('[/api/projects GET]', err)
     return NextResponse.json({ error: 'Erro ao carregar projetos.' }, { status: 500 })

@@ -3,6 +3,10 @@ import { getRedis } from '@/lib/redis'
 import { getAuthUser } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
+import {
+  selectEpisodeRepo,
+  EPISODES_LEGACY_WORKSPACE_ID,
+} from '@/modules/episodes'
 
 const PREFIX = 'aaz:ep:'
 
@@ -26,27 +30,52 @@ interface Episode {
   organizationId?: string
 }
 
+/**
+ * GET /api/episodes — M5-PR2: lê via composer.
+ * Mesma estratégia do /api/projects (legacy data via sentinel).
+ */
 export async function GET(request: NextRequest) {
   try {
     const authUser = getAuthUser(request)
     const orgId = authUser?.organizationId
 
-    const redis = await getRedis()
-    const keys = await redis.keys(`${PREFIX}*`)
-    if (keys.length === 0) return NextResponse.json([])
-    const episodes: Episode[] = []
-    for (const key of keys) {
-      const val = await redis.get(key)
-      if (val) episodes.push(JSON.parse(val))
-    }
+    const repo = selectEpisodeRepo({
+      userId: authUser?.id,
+      workspaceId: orgId,
+    })
 
-    // Multi-tenant filtering: users in an org see their org's data + legacy data
-    const filtered = orgId
-      ? episodes.filter(e => e.organizationId === orgId || !e.organizationId)
-      : episodes
+    const epsForOrg = orgId
+      ? await repo.list({ workspaceId: orgId })
+      : await repo.list()
 
-    filtered.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    return NextResponse.json(filtered)
+    const legacyVisible = orgId
+      ? await repo.list({ workspaceId: EPISODES_LEGACY_WORKSPACE_ID })
+      : []
+
+    const merged = [...epsForOrg, ...legacyVisible]
+    merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+
+    const out: Episode[] = merged.map((e) => ({
+      id: e.id,
+      name: e.name,
+      projectId: e.projectId,
+      createdAt: e.createdAt,
+      createdBy: e.createdBy,
+      finalVideoUrl: e.finalVideoUrl,
+      finalVideoSizeMB: e.finalVideoSizeMb,
+      finalVideoUploadedAt: e.finalVideoUploadedAt,
+      finalVideoUploadedBy: e.finalVideoUploadedBy,
+      finalStatus: e.finalStatus,
+      reviewNote: e.reviewNote,
+      reviewedAt: e.reviewedAt,
+      reviewedBy: e.reviewedBy,
+      creatorNote: e.creatorNote,
+      organizationId:
+        e.workspaceId === EPISODES_LEGACY_WORKSPACE_ID
+          ? undefined
+          : e.workspaceId,
+    }))
+    return NextResponse.json(out)
   } catch (err) {
     console.error('[/api/episodes GET]', err)
     return NextResponse.json({ error: 'Erro ao carregar episódios.' }, { status: 500 })
