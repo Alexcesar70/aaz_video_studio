@@ -66,8 +66,12 @@ export {
   rowToWorkspace,
   workspaceToInsert,
 } from './infra/PostgresWorkspaceRepository'
+export { RedisWorkspaceRepository } from './infra/RedisWorkspaceRepository'
 export {
   getWorkspace,
   getWorkspaceOrThrow,
   WorkspaceNotFoundError,
 } from './usecases/getWorkspace'
+
+// Composer (M4-PR3)
+export { selectWorkspaceRepo } from './composer'

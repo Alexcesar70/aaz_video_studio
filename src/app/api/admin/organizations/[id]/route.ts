@@ -6,6 +6,7 @@ import {
   suspendOrganization,
   reactivateOrganization,
 } from '@/lib/organizations'
+import { selectWorkspaceRepo } from '@/modules/workspaces'
 import { getWallet, addCredits, getTransactions } from '@/lib/wallet'
 import { getUsersByOrganization, listUsers, updateUser } from '@/lib/users'
 import { getPlanById } from '@/lib/plans'
@@ -20,9 +21,14 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    requireSuperAdmin(request)
+    const admin = requireSuperAdmin(request)
 
-    const org = await getOrgById(params.id)
+    // M4-PR3: leitura via composer; default OFF mantém Redis (idêntico ao legado).
+    const wsRepo = selectWorkspaceRepo({
+      userId: admin.id,
+      workspaceId: admin.organizationId,
+    })
+    const org = await wsRepo.findById(params.id)
     if (!org) {
       return NextResponse.json({ error: 'Organização não encontrada.' }, { status: 404 })
     }
