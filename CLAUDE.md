@@ -82,15 +82,33 @@ Vercel KV, Vercel Blob).
 **Plano de rollout das 4 feature flags do M1:** ver
 [`docs/m1-rollout-checklist.md`](./docs/m1-rollout-checklist.md).
 
-### Milestone 2 — Próximo (escopo a ser detalhado)
+### Milestone 2 — Async generation + library entities ✅ COMPLETO
 
-Áreas previstas (ordem de prioridade):
+- [x] **M2-PR1** — Jobs module foundation (domain + Redis/InMemory adapters)
+- [x] **M2-PR2** — Inngest adapter + `/api/generate` async (flag `USE_ASYNC_GENERATION`)
+- [x] **M2-PR3** — `ReferenceAsset` como entidade (`@/modules/references`)
+- [x] **M2-PR4** — Asset Picker + auto-register no upload (flag `USE_REFERENCE_ASSETS`)
+- [x] **M2-PR5** — `Character` como entidade + versionamento + histórico
+- [x] **M2-PR6** — `StyleProfile` versionamento (admin route `/api/admin/style-profiles/[slug]/versions`)
+- [x] **M2-PR7** — Decomposição inicial de `AAZStudio.tsx` (theme, types, atoms, modals)
+- [x] **M2-PR8** — `errorReporter` abstrato + ADR-0005
 
-1. **Postgres + Drizzle** para User, Workspace, Project, Wallet, Transaction.
-2. **Inngest** para gerações longas (sai do timeout 300s da Vercel).
-3. **ReferenceAsset** como entidade de primeira classe.
-4. **Versionamento** de Character e StyleProfile.
-5. **Sentry + Axiom + PostHog** para observabilidade real.
+**Rollout:** ver [`docs/m2-rollout-checklist.md`](./docs/m2-rollout-checklist.md).
+
+### Milestone 3 — Postgres + observability ✅ CODE-COMPLETE
+
+- [x] **M3-PR1** — Drizzle setup + schemas + migrations iniciais (ADR-0006)
+- [x] **M3-PR2** — `users` module (Postgres adapter + InMemory + usecases)
+- [x] **M3-PR3** — `workspaces` Postgres adapter
+- [x] **M3-PR4** — `projects` + `episodes` modules
+- [x] **M3-PR5** — `wallet` + transactions ACID (Postgres `db.transaction()` + row lock)
+- [x] **M3-PR6** — Sentry adapter (concretiza `ErrorReporter` do M2-PR8)
+- [x] **M3-PR7** — Consolidação: backfill scripts + rollout checklist
+
+**Rollout:** ver [`docs/m3-rollout-checklist.md`](./docs/m3-rollout-checklist.md).
+Backfill scripts em `scripts/backfill/`. Wiring nas rotas vem em
+PRs de M4 (entidade por entidade, atrás de flag, com dual-write
+no caso do Wallet).
 
 ---
 
