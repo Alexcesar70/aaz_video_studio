@@ -106,9 +106,19 @@ Vercel KV, Vercel Blob).
 - [x] **M3-PR7** — Consolidação: backfill scripts + rollout checklist
 
 **Rollout:** ver [`docs/m3-rollout-checklist.md`](./docs/m3-rollout-checklist.md).
-Backfill scripts em `scripts/backfill/`. Wiring nas rotas vem em
-PRs de M4 (entidade por entidade, atrás de flag, com dual-write
-no caso do Wallet).
+Backfill scripts em `scripts/backfill/`.
+
+### Milestone 4 — Wiring + Observability + Decomposition ✅ CODE-COMPLETE
+
+- [x] **M4-PR1** — `RedisUserRepository` + `selectUserRepo` + lazy DB resolution
+- [x] **M4-PR2** — Wire `/api/users` (GET) ao composer (flag `USE_POSTGRES_USERS`)
+- [x] **M4-PR3** — `RedisWorkspaceRepository` + `selectWorkspaceRepo` + wire `/api/admin/organizations/[id]` (GET)
+- [x] **M4-PR4** — `RedisWalletRepository` + `DualWriteWalletRepository` + `selectWalletRepo` + wire `/api/me/wallet` (GET) — flags `USE_POSTGRES_WALLET` e `USE_POSTGRES_WALLET_DUAL_WRITE`
+- [x] **M4-PR5** — `analytics` abstraction + PostHog adapter
+- [x] **M4-PR6** — Decomposição contínua de `AAZStudio.tsx` (KpiCard, NewUserCredsModal)
+- [x] **M4-PR7** — Consolidação: `docs/m4-rollout-checklist.md` + CLAUDE.md update
+
+**Rollout:** ver [`docs/m4-rollout-checklist.md`](./docs/m4-rollout-checklist.md).
 
 ---
 
