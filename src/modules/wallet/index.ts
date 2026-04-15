@@ -56,6 +56,11 @@ export {
   rowToWallet,
   rowToTransaction,
 } from './infra/PostgresWalletRepository'
+export { RedisWalletRepository } from './infra/RedisWalletRepository'
+export { DualWriteWalletRepository } from './infra/DualWriteWalletRepository'
+
+// Composer (M4-PR4) — Redis | DualWrite | Postgres
+export { selectWalletRepo } from './composer'
 
 // Use cases
 export {

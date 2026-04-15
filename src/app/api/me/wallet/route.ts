@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { getWalletByOwner, type AlertLevel } from '@/lib/wallet'
+import { type AlertLevel } from '@/lib/wallet'
 import { getOrgById } from '@/lib/organizations'
+import { selectWalletRepo } from '@/modules/wallet'
 
 /**
  * GET /api/me/wallet
@@ -48,7 +49,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ wallet: null })
     }
 
-    const wallet = await getWalletByOwner(orgId, 'organization')
+    // M4-PR4: composer escolhe Redis | DualWrite | Postgres baseado
+    // em flags. Default OFF mantém comportamento idêntico ao histórico.
+    const walletRepo = selectWalletRepo({
+      userId: authUser.id,
+      workspaceId: orgId,
+    })
+    const wallet = await walletRepo.findByOwner('organization', orgId)
     if (!wallet) {
       return NextResponse.json({ wallet: null })
     }
