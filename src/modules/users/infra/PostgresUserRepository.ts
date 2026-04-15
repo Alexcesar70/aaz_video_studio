@@ -20,10 +20,20 @@ import { users, type UserRow, type UserInsert } from '@/db/schema'
  * lança. Prefira `InMemoryUserRepository` em tests unit.
  */
 export class PostgresUserRepository implements UserRepository {
-  private readonly db: Db
+  private readonly _injectedDb?: Db
 
   constructor(db?: Db) {
-    this.db = db ?? getDb()
+    this._injectedDb = db
+  }
+
+  /**
+   * Resolve `db` no primeiro uso — permite construir o repo em
+   * ambientes sem DATABASE_URL (ex.: composer/seleção por flag em
+   * testes que só checam tipo). Em runtime real, falha somente quando
+   * uma operação é executada.
+   */
+  private get db(): Db {
+    return this._injectedDb ?? getDb()
   }
 
   async findById(id: string): Promise<User | null> {

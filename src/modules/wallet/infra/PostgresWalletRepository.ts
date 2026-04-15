@@ -45,10 +45,14 @@ import {
  *    para callers que querem protecção extra.
  */
 export class PostgresWalletRepository implements WalletRepository {
-  private readonly db: Db
+  private readonly _injectedDb?: Db
 
   constructor(db?: Db) {
-    this.db = db ?? getDb()
+    this._injectedDb = db
+  }
+
+  private get db(): Db {
+    return this._injectedDb ?? getDb()
   }
 
   async findById(id: string): Promise<Wallet | null> {

@@ -46,6 +46,10 @@ export {
   rowToUser,
   userToInsert,
 } from './infra/PostgresUserRepository'
+export { RedisUserRepository } from './infra/RedisUserRepository'
+
+// Composer (M4-PR1) — escolhe Redis ou Postgres por flag
+export { selectUserRepo } from './composer'
 
 // Use cases
 export {

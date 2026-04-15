@@ -9,10 +9,14 @@ import { getDb, type Db } from '@/db/client'
 import { episodes, type EpisodeRow, type EpisodeInsert } from '@/db/schema'
 
 export class PostgresEpisodeRepository implements EpisodeRepository {
-  private readonly db: Db
+  private readonly _injectedDb?: Db
 
   constructor(db?: Db) {
-    this.db = db ?? getDb()
+    this._injectedDb = db
+  }
+
+  private get db(): Db {
+    return this._injectedDb ?? getDb()
   }
 
   async findById(id: string): Promise<Episode | null> {

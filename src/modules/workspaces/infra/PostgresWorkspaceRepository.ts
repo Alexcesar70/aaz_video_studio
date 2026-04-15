@@ -14,10 +14,14 @@ import { workspaces, type WorkspaceRow, type WorkspaceInsert } from '@/db/schema
  * uma linha no composer.
  */
 export class PostgresWorkspaceRepository implements WorkspaceRepository {
-  private readonly db: Db
+  private readonly _injectedDb?: Db
 
   constructor(db?: Db) {
-    this.db = db ?? getDb()
+    this._injectedDb = db
+  }
+
+  private get db(): Db {
+    return this._injectedDb ?? getDb()
   }
 
   async findById(id: string): Promise<Workspace | null> {
