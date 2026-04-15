@@ -133,6 +133,19 @@ Backfill scripts em `scripts/backfill/`.
 **Rollout:** ver [`docs/m5-rollout-checklist.md`](./docs/m5-rollout-checklist.md).
 **Padrão de migração:** ver [ADR-0007](./docs/adr/0007-composer-pattern-for-storage-migration.md).
 
+### Milestone 6 — Notifications + Webhooks ✅ CODE-COMPLETE
+
+- [x] **M6-PR1** — Backfill scripts: workspaces + projects + episodes (com sentinel `__legacy__` resolution via createdBy.organizationId)
+- [x] **M6-PR2** — Módulo `notifications` foundation (12 kinds, 3 levels, Redis layout otimizado)
+- [x] **M6-PR3** — Email channel: `EmailNotificationSender` + `ResendEmailDeliverer` + Inngest fan-out function
+- [x] **M6-PR4** — Wire em pontos críticos: `wallet_topped_up`, `episode_approved`/`needs_changes`, `job_failed`
+- [x] **M6-PR5** — Outbound webhooks HMAC-signed (módulo `webhooks` + `WebhookNotificationSender` + auto-pause em falhas)
+- [x] **M6-PR6** — Decomposição: extrai `InviteUserModal` (-117 linhas)
+- [x] **M6-PR7** — Consolidação: ADR-0008 (event-driven notifications) + `docs/m6-rollout-checklist.md` + CLAUDE.md
+
+**Rollout:** ver [`docs/m6-rollout-checklist.md`](./docs/m6-rollout-checklist.md).
+**Arquitetura:** ver [ADR-0008](./docs/adr/0008-event-driven-notifications.md).
+
 ---
 
 ## Checklist de paridade funcional (rodar antes de cada merge)
