@@ -35,3 +35,20 @@ export interface JobRequestedEventData {
   workspaceId: string | null
   input: unknown
 }
+
+/**
+ * Eventos de notification — fan-out assíncrono pra canais (email,
+ * webhook). O payload é o id da notificação já persistida; quem
+ * consome busca o objeto completo do repo.
+ */
+export const NOTIFICATION_EVENT_NAMES = {
+  email: 'aaz/notification.email.requested',
+  webhook: 'aaz/notification.webhook.requested',
+} as const
+
+export type NotificationEventName =
+  (typeof NOTIFICATION_EVENT_NAMES)[keyof typeof NOTIFICATION_EVENT_NAMES]
+
+export interface NotificationEventData {
+  notificationId: string
+}

@@ -51,6 +51,14 @@ export {
   CompositeNotificationSender,
   ConsoleNotificationSender,
 } from './infra/NotificationSenders'
+export { EmailNotificationSender } from './infra/EmailNotificationSender'
+export type { EmailNotificationSenderConfig } from './infra/EmailNotificationSender'
+export type {
+  EmailDeliverer,
+  EmailMessage,
+} from './ports/EmailDeliverer'
+export { ConsoleEmailDeliverer, RecordingEmailDeliverer } from './infra/email/ConsoleEmailDeliverer'
+export { ResendEmailDeliverer } from './infra/email/ResendEmailDeliverer'
 
 // Use cases
 export {

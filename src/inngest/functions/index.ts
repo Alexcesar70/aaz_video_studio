@@ -7,7 +7,9 @@
  */
 
 import { videoGenerationJobFunction } from './videoGeneration'
+import { sendNotificationEmailFunction } from './sendNotificationEmail'
 
 export const inngestFunctions = [
   videoGenerationJobFunction,
+  sendNotificationEmailFunction,
 ] as const
