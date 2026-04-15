@@ -1,17 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listUsers, createUser, type UserRole } from '@/lib/users'
+import { createUser, type UserRole } from '@/lib/users'
+import {
+  selectUserRepo,
+  listUsers as listUsersUseCase,
+  toPublicUser,
+} from '@/modules/users'
 import { requireAdmin, AuthError } from '@/lib/auth'
 import { emitEvent } from '@/lib/activity'
 
 /**
  * GET /api/users
  * Lista todos os usuários. Só admin.
+ *
+ * M4-PR2: leitura passa pelo `selectUserRepo()` — flag
+ * USE_POSTGRES_USERS escolhe Redis vs Postgres. Default OFF =
+ * comportamento idêntico ao histórico (Redis).
  */
 export async function GET(request: NextRequest) {
   try {
-    requireAdmin(request)
-    const users = await listUsers()
-    return NextResponse.json({ users })
+    const admin = requireAdmin(request)
+    const repo = selectUserRepo({
+      userId: admin.id,
+      workspaceId: admin.organizationId,
+    })
+    const users = await listUsersUseCase({ repo })
+    return NextResponse.json({ users: users.map(toPublicUser) })
   } catch (err) {
     if (err instanceof AuthError) {
       return NextResponse.json({ error: err.message }, { status: err.status })
