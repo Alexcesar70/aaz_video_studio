@@ -8,6 +8,7 @@ import {
 } from '@/lib/organizations'
 import { selectWorkspaceRepo } from '@/modules/workspaces'
 import { getWallet, addCredits, getTransactions } from '@/lib/wallet'
+import { selectWalletRepo, topUpWallet } from '@/modules/wallet'
 import { getUsersByOrganization, listUsers, updateUser } from '@/lib/users'
 import { getPlanById } from '@/lib/plans'
 import { queryEvents } from '@/lib/activity'
@@ -152,14 +153,27 @@ export async function POST(
         if (!org.walletId) {
           return NextResponse.json({ error: 'Organização sem wallet.' }, { status: 400 })
         }
-        const txn = await addCredits(
-          org.walletId,
-          body.amount,
-          body.description || `Créditos adicionados por ${admin.name}`,
-          { userId: admin.id }
+        // M5-PR3: topUp via composer. Quando dual-write está on, escreve
+        // em Redis E Postgres atomicamente (best-effort no shadow).
+        const walletRepo = selectWalletRepo({
+          userId: admin.id,
+          workspaceId: org.id,
+        })
+        const result = await topUpWallet(
+          { repo: walletRepo },
+          {
+            walletId: org.walletId,
+            amountUsd: body.amount,
+            reason:
+              body.description || `Créditos adicionados por ${admin.name}`,
+            createdBy: admin.id,
+          },
         )
-        const wallet = await getWallet(org.walletId)
-        return NextResponse.json({ ok: true, transaction: txn, newBalance: wallet?.balanceUsd ?? 0 })
+        return NextResponse.json({
+          ok: true,
+          transaction: result.transaction,
+          newBalance: result.wallet.balanceUsd,
+        })
       }
 
       case 'suspend': {
