@@ -120,6 +120,19 @@ Backfill scripts em `scripts/backfill/`.
 
 **Rollout:** ver [`docs/m4-rollout-checklist.md`](./docs/m4-rollout-checklist.md).
 
+### Milestone 5 — Wiring expansion + Playbooks ✅ CODE-COMPLETE
+
+- [x] **M5-PR1** — `RedisProjectRepository` + `RedisEpisodeRepository` + composers (flags `USE_POSTGRES_PROJECTS`, `USE_POSTGRES_EPISODES`)
+- [x] **M5-PR2** — Wire `/api/projects` + `/api/episodes` (GET) ao composer com fallback de legacy data via sentinel `__legacy__`
+- [x] **M5-PR3** — Wire wallet writes: admin `add_credits` + `generateVideo` spend via `composedSpendCredits` (helper em `src/lib/walletWiring.ts`)
+- [x] **M5-PR4** — Wallet reconciliation script + Vercel Cron diário (`/api/cron/reconcile-wallets`)
+- [x] **M5-PR5** — Módulo `playbooks` (entidade + Redis/InMemory + use cases + versionamento + clone)
+- [x] **M5-PR6** — Decomposição `AAZStudio.tsx`: extrai `HistoryTab` + `SceneCard` + `EpisodeHeader` + `EpisodeDeliveryCard` (-285 linhas)
+- [x] **M5-PR7** — Consolidação: ADR-0007 (composer pattern) + `docs/m5-rollout-checklist.md` + CLAUDE.md
+
+**Rollout:** ver [`docs/m5-rollout-checklist.md`](./docs/m5-rollout-checklist.md).
+**Padrão de migração:** ver [ADR-0007](./docs/adr/0007-composer-pattern-for-storage-migration.md).
+
 ---
 
 ## Checklist de paridade funcional (rodar antes de cada merge)
