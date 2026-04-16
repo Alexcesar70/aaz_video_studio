@@ -6,7 +6,8 @@
 > em `docs/adr/`. Histórico de fases pré-refactor em `docs/history/`.
 
 **Desenvolvedor:** Alexandre (solo)
-**Branch ativo:** `universal` (M1 entregue) — `main` está congelado em `v0.0.1`.
+**Branch ativa:** `main` — recebe o refactor M1-M6 via merge (commit `3ddf7cc`).
+**Snapshot pré-refactor:** tag imutável [`v0.0.1`](https://github.com/Alexcesar70/aaz_video_studio/releases/tag/v0.0.1) — AAZ Studio "com Jesus" original, recuperável a qualquer momento via `git checkout v0.0.1`.
 
 ---
 
@@ -193,11 +194,21 @@ Tipos: `feat`, `refactor`, `fix`, `chore`, `docs`, `test`, `perf`.
 
 ### Branches
 
-- `main` — freeze pré-refactor (tag `v0.0.1`).
-- `universal` — branch de integração do refactor (default daqui em diante).
-- `refactor/m{N}-pr{X}-<slug>` — sub-branch por PR, stacked sobre o anterior.
+- `main` — branch de deploy (Vercel auto-deploy). Recebe todo refactor pós-M1.
+- Tag `v0.0.1` — snapshot imutável do AAZ pré-refactor. Preservado por design
+  do git (tags são imutáveis, sobrevivem a qualquer merge/reset na branch).
+  Recuperação: `git checkout v0.0.1` ou `git branch <nome> v0.0.1`.
+- `refactor/m{N}-pr{X}-<slug>` — sub-branch por PR, stacked sobre `main`.
 - `feat/<slug>` — features pós-M1.
 - `fix/<slug>` — bug fixes.
+- `claude/<slug>` — sessões de trabalho do Claude Code.
+
+> **Nota histórica:** até o commit `3ddf7cc Merge M2+M3+M4+M5+M6`, o fluxo
+> previa `main` congelado em `v0.0.1` e `universal` como branch de
+> integração. Essa separação foi descontinuada porque a tag `v0.0.1` já
+> cumpre o papel de safety net (sem exigir branch paralela), e ter uma
+> branch única simplifica o deploy. O universo AAZ original continua
+> preservado — ver seção abaixo.
 
 ---
 
