@@ -1,8 +1,22 @@
 /**
- * Helpers de wiring que conectam o módulo `notifications` à infra
- * Inngest pra envio assíncrono de emails.
+ * Helpers de wiring que conectam o módulo `notifications` ao envio
+ * de email — INLINE, sem Inngest.
  *
- * Padrão:
+ * Histórico: a v1 deste arquivo (M6-PR3) usava Inngest como fila
+ * (`inngest.send()` → função Inngest → Resend). Essa arquitetura é
+ * overkill pra volume transacional baixo e cria várias partes móveis
+ * (conta Inngest, env vars, webhook sync). Pra simplificar, voltamos
+ * a enviar inline: persiste notification → chama Resend direto →
+ * retorna.
+ *
+ * Quando usar Inngest faria sentido no futuro:
+ *  - Volume > 1k emails/dia (queue smoothing)
+ *  - Retries com backoff exponencial obrigatórios (rate limits de vendor)
+ *  - Batch / digest / send-in-window (ex.: só envia entre 9h-21h)
+ *
+ * Até lá, inline resolve e é mais fácil de debugar.
+ *
+ * Padrão de uso:
  *   import { notifyAndQueueEmail } from '@/lib/notificationsWiring'
  *
  *   await notifyAndQueueEmail({
@@ -17,34 +31,62 @@
  *
  * O que acontece:
  *   1. Notification persiste no Redis (visível no in-app sino).
- *   2. Evento Inngest `aaz/notification.email.requested` é
- *      publicado.
- *   3. A função `sendNotificationEmailFunction` consome e envia
- *      via EmailNotificationSender (Resend ou Console por env).
- *
- * Falha em qualquer ponto NÃO desfaz o anterior — notification
- * fica visível mesmo se Inngest publish falhar (caso raro). Erros
- * são logados via reportError.
+ *   2. Envio inline via EmailNotificationSender → ResendEmailDeliverer.
+ *   3. Falha no envio NÃO desfaz persistência (notification fica
+ *      acessível no in-app mesmo se email falhou).
+ *   4. Erros logados via reportError com tag feature=notifications.
  */
 
 import {
   createNotification,
+  EmailNotificationSender,
   RedisNotificationRepository,
   type CreateNotificationInput,
   type Notification,
 } from '@/modules/notifications'
-import { inngest } from '@/inngest/client'
-import {
-  NOTIFICATION_EVENT_NAMES,
-  type NotificationEventData,
-} from '@/inngest/events'
+import { ConsoleEmailDeliverer } from '@/modules/notifications/infra/email/ConsoleEmailDeliverer'
+import { ResendEmailDeliverer } from '@/modules/notifications/infra/email/ResendEmailDeliverer'
+import { RedisUserRepository } from '@/modules/users'
 import { reportError } from '@/lib/errorReporter'
 
 /**
- * Persiste a Notification e publica evento Inngest pra envio
- * assíncrono de email.
+ * Constrói o EmailNotificationSender conforme env vars disponíveis.
+ * - RESEND_API_KEY presente → Resend real
+ * - Ausente → Console (logs estruturados, útil em dev)
+ */
+function buildEmailSender(): EmailNotificationSender {
+  const apiKey = process.env.RESEND_API_KEY
+  const deliverer = apiKey
+    ? new ResendEmailDeliverer({ apiKey })
+    : new ConsoleEmailDeliverer()
+
+  const userRepo = new RedisUserRepository()
+
+  return new EmailNotificationSender({
+    emailDeliverer: deliverer,
+    defaultFrom:
+      process.env.NOTIFICATION_FROM_EMAIL ?? 'onboarding@resend.dev',
+    recipientResolver: async (userId) => {
+      const u = await userRepo.findById(userId)
+      return u?.email ?? null
+    },
+    onSkip: (n, reason) => {
+      console.warn('[notifyAndQueueEmail] skipped', {
+        notificationId: n.id,
+        kind: n.kind,
+        reason,
+      })
+    },
+  })
+}
+
+/**
+ * Persiste a Notification e envia email INLINE (não bloqueia muito —
+ * Resend responde em ~500ms típico). Falha no email é capturada e
+ * logada, mas não propaga — caller do notifyAndQueueEmail não deve
+ * ser bloqueado por problema de canal externo.
  *
- * Returns: a Notification persistida.
+ * Retorna: a Notification persistida.
  */
 export async function notifyAndQueueEmail(
   input: CreateNotificationInput,
@@ -52,18 +94,21 @@ export async function notifyAndQueueEmail(
   const repo = new RedisNotificationRepository()
   const notification = await createNotification({ repo }, input)
 
-  // Best-effort enqueue. Falha não bloqueia retorno.
+  // Envio inline — best-effort, não bloqueia retorno se falhar.
   try {
-    const data: NotificationEventData = { notificationId: notification.id }
-    await inngest.send({
-      name: NOTIFICATION_EVENT_NAMES.email,
-      data: data as unknown as Record<string, unknown>,
-    })
+    const sender = buildEmailSender()
+    await sender.send(notification)
   } catch (err) {
     reportError(err, {
-      tags: { feature: 'notifications', stage: 'enqueue_email' },
+      tags: { feature: 'notifications', stage: 'inline_email' },
       extra: { notificationId: notification.id, kind: notification.kind },
-      fingerprint: ['notification-enqueue', notification.kind],
+      fingerprint: ['notification-inline-email', notification.kind],
+    })
+    // Não re-throw — notification foi persistida, user vai ver no sino
+    // mesmo sem email. Caller pode resender manualmente depois.
+    console.error('[notifyAndQueueEmail] email send failed', {
+      notificationId: notification.id,
+      err: err instanceof Error ? err.message : String(err),
     })
   }
 
@@ -71,9 +116,9 @@ export async function notifyAndQueueEmail(
 }
 
 /**
- * Variante "store-only" — persiste a notificação SEM disparar
- * envio externo. Usado quando o canal externo não faz sentido
- * (ex.: notificações puramente in-app, baixíssima prioridade).
+ * Variante "store-only" — persiste a notificação SEM disparar envio
+ * externo. Usado quando o canal externo não faz sentido (ex.:
+ * notificações puramente in-app, baixíssima prioridade).
  */
 export async function notifyInAppOnly(
   input: CreateNotificationInput,
