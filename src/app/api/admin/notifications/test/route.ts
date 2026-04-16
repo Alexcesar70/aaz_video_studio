@@ -8,12 +8,14 @@
  * EmailNotificationSender → ResendEmailDeliverer (se
  * RESEND_API_KEY presente) ou ConsoleEmailDeliverer (fallback).
  *
- * Retorna JSON com diagnóstico completo:
- *   - notification persistida
- *   - env vars presentes/ausentes
- *   - recipient resolvido
- *   - deliverer ativo (Resend vs Console)
- *   - resultado (sent / skipped / failed)
+ * Body opcional:
+ *   { "overrideTo": "outro@email.com" }
+ *
+ * Útil em sandbox do Resend (sem domínio verificado) que só permite
+ * enviar pro email da conta do Resend. Passar overrideTo faz com
+ * que o teste use aquele endereço em vez do email do admin no Redis.
+ *
+ * Retorna JSON com diagnóstico completo.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -33,15 +35,20 @@ export async function POST(request: NextRequest) {
   try {
     const admin = requireSuperAdmin(request)
 
+    // Body opcional — permite override do destinatário
+    const body = await request.json().catch(() => ({})) as { overrideTo?: string }
+    const overrideTo = body.overrideTo?.trim()
+
     // Diagnóstico das env vars (sem expor valores — só presença)
     const hasResendKey = !!process.env.RESEND_API_KEY
     const fromEmail =
       process.env.NOTIFICATION_FROM_EMAIL ?? 'onboarding@resend.dev'
 
-    // 1. Resolve email do admin logado
+    // 1. Resolve email do admin logado (ou usa override)
     const userRepo = new RedisUserRepository()
     const adminUser = await userRepo.findById(admin.id)
     const adminEmail = adminUser?.email ?? null
+    const recipientEmail = overrideTo ?? adminEmail
 
     // 2. Persiste notification
     const repo = new RedisNotificationRepository()
@@ -54,12 +61,14 @@ export async function POST(request: NextRequest) {
       body:
         `Se você está lendo este email, a pipeline INLINE está funcionando.\n\n` +
         `Admin (${admin.name}) disparou em ${new Date().toLocaleString('pt-BR')}.\n\n` +
-        `Arquitetura: notifyAndQueueEmail → Resend direto (sem Inngest).`,
+        `Arquitetura: notifyAndQueueEmail → Resend direto (sem Inngest).` +
+        (overrideTo ? `\n\nDestinatário forçado via overrideTo: ${overrideTo}` : ''),
       link: { href: '/admin', label: 'Voltar ao painel' },
       metadata: {
         testDispatchedAt: new Date().toISOString(),
         dispatchedBy: admin.id,
         fromEmail,
+        overrideTo: overrideTo ?? null,
       },
     })
 
@@ -72,15 +81,16 @@ export async function POST(request: NextRequest) {
     const sender = new EmailNotificationSender({
       emailDeliverer: deliverer,
       defaultFrom: fromEmail,
-      recipientResolver: async () => adminEmail,
+      // Sempre retorna o recipientEmail escolhido (override ou admin)
+      recipientResolver: async () => recipientEmail,
     })
 
     let emailResult: 'sent' | 'skipped' | 'failed' = 'failed'
     let emailError: string | null = null
     try {
-      if (!adminEmail) {
+      if (!recipientEmail) {
         emailResult = 'skipped'
-        emailError = 'admin user sem email cadastrado no Redis'
+        emailError = 'nenhum email disponível (admin sem email no Redis e overrideTo ausente)'
       } else {
         await sender.send(notification)
         emailResult = 'sent'
@@ -107,6 +117,8 @@ export async function POST(request: NextRequest) {
           deliverer: delivererName,
           result: emailResult,
           error: emailError,
+          recipientUsed: recipientEmail ?? null,
+          overrideApplied: !!overrideTo,
         },
       },
       notification: {
@@ -116,13 +128,13 @@ export async function POST(request: NextRequest) {
       },
       hint:
         emailResult === 'sent'
-          ? `✅ Email enviado! Verifica inbox de ${adminEmail}. Se não chegar em 1 min, olha spam. ` +
-            (delivererName === 'ConsoleEmailDeliverer'
-              ? 'ATENÇÃO: está usando Console (só loga), não enviou email real — RESEND_API_KEY ausente.'
-              : 'Conferir Resend dashboard (resend.com/emails) se quiser ver o log do envio.')
+          ? `✅ Email enviado com sucesso para ${recipientEmail}. Verifica o inbox (+ spam) desse endereço.` +
+            (overrideTo
+              ? ` (overrideTo aplicado — em produção real, verifique domínio próprio no Resend pra poder enviar pra qualquer email.)`
+              : '')
           : emailResult === 'skipped'
-            ? `⚠️ Email pulado: ${emailError}. Adicione um email ao user admin no Redis.`
-            : `❌ Falha no envio: ${emailError}. Se for "403: You can only send testing emails...", precisa verificar domínio no Resend OU adicionar o destinatário como test recipient.`,
+            ? `⚠️ Email pulado: ${emailError}.`
+            : `❌ Falha: ${emailError}`,
     })
   } catch (err) {
     if (err instanceof AuthError) {
