@@ -46,6 +46,7 @@ export const dynamic = 'force-dynamic'
 
 const PREFIXES = [
   'aaz:asset:',
+  'aaz:char:',
   'aaz:draft:',
   'aaz:project:',
   'aaz:ep:',
