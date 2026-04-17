@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSceneDirectorSystem, type ChainFromContext } from '@/lib/sceneDirectorSystem'
+import { type ChainFromContext } from '@/lib/sceneDirectorSystem'
 import { getMood } from '@/lib/moods'
 import { getAuthUser } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
-import { isFeatureEnabled } from '@/lib/featureFlags'
 import {
   resolveSceneDirectorSystem,
   RedisPromptTemplateRepository,
@@ -111,34 +110,17 @@ export async function POST(request: NextRequest) {
     // ── Chamada à Claude API com retry em overloaded ──────────
     const model = process.env.ANTHROPIC_MODEL ?? 'claude-sonnet-4-20250514'
 
-    // Feature flag USE_DB_PROMPTS (ver ADR-0002):
-    //   OFF (default): usa o SCENE_DIRECTOR_BASE hardcoded — zero risco.
-    //   ON: resolve via repositório com fallback automático para o mesmo
-    //   base hardcoded se o seed não rodou ainda.
-    // A composição de mood + chainFrom é idêntica nos dois caminhos.
-    let systemPrompt: string
-    let promptSource: 'legacy' | 'db' | 'fallback' = 'legacy'
-    let promptVersion: number | undefined
-    if (
-      isFeatureEnabled('USE_DB_PROMPTS', {
-        userId: earlyAuth?.id,
-        workspaceId: earlyAuth?.organizationId,
-      })
-    ) {
-      const resolved = await resolveSceneDirectorSystem(
-        { repo: new RedisPromptTemplateRepository() },
-        {
-          moodId: body.mood,
-          chainFrom: chainFrom ?? null,
-          workspaceId: earlyAuth?.organizationId ?? null,
-        },
-      )
-      systemPrompt = resolved.prompt
-      promptSource = resolved.source
-      promptVersion = resolved.version
-    } else {
-      systemPrompt = getSceneDirectorSystem(body.mood, chainFrom ?? null)
-    }
+    const resolved = await resolveSceneDirectorSystem(
+      { repo: new RedisPromptTemplateRepository() },
+      {
+        moodId: body.mood,
+        chainFrom: chainFrom ?? null,
+        workspaceId: earlyAuth?.organizationId ?? null,
+      },
+    )
+    const systemPrompt = resolved.prompt
+    const promptSource = resolved.source
+    const promptVersion = resolved.version
 
     const requestBody = JSON.stringify({
       model,

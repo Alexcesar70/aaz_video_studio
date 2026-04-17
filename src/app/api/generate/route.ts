@@ -18,10 +18,6 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { isFeatureEnabled } from '@/lib/featureFlags'
-import { createVideoProvider } from '@/providers/segmind'
-import { createVideoStorage } from '@/providers/blobStorage'
-import { generateVideo } from '@/usecases/video/generateVideo'
 import {
   ValidationError,
   PermissionError,
@@ -74,55 +70,36 @@ export async function POST(request: NextRequest) {
       permissions: user.permissions,
     }
 
-    // ── Modo assíncrono (flag ON) — enfileira e devolve jobId ──
-    if (
-      isFeatureEnabled('USE_ASYNC_GENERATION', {
-        userId: user.id,
-        workspaceId: user.organizationId,
-      })
-    ) {
-      const repo = new RedisJobRepository()
-      const runner = createProductionJobRunner()
+    const repo = new RedisJobRepository()
+    const runner = createProductionJobRunner()
 
-      const jobInput: VideoGenerationJobInput = {
-        request: videoRequest,
-        user: userSnapshot,
-      }
-
-      const job = await enqueueJob(
-        { repo, runner },
-        {
-          kind: 'video_generation',
-          input: jobInput,
-          userId: user.id,
-          workspaceId: user.organizationId ?? null,
-          metadata: {
-            engineId: videoRequest.engineId,
-            duration: videoRequest.duration,
-          },
-        },
-      )
-
-      return NextResponse.json(
-        {
-          jobId: job.id,
-          status: job.status,
-          async: true,
-        },
-        { status: 202 },
-      )
-    }
-
-    // ── Modo síncrono (flag OFF) — comportamento histórico intacto ──
-    const provider = createVideoProvider()
-    const storage = createVideoStorage()
-
-    const result = await generateVideo(provider, storage, {
+    const jobInput: VideoGenerationJobInput = {
       request: videoRequest,
       user: userSnapshot,
-    })
+    }
 
-    return NextResponse.json(result)
+    const job = await enqueueJob(
+      { repo, runner },
+      {
+        kind: 'video_generation',
+        input: jobInput,
+        userId: user.id,
+        workspaceId: user.organizationId ?? null,
+        metadata: {
+          engineId: videoRequest.engineId,
+          duration: videoRequest.duration,
+        },
+      },
+    )
+
+    return NextResponse.json(
+      {
+        jobId: job.id,
+        status: job.status,
+        async: true,
+      },
+      { status: 202 },
+    )
   } catch (err) {
     if (err instanceof ValidationError) {
       return NextResponse.json({ error: err.message }, { status: 400 })
