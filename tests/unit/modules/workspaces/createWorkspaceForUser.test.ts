@@ -137,6 +137,36 @@ describe('createWorkspaceForUser', () => {
       })
       expect(result.workspace.billingEmail).toBe('billing@co.com')
     })
+
+    it('chama seedWalletCredits com walletId e planId quando fornecido', async () => {
+      const { deps, orgStore } = makeFakes({ users: [fakeUser()] })
+      const seeded: Array<{ walletId: string; planId: string }> = []
+      deps.seedWalletCredits = async (walletId, planId) => {
+        seeded.push({ walletId, planId })
+      }
+
+      await createWorkspaceForUser(deps, {
+        userId: 'u1',
+        input: { name: 'Seeded Studio', type: 'individual' },
+      })
+
+      expect(seeded).toHaveLength(1)
+      expect(seeded[0].walletId).toBe(orgStore[0].walletId)
+      expect(seeded[0].planId).toBe('trial')
+    })
+
+    it('não quebra se seedWalletCredits não for fornecido', async () => {
+      const { deps } = makeFakes({ users: [fakeUser()] })
+      // deps.seedWalletCredits é undefined por padrão
+
+      const result = await createWorkspaceForUser(deps, {
+        userId: 'u1',
+        input: { name: 'No Seed', type: 'individual' },
+      })
+
+      expect(result.workspace).toBeDefined()
+      expect(result.user.organizationId).toBe(result.workspace.id)
+    })
   })
 
   describe('erros', () => {

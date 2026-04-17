@@ -24,6 +24,8 @@ export interface CreateWorkspaceDeps {
   updateUser: (id: string, patch: Partial<User>) => Promise<PublicUser | null>
   /** Retorna o id do plano default para novos workspaces (ex.: trial) */
   resolveDefaultPlanId: (type: 'individual' | 'team') => Promise<string>
+  /** Seed de créditos iniciais do plano na wallet do workspace recém-criado. */
+  seedWalletCredits?: (walletId: string, planId: string) => Promise<void>
 }
 
 export class UserNotFoundError extends Error {
@@ -93,6 +95,10 @@ export async function createWorkspaceForUser(
     leaderCanCreate: validated.type === 'team',
     billingEmail,
   })
+
+  if (workspace.walletId && deps.seedWalletCredits) {
+    await deps.seedWalletCredits(workspace.walletId, planId)
+  }
 
   const updatedUser = await deps.updateUser(user.id, {
     organizationId: workspace.id,
