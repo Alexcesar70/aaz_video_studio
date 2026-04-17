@@ -30,8 +30,7 @@ export async function GET(request: NextRequest) {
       const val = await redis.get(key)
       if (val) {
         const entry = JSON.parse(val) as LibraryEntry
-        // Multi-tenant filtering: skip entries from other orgs
-        if (orgId && entry.organizationId && entry.organizationId !== orgId) {
+        if (orgId && entry.organizationId !== orgId) {
           continue
         }
         const charId = key.replace(PREFIX, '')
