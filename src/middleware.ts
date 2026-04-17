@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { SignJWT, jwtVerify } from 'jose'
 
 const SESSION_COOKIE = 'aaz_session'
-const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout']
+const PUBLIC_PATHS = ['/login', '/api/auth/login', '/api/auth/logout', '/api/inngest', '/api/cron/']
 
 function getSecret() {
   const secret = process.env.SESSION_SECRET
