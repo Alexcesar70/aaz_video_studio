@@ -28,9 +28,8 @@ export async function GET(request: NextRequest) {
       if (val) scenarios.push(JSON.parse(val))
     }
 
-    // Multi-tenant filtering: users in an org see their org's data + legacy data
     const filtered = orgId
-      ? scenarios.filter(s => s.organizationId === orgId || !s.organizationId)
+      ? scenarios.filter(s => s.organizationId === orgId)
       : scenarios
 
     return NextResponse.json(filtered)

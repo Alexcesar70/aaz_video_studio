@@ -4,7 +4,6 @@ import { getAuthUser } from '@/lib/auth'
 import { emitEvent } from '@/lib/activity'
 import {
   selectProjectRepo,
-  PROJECTS_LEGACY_WORKSPACE_ID,
 } from '@/modules/projects'
 
 const PREFIX = 'aaz:project:'
@@ -42,28 +41,17 @@ export async function GET(request: NextRequest) {
       ? await repo.list({ workspaceId: orgId })
       : await repo.list()
 
-    // Compatibilidade legado: itens sem orgId (sentinel '__legacy__')
-    // ficam visíveis a todos. No Postgres não há sentinel — backfill
-    // assinou orphans à org correta.
-    const legacyVisible = orgId
-      ? await repo.list({ workspaceId: PROJECTS_LEGACY_WORKSPACE_ID })
-      : []
-
-    const merged = [...projectsForOrg, ...legacyVisible]
-    merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+    projectsForOrg.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 
     // Mapeia ao shape legado pro client (omit workspaceId='__legacy__'
     // → organizationId: undefined).
-    const out: Project[] = merged.map((p) => ({
+    const out: Project[] = projectsForOrg.map((p) => ({
       id: p.id,
       name: p.name,
       createdAt: p.createdAt,
       createdBy: p.createdBy,
       memberIds: p.memberIds,
-      organizationId:
-        p.workspaceId === PROJECTS_LEGACY_WORKSPACE_ID
-          ? undefined
-          : p.workspaceId,
+      organizationId: p.workspaceId,
     }))
     return NextResponse.json(out)
   } catch (err) {

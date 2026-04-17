@@ -49,10 +49,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Multi-tenant filtering: users in an org see their org's data + legacy data
+    // Multi-tenant filtering: strict workspace scope
     if (orgId) {
       customAssets = customAssets.filter(
-        a => a.organizationId === orgId || !a.organizationId
+        a => a.organizationId === orgId
       )
     }
 
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
       // Multi-tenant filtering for drafts too
       if (orgId) {
         drafts = drafts.filter(
-          d => d.organizationId === orgId || !d.organizationId
+          d => d.organizationId === orgId
         )
       }
     }
