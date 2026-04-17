@@ -9,7 +9,7 @@ import {
   LEAD_ADMIN_ID,
   LEAD_ADMIN_EMAIL,
 } from '@/lib/users'
-import { bootstrapDefaultOrg } from '@/lib/organizations'
+import { bootstrapDefaultOrg, getOrgById } from '@/lib/organizations'
 import { emitEvent } from '@/lib/activity'
 import { checkLoginRateLimit, recordLoginAttempt } from '@/lib/rateLimit'
 import { isFeatureEnabled } from '@/lib/featureFlags'
@@ -142,6 +142,8 @@ export async function POST(request: NextRequest) {
     }
     if (user.organizationId) {
       tokenPayload.organizationId = user.organizationId
+      const org = await getOrgById(user.organizationId)
+      if (org) tokenPayload.organizationName = org.name
     }
     if (user.permissions && user.permissions.length > 0) {
       tokenPayload.permissions = user.permissions

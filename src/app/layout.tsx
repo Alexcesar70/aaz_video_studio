@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'AAZ com Jesus · Production Studio',
-  description: 'Studio interno de produção de cenas — Seedance 2.0',
+  title: 'Creative Studio',
+  description: 'Plataforma multi-tenant de produção audiovisual com IA',
   robots: 'noindex, nofollow', // uso interno — não indexar
 }
 

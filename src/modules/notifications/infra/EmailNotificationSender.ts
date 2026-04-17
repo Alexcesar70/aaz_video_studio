@@ -29,7 +29,7 @@ export interface EmailNotificationSenderConfig {
   onSkip?: (n: Notification, reason: string) => void
 }
 
-const DEFAULT_SUBJECT_PREFIX = '[AAZ Studio] '
+const DEFAULT_SUBJECT_PREFIX = '[Creative Studio] '
 
 export class EmailNotificationSender implements NotificationSender {
   constructor(private readonly cfg: EmailNotificationSenderConfig) {}
@@ -68,7 +68,7 @@ function renderText(n: Notification): string {
   if (n.link) {
     lines.push('', `${n.link.label}: ${n.link.href}`)
   }
-  lines.push('', '—', 'AAZ Studio')
+  lines.push('', '—', 'Creative Studio')
   return lines.join('\n')
 }
 
@@ -98,7 +98,7 @@ function renderHtml(n: Notification): string {
       <p style="font-size:14px;line-height:1.5;margin:0;color:#444;">${safeBody}</p>
       ${linkBlock}
       <p style="font-size:11px;color:#888;margin-top:32px;border-top:1px solid #eee;padding-top:16px;">
-        Esta é uma notificação automática do AAZ Studio.
+        Esta é uma notificação automática do Creative Studio.
       </p>
     </td></tr>
   </table>

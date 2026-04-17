@@ -1075,7 +1075,7 @@ export function SuperAdmin() {
       {/* Sidebar */}
       <div style={{ width: 220, background: C.surface, borderRight: `1px solid ${C.border}`, padding: '20px 0', flexShrink: 0 }}>
         <div style={{ padding: '0 20px 20px', borderBottom: `1px solid ${C.border}`, marginBottom: 12 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>AAZ Platform</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: C.gold }}>Creative Studio</div>
           <div style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>Super Admin</div>
         </div>
         {NAV.map(n => (

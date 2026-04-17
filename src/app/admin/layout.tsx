@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'AAZ Platform · Super Admin',
-  description: 'Painel administrativo da plataforma AAZ',
+  title: 'Creative Studio · Admin',
+  description: 'Painel administrativo da plataforma',
   robots: 'noindex, nofollow',
 }
 

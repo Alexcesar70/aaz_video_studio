@@ -3,7 +3,7 @@ import { ConsoleEmailDeliverer } from './ConsoleEmailDeliverer'
 import { ResendEmailDeliverer } from './ResendEmailDeliverer'
 import { RedisUserRepository } from '@/modules/users'
 
-const DEFAULT_FROM = 'AAZ Studio <noreply@aaz.app>'
+const DEFAULT_FROM = 'Creative Studio <noreply@aaz.app>'
 
 interface BuildEmailSenderOverrides {
   recipientResolver?: (userId: string) => Promise<string | null>

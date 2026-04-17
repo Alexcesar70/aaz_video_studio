@@ -157,11 +157,11 @@ function LoginForm() {
             color: '#C9A84C',
             letterSpacing: 1,
             marginBottom: 6,
-          }}>AAZ com Jesus</div>
+          }}>Creative Studio</div>
           <div style={{
             fontSize: 10, color: '#8A93A8',
             letterSpacing: 3, textTransform: 'uppercase',
-          }}>Production Studio</div>
+          }}>Production Platform</div>
         </div>
 
         {step === 'workspace_setup' ? (

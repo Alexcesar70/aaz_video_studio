@@ -18,6 +18,7 @@ export type CurrentUser = {
   email: string
   name: string
   role: 'super_admin' | 'admin' | 'creator'
+  workspaceName?: string
   permissions?: string[]
   products?: string[]
 }

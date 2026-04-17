@@ -3845,7 +3845,7 @@ export function AAZStudio() {
       {/* Header */}
       <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>AAZ Studio</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{currentUser?.workspaceName ?? 'Creative Studio'}</div>
           <Pill color={C.textDim}>{engine.name}</Pill>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
