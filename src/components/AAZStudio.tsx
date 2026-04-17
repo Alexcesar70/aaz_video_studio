@@ -38,15 +38,17 @@ import { InviteUserModal } from './studio/modals/InviteUserModal'
 
 /* Palette, types and atoms extraídos para src/components/studio/* (M2-PR7). */
 
-const CHARACTERS = [
-  { id: 'abraao', name: 'Abraão', emoji: '👴', color: '#C9A84C', desc: '8 year old boy, messy orange-red hair, fair skin with freckles, hazel-green eyes, slightly protruding ears, pink vest over teal t-shirt, gray cargo shorts, green-mint canvas sneakers' },
-  { id: 'abigail', name: 'Abigail', emoji: '👧', color: '#D4A0C8', desc: '7 year old girl, dark curly hair in two side puffs, warm brown skin, big brown eyes with defined lashes, rosy cheeks, multi-layered dress with colorful geometric print, colorful neck scarf, beaded bracelets, burgundy-pink flats' },
-  { id: 'zaqueu', name: 'Zaqueu', emoji: '🧔', color: '#7AB8D4', desc: '9 year old boy, mini-dreads with clay texture, deep dark skin, expressive brown eyes, wide smile, open olive-green jacket with gold buttons over orange t-shirt, geometric colorful shorts, colorful canvas sneakers with orange laces' },
-  { id: 'tuba', name: 'Tuba', emoji: '🐕', color: '#C8A07A', desc: 'a cartoon dog, medium sized dog character, four legs, amber-orange fur, cream chest and belly, rounded black nose, expressive dark-brown eyes, floppy ears, curled tail, NOT a human' },
-  { id: 'theos', name: 'Theos', emoji: '✨', color: '#A8D4FF', desc: 'a luminous winged boy figure, glowing warm light, soft feathered wings, gentle ethereal presence, youthful face, kind eyes, flowing robes in white and gold' },
-  { id: 'miriam', name: 'Miriã', emoji: '👩', color: '#D4C0A0', desc: 'adult woman, mother, curly hair, wears apron, welcoming warm eyes, kind expression' },
-  { id: 'elias', name: 'Elias', emoji: '🧙', color: '#A0D4B0', desc: 'adult man, father, short beard, large hands, calm presence, gentle expression' },
-]
+const LEAD_CHAR_COLORS = ['#C9A84C', '#D4A0C8', '#7AB8D4', '#C8A07A', '#A8D4FF', '#D4C0A0', '#A0D4B0', '#D4A8A0', '#A0D4D4']
+
+function assetToCharacter(a: Asset, index: number): Character {
+  return {
+    id: a.id,
+    name: a.name,
+    emoji: a.emoji || defaultEmoji(a.type),
+    color: LEAD_CHAR_COLORS[index % LEAD_CHAR_COLORS.length],
+    desc: a.description,
+  }
+}
 
 const MODES = [
   { id: 'text_to_video', label: 'Texto → Vídeo', icon: '✍', desc: 'Geração por prompt puro' },
@@ -178,14 +180,13 @@ function SceneAssetsStrip({
     if (existing) {
       existing.count += 1
     } else {
-      // Resolve emoji/color a partir dos leads, assets custom ou padrão
-      const leadChar = CHARACTERS.find(c => c.id === r.charId)
+      const leadChar = atAssets.find(a => a.id === r.charId && a.isOfficial)
       const customAsset = atAssets.find(a => a.id === r.charId && !a.isOfficial)
       grouped.set(key, {
         name: r.name || r.charId || r.label,
         count: 1,
         emoji: leadChar?.emoji ?? customAsset?.emoji ?? '📎',
-        color: leadChar?.color ?? (customAsset?.type === 'scenario' ? C.blue : customAsset?.type === 'item' ? C.gold : C.purple),
+        color: leadChar ? C.gold : (customAsset?.type === 'scenario' ? C.blue : customAsset?.type === 'item' ? C.gold : C.purple),
         type: (customAsset?.type ?? 'character') as AssetType,
         fromLib: !!r.fromLib,
       })
@@ -2253,6 +2254,13 @@ export function AAZStudio() {
   useEffect(() => {
     if (tab === 'atelier') loadAssets(atType)
   }, [tab, atType, loadAssets])
+
+  const CHARACTERS = useMemo(() =>
+    atAssets
+      .filter(a => a.type === 'character' && a.isOfficial)
+      .map((a, i) => assetToCharacter(a, i)),
+    [atAssets],
+  )
 
   // Auto-slug quando o nome muda (a menos que o usuário tenha editado o id manualmente)
   useEffect(() => {
