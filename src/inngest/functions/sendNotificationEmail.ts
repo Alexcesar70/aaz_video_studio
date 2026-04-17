@@ -22,41 +22,11 @@
 
 import {
   RedisNotificationRepository,
-  EmailNotificationSender,
+  buildEmailSender,
 } from '@/modules/notifications'
-import { ConsoleEmailDeliverer } from '@/modules/notifications/infra/email/ConsoleEmailDeliverer'
-import { ResendEmailDeliverer } from '@/modules/notifications/infra/email/ResendEmailDeliverer'
-import { RedisUserRepository } from '@/modules/users'
 import { reportError } from '@/lib/errorReporter'
 import { inngest } from '../client'
 import { NOTIFICATION_EVENT_NAMES } from '../events'
-
-function buildEmailSender(): EmailNotificationSender {
-  const apiKey = process.env.RESEND_API_KEY
-  const deliverer = apiKey
-    ? new ResendEmailDeliverer({ apiKey })
-    : new ConsoleEmailDeliverer()
-
-  const userRepo = new RedisUserRepository()
-
-  return new EmailNotificationSender({
-    emailDeliverer: deliverer,
-    defaultFrom:
-      process.env.NOTIFICATION_FROM_EMAIL ??
-      'AAZ Studio <noreply@aaz.app>',
-    recipientResolver: async (userId) => {
-      const u = await userRepo.findById(userId)
-      return u?.email ?? null
-    },
-    onSkip: (n, reason) => {
-      console.warn('[sendNotificationEmail] skipped', {
-        notificationId: n.id,
-        kind: n.kind,
-        reason,
-      })
-    },
-  })
-}
 
 export const sendNotificationEmailFunction = inngest.createFunction(
   {

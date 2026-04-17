@@ -59,6 +59,7 @@ export type {
 } from './ports/EmailDeliverer'
 export { ConsoleEmailDeliverer, RecordingEmailDeliverer } from './infra/email/ConsoleEmailDeliverer'
 export { ResendEmailDeliverer } from './infra/email/ResendEmailDeliverer'
+export { buildEmailSender, DEFAULT_FROM } from './infra/email/buildEmailSender'
 
 // Use cases
 export {
