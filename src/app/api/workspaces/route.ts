@@ -4,6 +4,7 @@ import { getAuthUser, AuthError } from '@/lib/auth'
 import { createOrganization } from '@/lib/organizations'
 import { getUserById, updateUser } from '@/lib/users'
 import { listPlans, createPlan, getPlanById } from '@/lib/plans'
+import { addCredits } from '@/lib/wallet'
 import { emitEvent } from '@/lib/activity'
 import {
   createWorkspaceForUser,
@@ -103,6 +104,18 @@ export async function POST(request: NextRequest) {
         createOrganization,
         updateUser,
         resolveDefaultPlanId,
+        seedWalletCredits: async (walletId, planId) => {
+          const plan = await getPlanById(planId)
+          if (plan && plan.creditsMonthlyUsd > 0) {
+            await addCredits(
+              walletId,
+              plan.creditsMonthlyUsd,
+              `Créditos iniciais do plano ${plan.name}`,
+              {},
+              'monthly_credit',
+            )
+          }
+        },
       },
       {
         userId: authUser.id,
