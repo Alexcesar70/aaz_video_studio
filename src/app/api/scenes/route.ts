@@ -47,9 +47,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Multi-tenant filtering: users in an org see their org's data + legacy data
     const filtered = orgId
-      ? scenes.filter(s => s.organizationId === orgId || !s.organizationId)
+      ? scenes.filter(s => s.organizationId === orgId)
       : scenes
 
     // Ordena por createdAt desc (mais recentes primeiro)

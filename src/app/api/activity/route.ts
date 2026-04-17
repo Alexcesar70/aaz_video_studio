@@ -78,9 +78,8 @@ export async function GET(request: NextRequest) {
 
     const events = await queryEvents({ userId, types, fromTs, toTs, limit })
 
-    // Multi-tenant filtering: admin with orgId sees only their org's events + legacy (no orgId)
     const filtered = orgId
-      ? events.filter((e: ActivityEvent) => e.organizationId === orgId || !e.organizationId)
+      ? events.filter((e: ActivityEvent) => e.organizationId === orgId)
       : events
 
     return NextResponse.json({ events: filtered })

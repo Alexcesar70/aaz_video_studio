@@ -5,7 +5,6 @@ import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import {
   selectEpisodeRepo,
-  EPISODES_LEGACY_WORKSPACE_ID,
 } from '@/modules/episodes'
 
 const PREFIX = 'aaz:ep:'
@@ -48,14 +47,9 @@ export async function GET(request: NextRequest) {
       ? await repo.list({ workspaceId: orgId })
       : await repo.list()
 
-    const legacyVisible = orgId
-      ? await repo.list({ workspaceId: EPISODES_LEGACY_WORKSPACE_ID })
-      : []
+    epsForOrg.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 
-    const merged = [...epsForOrg, ...legacyVisible]
-    merged.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-
-    const out: Episode[] = merged.map((e) => ({
+    const out: Episode[] = epsForOrg.map((e) => ({
       id: e.id,
       name: e.name,
       projectId: e.projectId,
@@ -70,10 +64,7 @@ export async function GET(request: NextRequest) {
       reviewedAt: e.reviewedAt,
       reviewedBy: e.reviewedBy,
       creatorNote: e.creatorNote,
-      organizationId:
-        e.workspaceId === EPISODES_LEGACY_WORKSPACE_ID
-          ? undefined
-          : e.workspaceId,
+      organizationId: e.workspaceId,
     }))
     return NextResponse.json(out)
   } catch (err) {
