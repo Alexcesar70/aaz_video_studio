@@ -11,11 +11,9 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { getAuthUser } from '@/lib/auth'
-import { getLyricsDirectorSystem, getStoryboardDirectorSystem, getPromptGeneratorSystem } from '@/lib/lyricsDirectorSystem'
 import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
-import { isFeatureEnabled } from '@/lib/featureFlags'
 import {
   resolveLyricsDirectorSystem,
   resolveStoryboardDirectorSystem,
@@ -54,39 +52,19 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Feature flag USE_DB_PROMPTS (ver ADR-0002):
-    //   OFF (default): usa os system prompts hardcoded legados.
-    //   ON: resolve via repositório com fallback transparente se seed
-    //   não rodou.
-    let systemPrompt: string
-    let promptSource: 'legacy' | 'db' | 'fallback' = 'legacy'
-    let promptVersion: number | undefined
-    if (
-      isFeatureEnabled('USE_DB_PROMPTS', {
-        userId: authUser.id,
-        workspaceId: authUser.organizationId,
-      })
-    ) {
-      const repo = new RedisPromptTemplateRepository()
-      const ws = authUser.organizationId ?? null
-      let resolved: ResolvedLyricsSystem
-      if (mode === 'storyboard') {
-        resolved = await resolveStoryboardDirectorSystem({ repo }, { workspaceId: ws })
-      } else if (mode === 'generate_prompt') {
-        resolved = await resolveSongPromptGeneratorSystem({ repo }, { workspaceId: ws })
-      } else {
-        resolved = await resolveLyricsDirectorSystem({ repo }, { workspaceId: ws })
-      }
-      systemPrompt = resolved.prompt
-      promptSource = resolved.source
-      promptVersion = resolved.version
+    const repo = new RedisPromptTemplateRepository()
+    const ws = authUser.organizationId ?? null
+    let resolved: ResolvedLyricsSystem
+    if (mode === 'storyboard') {
+      resolved = await resolveStoryboardDirectorSystem({ repo }, { workspaceId: ws })
+    } else if (mode === 'generate_prompt') {
+      resolved = await resolveSongPromptGeneratorSystem({ repo }, { workspaceId: ws })
     } else {
-      systemPrompt = mode === 'storyboard'
-        ? getStoryboardDirectorSystem()
-        : mode === 'generate_prompt'
-          ? getPromptGeneratorSystem()
-          : getLyricsDirectorSystem()
+      resolved = await resolveLyricsDirectorSystem({ repo }, { workspaceId: ws })
     }
+    const systemPrompt = resolved.prompt
+    const promptSource = resolved.source
+    const promptVersion = resolved.version
 
     let userMessage = prompt.trim()
     if (mode === 'lyrics') {

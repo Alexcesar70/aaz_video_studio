@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getImageDirectorSystemPrompt } from '@/lib/imageDirectorSystem'
 import type { AssetType } from '@/lib/assets'
 import { getAuthUser } from '@/lib/auth'
 import { hasPermission, PERMISSIONS } from '@/lib/permissions'
 import { emitEvent } from '@/lib/activity'
 import { checkWalletBalance, spendCredits } from '@/lib/wallet'
 import { getClientPrice, recordEngineCost } from '@/lib/pricing'
-import { isFeatureEnabled } from '@/lib/featureFlags'
 import { resolveImageDirectorSystem } from '@/modules/prompts'
 import { RedisStyleProfileRepository } from '@/modules/library'
 
@@ -86,38 +84,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'description é obrigatória.' }, { status: 400 })
     }
 
-    // Feature flag USE_STYLE_PROFILES (PR #6, ver ADR-0002):
-    //   OFF (default): caminho legado com AAZ_STYLE_BLOCK hardcoded —
-    //     mantém comportamento idêntico ao pré-refactor.
-    //   ON: resolve StyleProfile do DB (workspace override → global →
-    //     fallback AAZ_STYLE_BLOCK). Aceita body.style_profile_slug
-    //     para override explícito do creator. Usa guides style-agnostic.
-    let systemPrompt: string
-    let styleSource: 'legacy' | 'db' | 'fallback' = 'legacy'
-    let styleProfileSlug: string | undefined
-    let styleProfileVersion: number | undefined
-    if (
-      isFeatureEnabled('USE_STYLE_PROFILES', {
-        userId: earlyAuth?.id,
-        workspaceId: earlyAuth?.organizationId,
-      })
-    ) {
-      const resolved = await resolveImageDirectorSystem(
-        { repo: new RedisStyleProfileRepository() },
-        {
-          assetType: body.type,
-          moodId: body.mood,
-          styleProfileSlug: body.style_profile_slug,
-          workspaceId: earlyAuth?.organizationId ?? null,
-        },
-      )
-      systemPrompt = resolved.prompt
-      styleSource = resolved.source
-      styleProfileSlug = resolved.slug
-      styleProfileVersion = resolved.version
-    } else {
-      systemPrompt = getImageDirectorSystemPrompt(body.type, body.mood)
-    }
+    const resolved = await resolveImageDirectorSystem(
+      { repo: new RedisStyleProfileRepository() },
+      {
+        assetType: body.type,
+        moodId: body.mood,
+        styleProfileSlug: body.style_profile_slug,
+        workspaceId: earlyAuth?.organizationId ?? null,
+      },
+    )
+    const systemPrompt = resolved.prompt
+    const styleSource = resolved.source
+    const styleProfileSlug = resolved.slug
+    const styleProfileVersion = resolved.version
 
     const userMessage = [
       `Asset type: ${body.type}`,

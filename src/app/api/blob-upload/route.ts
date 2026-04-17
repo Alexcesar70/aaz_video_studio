@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { put } from '@vercel/blob'
 import { getAuthUser } from '@/lib/auth'
-import { isFeatureEnabled } from '@/lib/featureFlags'
 import {
   createReferenceAsset,
   inferMediaType,
@@ -63,17 +62,10 @@ export async function POST(request: NextRequest) {
       addRandomSuffix: false,
     })
 
-    // ── M2-PR4: auto-registro como ReferenceAsset ──
     const user = getAuthUser(request)
-    const autoRegister =
-      !!user &&
-      isFeatureEnabled('USE_REFERENCE_ASSETS', {
-        userId: user.id,
-        workspaceId: user.organizationId,
-      })
 
     let referenceId: string | undefined
-    if (autoRegister) {
+    if (user) {
       const mediaType =
         (formData.get('mediaType') as ReferenceMediaType | null) ??
         inferMediaType({ contentType: file.type, url: blob.url })
