@@ -25,6 +25,7 @@ export interface AuthUser {
    * do middleware (que mapeia ao JWT.organizationId legado).
    */
   workspaceId?: string
+  workspaceName?: string
   /** @deprecated Use `workspaceId`. Mantido por retrocompat — ADR-0004. */
   organizationId?: string
   /** Granular permissions (Phase 4). Empty = fall back to role defaults. */
@@ -43,6 +44,7 @@ export function getAuthUser(request: NextRequest): AuthUser | null {
   const name = request.headers.get('x-user-name')
   const role = request.headers.get('x-user-role') as UserRole | null
   const organizationId = request.headers.get('x-org-id')
+  const organizationName = request.headers.get('x-org-name')
   const permissionsRaw = request.headers.get('x-user-permissions')
   const productsRaw = request.headers.get('x-user-products')
   if (!id || !role) return null
@@ -60,7 +62,8 @@ export function getAuthUser(request: NextRequest): AuthUser | null {
     name: name ?? '',
     role,
     workspaceId,
-    organizationId: workspaceId, // alias deprecated — ver ADR-0004
+    workspaceName: organizationName ?? undefined,
+    organizationId: workspaceId,
     permissions,
     products,
   }

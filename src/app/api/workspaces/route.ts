@@ -135,6 +135,7 @@ export async function POST(request: NextRequest) {
       role: user.role,
       name: user.name,
       organizationId: workspace.id,
+      organizationName: workspace.name,
     }
     if (user.permissions && user.permissions.length > 0) {
       tokenPayload.permissions = user.permissions
