@@ -39,46 +39,12 @@
 
 import {
   createNotification,
-  EmailNotificationSender,
+  buildEmailSender,
   RedisNotificationRepository,
   type CreateNotificationInput,
   type Notification,
 } from '@/modules/notifications'
-import { ConsoleEmailDeliverer } from '@/modules/notifications/infra/email/ConsoleEmailDeliverer'
-import { ResendEmailDeliverer } from '@/modules/notifications/infra/email/ResendEmailDeliverer'
-import { RedisUserRepository } from '@/modules/users'
 import { reportError } from '@/lib/errorReporter'
-
-/**
- * Constrói o EmailNotificationSender conforme env vars disponíveis.
- * - RESEND_API_KEY presente → Resend real
- * - Ausente → Console (logs estruturados, útil em dev)
- */
-function buildEmailSender(): EmailNotificationSender {
-  const apiKey = process.env.RESEND_API_KEY
-  const deliverer = apiKey
-    ? new ResendEmailDeliverer({ apiKey })
-    : new ConsoleEmailDeliverer()
-
-  const userRepo = new RedisUserRepository()
-
-  return new EmailNotificationSender({
-    emailDeliverer: deliverer,
-    defaultFrom:
-      process.env.NOTIFICATION_FROM_EMAIL ?? 'onboarding@resend.dev',
-    recipientResolver: async (userId) => {
-      const u = await userRepo.findById(userId)
-      return u?.email ?? null
-    },
-    onSkip: (n, reason) => {
-      console.warn('[notifyAndQueueEmail] skipped', {
-        notificationId: n.id,
-        kind: n.kind,
-        reason,
-      })
-    },
-  })
-}
 
 /**
  * Persiste a Notification e envia email INLINE (não bloqueia muito —

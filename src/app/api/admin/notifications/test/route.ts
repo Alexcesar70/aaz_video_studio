@@ -23,10 +23,9 @@ import { requireSuperAdmin, AuthError } from '@/lib/auth'
 import {
   createNotification,
   RedisNotificationRepository,
-  EmailNotificationSender,
+  buildEmailSender,
+  DEFAULT_FROM,
 } from '@/modules/notifications'
-import { ConsoleEmailDeliverer } from '@/modules/notifications/infra/email/ConsoleEmailDeliverer'
-import { ResendEmailDeliverer } from '@/modules/notifications/infra/email/ResendEmailDeliverer'
 import { RedisUserRepository } from '@/modules/users'
 
 export const dynamic = 'force-dynamic'
@@ -42,7 +41,7 @@ export async function POST(request: NextRequest) {
     // Diagnóstico das env vars (sem expor valores — só presença)
     const hasResendKey = !!process.env.RESEND_API_KEY
     const fromEmail =
-      process.env.NOTIFICATION_FROM_EMAIL ?? 'onboarding@resend.dev'
+      process.env.NOTIFICATION_FROM_EMAIL ?? DEFAULT_FROM
 
     // 1. Resolve email do admin logado (ou usa override)
     const userRepo = new RedisUserRepository()
@@ -72,16 +71,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // 3. Tenta enviar via EmailNotificationSender (captura TUDO pra diagnóstico)
+    // 3. Tenta enviar via factory compartilhada (captura TUDO pra diagnóstico)
     const delivererName = hasResendKey ? 'ResendEmailDeliverer' : 'ConsoleEmailDeliverer'
-    const deliverer = hasResendKey
-      ? new ResendEmailDeliverer({ apiKey: process.env.RESEND_API_KEY! })
-      : new ConsoleEmailDeliverer()
-
-    const sender = new EmailNotificationSender({
-      emailDeliverer: deliverer,
-      defaultFrom: fromEmail,
-      // Sempre retorna o recipientEmail escolhido (override ou admin)
+    const sender = buildEmailSender({
       recipientResolver: async () => recipientEmail,
     })
 
