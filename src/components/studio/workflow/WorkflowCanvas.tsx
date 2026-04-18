@@ -25,7 +25,8 @@ import { VideoNode } from './nodes/VideoNode'
 import { ReferenceNode } from './nodes/ReferenceNode'
 import { CharacterNode } from './nodes/CharacterNode'
 import { ScenarioNode } from './nodes/ScenarioNode'
-import { WorkflowContext, type NodeUpdatePatch } from './WorkflowContext'
+import { PromptNode } from './nodes/PromptNode'
+import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult } from './WorkflowContext'
 import type { DraggableItem } from './WorkflowSidebar'
 import type { WorkflowNode, NodeType } from '@/modules/workflow'
 
@@ -36,6 +37,7 @@ const nodeTypes: NodeTypes = {
   reference: ReferenceNode,
   character: CharacterNode,
   scenario: ScenarioNode,
+  prompt: PromptNode,
 }
 
 interface WorkflowCanvasProps {
@@ -66,6 +68,7 @@ function toFlowEdges(connections: Array<{ id: string; source: string; target: st
 
 const TOOLBAR_ITEMS: { type: NodeType; icon: string; label: string }[] = [
   { type: 'note', icon: '📝', label: 'Nota' },
+  { type: 'prompt', icon: '✍️', label: 'Prompt' },
   { type: 'image', icon: '🖼️', label: 'Imagem' },
   { type: 'video', icon: '🎬', label: 'Vídeo' },
   { type: 'reference', icon: '🔗', label: 'Ref' },
@@ -82,7 +85,7 @@ export function WorkflowCanvas(props: WorkflowCanvasProps) {
 function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConnectionsChange }: WorkflowCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(toFlowNodes(initialNodes))
   const [edges, setEdges, onEdgesChange] = useEdgesState(toFlowEdges(initialConnections))
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getNode } = useReactFlow()
 
   const positionTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const connectionsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -146,7 +149,83 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
     deleteNodeApi(id)
   }, [setNodes, setEdges, scheduleConnectionsSave, deleteNodeApi])
 
-  const contextValue = useMemo(() => ({ updateNode, deleteNode }), [updateNode, deleteNode])
+  const createNodeAt = useCallback(async (
+    type: NodeType,
+    position: { x: number; y: number },
+    label = '',
+    content: Record<string, unknown> = {},
+  ): Promise<Node | null> => {
+    try {
+      const res = await fetch(`/api/workflow/boards/${boardId}/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, position, label, content }),
+      })
+      if (!res.ok) return null
+      const payload = await res.json() as { node: WorkflowNode }
+      const created = payload.node
+      const flowNode: Node = {
+        id: created.id,
+        type: created.type in nodeTypes ? created.type : 'note',
+        position: created.position,
+        data: { ...created.content, label: created.label, color: created.color },
+      }
+      setNodes(prev => [...prev, flowNode])
+      return flowNode
+    } catch {
+      return null
+    }
+  }, [boardId, setNodes])
+
+  const generateImageFromPrompt = useCallback(async (
+    promptNodeId: string,
+    prompt: string,
+  ): Promise<GenerateImageResult> => {
+    const trimmed = prompt.trim()
+    if (!trimmed) return { ok: false, error: 'Prompt vazio.' }
+
+    const promptNode = getNode(promptNodeId)
+    const basePos = promptNode?.position ?? { x: 0, y: 0 }
+    const imagePosition = { x: basePos.x + 320, y: basePos.y }
+
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: trimmed, num_outputs: 1 }),
+      })
+      const data = await res.json() as { imageUrls?: string[]; error?: string }
+      if (!res.ok) return { ok: false, error: data.error ?? 'Falha ao gerar.' }
+      const url = data.imageUrls?.[0]
+      if (!url) return { ok: false, error: 'Sem imagem retornada.' }
+
+      const imageNode = await createNodeAt('image', imagePosition, '', { url, sourcePrompt: trimmed })
+      if (!imageNode) return { ok: false, error: 'Falha ao criar n\u00f3.' }
+
+      const edgeId = `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
+      const edge: Edge = {
+        id: edgeId,
+        source: promptNodeId,
+        target: imageNode.id,
+        animated: true,
+        style: { stroke: '#7F77DD', strokeWidth: 2 },
+      }
+      setEdges(current => {
+        const next = [...current, edge]
+        scheduleConnectionsSave(next)
+        return next
+      })
+
+      return { ok: true, imageNodeId: imageNode.id }
+    } catch {
+      return { ok: false, error: 'Erro de conex\u00e3o.' }
+    }
+  }, [getNode, createNodeAt, setEdges, scheduleConnectionsSave])
+
+  const contextValue = useMemo(
+    () => ({ updateNode, deleteNode, generateImageFromPrompt }),
+    [updateNode, deleteNode, generateImageFromPrompt],
+  )
 
   const onConnect: OnConnect = useCallback((params: Connection) => {
     setEdges(eds => {
@@ -187,33 +266,6 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
       return next
     })
   }, [setEdges, scheduleConnectionsSave])
-
-  const createNodeAt = useCallback(async (
-    type: NodeType,
-    position: { x: number; y: number },
-    label = '',
-    content: Record<string, unknown> = {},
-  ) => {
-    try {
-      const res = await fetch(`/api/workflow/boards/${boardId}/nodes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, position, label, content }),
-      })
-      if (!res.ok) return
-      const payload = await res.json() as { node: WorkflowNode }
-      const created = payload.node
-      const flowNode: Node = {
-        id: created.id,
-        type: created.type in nodeTypes ? created.type : 'note',
-        position: created.position,
-        data: { ...created.content, label: created.label, color: created.color },
-      }
-      setNodes(prev => [...prev, flowNode])
-    } catch {
-      // silent
-    }
-  }, [boardId, setNodes])
 
   const addNode = useCallback((type: NodeType) => {
     const position = { x: 200 + Math.random() * 300, y: 100 + Math.random() * 200 }
