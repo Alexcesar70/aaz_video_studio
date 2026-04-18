@@ -147,6 +147,45 @@ Backfill scripts em `scripts/backfill/`.
 **Rollout:** ver [`docs/m6-rollout-checklist.md`](./docs/m6-rollout-checklist.md).
 **Arquitetura:** ver [ADR-0008](./docs/adr/0008-event-driven-notifications.md).
 
+### Milestone 7 — UI Refactor + Creators ✅ CODE-COMPLETE
+
+- [x] **M7-PR1** — Route group `(workspace)` + Workspace Home dashboard
+- [x] **M7-PR2** — Sidebar nav + 8 páginas (projects, assets, music, voices, spaces, team, settings, profile)
+- [x] **M7-PR3** — Remove header duplicado + simplifica tabs do AAZStudio
+- [x] **M7-PR4** — Remove código morto (Library + Admin tabs, -327 linhas)
+- [x] **M7-PR5** — Extrai SenoidePanel + CantigasWizard pra arquivos próprios (-1440 linhas)
+- [x] **M7-PR6** — Aba Creators (YouTube/TikTok/Instagram) + Spielberg integrado (Claude API)
+- [x] **M7-PR7** — Seletor de duração pra YouTube longo
+- [x] **M7-PR8** — Fix build: WorkspaceContext movido pra lib/
+- [x] **M7-PR9** — Consolidação de 6 feature flags (global ON, -170 linhas legacy)
+- [x] **M7-PR10** — Fix frontend leads (derivados da API, não hardcoded)
+- [x] **M7-PR11** — Fix library leak + backfill prefix aaz:char:
+
+**Tag:** `v0.2.0` — snapshot pré-refactor UI.
+
+### Milestone 8 — Timeline + Creators Expansion (PLANEJADO)
+
+- [ ] **M8-PR1** — Preview Episódio: variante Cinema (player + strip de cenas)
+- [ ] **M8-PR2** — Preview Episódio: variante Storyboard (grid de cards)
+- [ ] **M8-PR3** — Preview Episódio: variante Timeline (duração proporcional + playhead)
+- [ ] **M8-PR4** — Sequenciador Nível 1: reordenar cenas (drag-and-drop) + export MP4 concatenado
+- [ ] **M8-PR5** — Sequenciador Nível 2: transições entre cenas (fade, cut, dissolve)
+- [ ] **M8-PR6** — Sequenciador Nível 2: faixa de áudio (trilha + TTS sincronizado)
+- [ ] **M8-PR7** — Sequenciador Nível 2: trim básico (cortar início/fim de cena)
+- [ ] **M8-PR8** — YouTube API: OAuth2 connect + channel info
+- [ ] **M8-PR9** — YouTube API: analytics básico (views, retenção, top vídeos)
+- [ ] **M8-PR10** — YouTube API: publicação direta
+- [ ] **M8-PR11** — Creators: templates por nicho (educação, lifestyle, tech, fitness)
+- [ ] **M8-PR12** — Creators: Spielberg sugere conteúdo baseado em analytics do canal
+
+**Conceito Timeline:**
+- Nível 1 (Sequenciador): organiza cenas na ordem, player sequencial, export
+  concatenado. NÃO é editor de vídeo — é organizador de sequência.
+- Nível 2 (Transições + Áudio): adiciona transições entre cenas (fade/cut/dissolve),
+  faixa de áudio (música/TTS), trim básico. Diferenciador competitivo.
+- Nível 3 (Editor completo tipo CapCut/Premiere): NÃO faremos. Exporta MP4 e
+  o creator usa editor externo se quiser pós-produção pesada.
+
 ---
 
 ## Checklist de paridade funcional (rodar antes de cada merge)
