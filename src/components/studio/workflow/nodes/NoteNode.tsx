@@ -1,11 +1,20 @@
 'use client'
 import React, { useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
+import { useWorkflow } from '../WorkflowContext'
 
-export function NoteNode({ data, selected }: { data: Record<string, unknown>; selected: boolean }) {
+export function NoteNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
+  const { updateNode } = useWorkflow()
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState((data.text as string) ?? '')
   const color = (data.color as string) ?? '#7F77DD'
+
+  const handleBlur = () => {
+    setEditing(false)
+    if (text !== (data.text ?? '')) {
+      updateNode(id, { content: { text } })
+    }
+  }
 
   return (
     <div style={{
@@ -25,8 +34,9 @@ export function NoteNode({ data, selected }: { data: Record<string, unknown>; se
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          onBlur={() => { setEditing(false); if (data.onUpdate) (data.onUpdate as (v: Record<string, unknown>) => void)({ text }) }}
+          onBlur={handleBlur}
           autoFocus
+          className="nodrag"
           style={{
             width: '100%', minHeight: 60, padding: 6, borderRadius: 6,
             background: '#0f0d1a', border: '1px solid #2A2545',
@@ -37,9 +47,9 @@ export function NoteNode({ data, selected }: { data: Record<string, unknown>; se
       ) : (
         <div
           onDoubleClick={() => setEditing(true)}
-          style={{ fontSize: 12, color: '#E8E5F0', lineHeight: 1.5, cursor: 'text', minHeight: 30 }}
+          style={{ fontSize: 12, color: '#E8E5F0', lineHeight: 1.5, cursor: 'text', minHeight: 30, whiteSpace: 'pre-wrap' }}
         >
-          {text || 'Double-click pra editar...'}
+          {text || <span style={{ color: '#6B6688' }}>Double-click pra editar...</span>}
         </div>
       )}
       <Handle type="source" position={Position.Right} style={{ background: color, width: 8, height: 8 }} />

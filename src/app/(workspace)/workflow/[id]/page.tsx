@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { WorkflowCanvas } from '@/components/studio/workflow/WorkflowCanvas'
 import type { Board } from '@/modules/workflow'
-import type { Node, Edge } from '@xyflow/react'
+import type { Edge } from '@xyflow/react'
 
 export default function BoardPage({ params }: { params: { id: string } }) {
   const router = useRouter()
   const [board, setBoard] = useState<Board | null>(null)
   const [loading, setLoading] = useState(true)
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
 
   useEffect(() => {
     fetch(`/api/workflow/boards/${params.id}`)
@@ -19,7 +21,7 @@ export default function BoardPage({ params }: { params: { id: string } }) {
       .finally(() => setLoading(false))
   }, [params.id])
 
-  const handleSave = useCallback(async (nodes: Node[], edges: Edge[]) => {
+  const handleConnectionsChange = useCallback(async (edges: Edge[]) => {
     const connections = edges.map(e => ({
       id: e.id,
       source: e.source,
@@ -31,6 +33,19 @@ export default function BoardPage({ params }: { params: { id: string } }) {
       body: JSON.stringify({ connections }),
     }).catch(() => {})
   }, [params.id])
+
+  const saveName = useCallback(async () => {
+    setEditingName(false)
+    if (!board) return
+    const trimmed = nameDraft.trim()
+    if (!trimmed || trimmed === board.name) return
+    setBoard({ ...board, name: trimmed })
+    await fetch(`/api/workflow/boards/${params.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: trimmed }),
+    }).catch(() => {})
+  }, [board, nameDraft, params.id])
 
   if (loading) {
     return (
@@ -63,7 +78,32 @@ export default function BoardPage({ params }: { params: { id: string } }) {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <button onClick={() => router.push('/workflow')} style={{ background: 'transparent', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 14 }}>←</button>
-          <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{board.name}</span>
+          {editingName ? (
+            <input
+              value={nameDraft}
+              onChange={e => setNameDraft(e.target.value)}
+              onBlur={saveName}
+              onKeyDown={e => {
+                if (e.key === 'Enter') saveName()
+                if (e.key === 'Escape') setEditingName(false)
+              }}
+              autoFocus
+              style={{
+                fontSize: 14, fontWeight: 700, color: C.text,
+                background: '#0f0d1a', border: `1px solid ${C.border}`,
+                borderRadius: 4, padding: '2px 6px', outline: 'none',
+                fontFamily: 'inherit', minWidth: 200,
+              }}
+            />
+          ) : (
+            <span
+              onDoubleClick={() => { setNameDraft(board.name); setEditingName(true) }}
+              title="Double-click para renomear"
+              style={{ fontSize: 14, fontWeight: 700, color: C.text, cursor: 'text' }}
+            >
+              {board.name}
+            </span>
+          )}
           <span style={{ fontSize: 11, color: C.textDim }}>{board.nodes.length} nós</span>
         </div>
         <div style={{ fontSize: 10, color: C.textDim }}>
@@ -77,7 +117,7 @@ export default function BoardPage({ params }: { params: { id: string } }) {
           boardId={board.id}
           initialNodes={board.nodes}
           initialConnections={board.connections}
-          onSave={handleSave}
+          onConnectionsChange={handleConnectionsChange}
         />
       </div>
     </div>
