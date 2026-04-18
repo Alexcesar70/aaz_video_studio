@@ -21,6 +21,7 @@
     "@sentry/node": "^10.48.0",
     "@vercel/blob": "^2.3.3",
     "@vercel/kv": "^2.0.0",
+    "@xyflow/react": "^12.10.2",
     "bcryptjs": "^3.0.3",
     "drizzle-orm": "^0.45.2",
     "inngest": "^4.2.2",
