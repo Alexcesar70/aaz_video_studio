@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { href: '/assets', label: 'Assets', icon: '🎨' },
   { href: '/music', label: 'Música', icon: '🎵' },
   { href: '/voices', label: 'Vozes', icon: '🎙' },
-  { href: '/spaces', label: 'Workflow', icon: '🔄' },
+  { href: '/workflow', label: 'Workflow', icon: '🔄' },
 ]
 
 const BOTTOM_NAV = [
