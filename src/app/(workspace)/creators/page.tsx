@@ -49,7 +49,24 @@ const PLATFORMS: Platform[] = [
   },
 ]
 
-type Step = 'platform' | 'brief' | 'generating'
+interface ScriptResult {
+  script: {
+    title: string
+    description: string
+    sections: { title: string; description: string; duration: number; visualDirection: string }[]
+    totalDuration: number
+    seoTitle?: string
+    seoDescription?: string
+    hashtags?: string[]
+    thumbnailPrompt?: string
+  }
+  project: { id: string; name: string }
+  episode: { id: string; name: string }
+  scenes: { id: string; title: string; prompt: string; duration: number }[]
+  ratio: string
+}
+
+type Step = 'platform' | 'brief' | 'generating' | 'result'
 
 export default function CreatorsPage() {
   const router = useRouter()
@@ -57,6 +74,8 @@ export default function CreatorsPage() {
   const [step, setStep] = useState<Step>('platform')
   const [selectedPlatform, setSelectedPlatform] = useState<Platform | null>(null)
   const [selectedFormat, setSelectedFormat] = useState<string>('')
+  const [result, setResult] = useState<ScriptResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [brief, setBrief] = useState({
     topic: '',
     audience: '',
@@ -83,13 +102,35 @@ export default function CreatorsPage() {
   const handleGenerate = async () => {
     if (!selectedPlatform || !brief.topic.trim()) return
     setStep('generating')
+    setError(null)
 
-    // TODO: chamar Spielberg (Claude API) pra gerar roteiro
-    // TODO: criar Projeto + Episódio + Cenas automaticamente
-    // Por agora, simula delay e redireciona pro studio
-    setTimeout(() => {
-      router.push('/studio')
-    }, 3000)
+    try {
+      const res = await fetch('/api/creators/generate-script', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          platform: selectedPlatform.id,
+          format: selectedFormat,
+          topic: brief.topic,
+          audience: brief.audience,
+          tone: brief.tone,
+          notes: brief.notes,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? 'Erro ao gerar roteiro.')
+        setStep('brief')
+        return
+      }
+
+      setResult(data)
+      setStep('result')
+    } catch {
+      setError('Erro de conexão.')
+      setStep('brief')
+    }
   }
 
   return (
@@ -295,6 +336,12 @@ export default function CreatorsPage() {
                 />
               </div>
 
+              {error && (
+                <div style={{ padding: '10px 14px', background: `${C.red}15`, border: `1px solid ${C.red}40`, borderRadius: 8, fontSize: 12, color: C.red }}>
+                  {error}
+                </div>
+              )}
+
               <button
                 onClick={handleGenerate}
                 disabled={!brief.topic.trim()}
@@ -365,6 +412,135 @@ export default function CreatorsPage() {
             <br />Um projeto será criado automaticamente com as cenas prontas pra editar.
           </div>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      )}
+
+      {/* Step: resultado */}
+      {step === 'result' && result && (
+        <div>
+          <div style={{
+            padding: '16px 20px', marginBottom: 24,
+            background: `${C.green}15`, border: `1px solid ${C.green}40`, borderRadius: 10,
+            display: 'flex', alignItems: 'center', gap: 12,
+          }}>
+            <span style={{ fontSize: 24 }}>✅</span>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.green }}>Roteiro criado + Projeto organizado!</div>
+              <div style={{ fontSize: 12, color: C.textDim }}>
+                {result.scenes.length} cenas criadas em {result.ratio} · Duração total: {result.script.totalDuration}s
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 24 }}>
+            {/* Roteiro */}
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>{result.script.title}</h2>
+              <p style={{ fontSize: 13, color: C.textDim, margin: '0 0 20px' }}>{result.script.description}</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {result.scenes.map((scene, i) => (
+                  <div key={scene.id} style={{
+                    background: C.card, border: `1px solid ${C.border}`, borderRadius: 10,
+                    padding: '16px', display: 'flex', gap: 14,
+                  }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 8,
+                      background: `${selectedPlatform?.color ?? C.purple}20`,
+                      color: selectedPlatform?.color ?? C.purple,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 700, flexShrink: 0,
+                    }}>
+                      {i + 1}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <span style={{ fontSize: 14, fontWeight: 700 }}>{scene.title}</span>
+                        <span style={{
+                          fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                          background: `${C.purple}15`, color: C.purple,
+                          fontFamily: 'monospace',
+                        }}>{scene.duration}s</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>{scene.prompt.slice(0, 200)}{scene.prompt.length > 200 ? '...' : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
+                <button
+                  onClick={() => router.push('/studio')}
+                  style={{
+                    flex: 2, padding: '14px 24px', borderRadius: 10,
+                    background: `linear-gradient(135deg, ${selectedPlatform?.color ?? C.purple}, ${selectedPlatform?.color ?? C.purple}cc)`,
+                    border: 'none', color: '#fff',
+                    fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  🎬 Abrir no BearStudio
+                </button>
+                <button
+                  onClick={() => router.push('/projects')}
+                  style={{
+                    flex: 1, padding: '14px 24px', borderRadius: 10,
+                    background: C.card, border: `1px solid ${C.border}`, color: C.text,
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  📁 Ver no Projetos
+                </button>
+              </div>
+            </div>
+
+            {/* Sidebar — SEO + hashtags + thumbnail */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {result.script.seoTitle && (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: 0.5, marginBottom: 6 }}>TÍTULO SEO</div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{result.script.seoTitle}</div>
+                </div>
+              )}
+
+              {result.script.seoDescription && (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: 0.5, marginBottom: 6 }}>DESCRIÇÃO SEO</div>
+                  <div style={{ fontSize: 12, color: C.textDim, lineHeight: 1.5 }}>{result.script.seoDescription}</div>
+                </div>
+              )}
+
+              {result.script.hashtags && result.script.hashtags.length > 0 && (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: 0.5, marginBottom: 8 }}>HASHTAGS</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                    {result.script.hashtags.map(h => (
+                      <span key={h} style={{
+                        fontSize: 11, padding: '3px 8px', borderRadius: 6,
+                        background: `${selectedPlatform?.color ?? C.purple}15`,
+                        color: selectedPlatform?.color ?? C.purple,
+                      }}>{h}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {result.script.thumbnailPrompt && (
+                <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: '14px' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: C.textDim, letterSpacing: 0.5, marginBottom: 6 }}>PROMPT PRA THUMBNAIL</div>
+                  <div style={{ fontSize: 11, color: C.textDim, lineHeight: 1.5, fontStyle: 'italic' }}>{result.script.thumbnailPrompt}</div>
+                </div>
+              )}
+
+              <div style={{
+                background: `${C.purple}10`, border: `1px solid ${C.purple}20`, borderRadius: 10,
+                padding: '14px', marginTop: 'auto',
+              }}>
+                <div style={{ fontSize: 11, color: C.textDim, lineHeight: 1.5 }}>
+                  📁 Projeto <strong style={{ color: C.text }}>&ldquo;{result.project.name}&rdquo;</strong> criado com {result.scenes.length} cenas prontas pra editar no BearStudio.
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>
