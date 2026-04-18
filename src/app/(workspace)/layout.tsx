@@ -7,12 +7,13 @@ import { WorkspaceProvider, useWorkspace } from '@/lib/workspaceContext'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Home', icon: '🏠' },
-  { href: '/studio', label: 'Estúdio', icon: '🎬' },
+  { href: '/studio', label: 'BearStudio', icon: '🎬' },
+  { href: '/creators', label: 'Creators', icon: '🎯' },
   { href: '/projects', label: 'Projetos', icon: '📁' },
   { href: '/assets', label: 'Assets', icon: '🎨' },
   { href: '/music', label: 'Música', icon: '🎵' },
   { href: '/voices', label: 'Vozes', icon: '🎙' },
-  { href: '/spaces', label: 'Spaces', icon: '🤝' },
+  { href: '/spaces', label: 'Workflow', icon: '🔄' },
 ]
 
 const BOTTOM_NAV = [
