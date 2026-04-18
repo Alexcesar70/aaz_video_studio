@@ -35,6 +35,7 @@ export type ActivityType =
   | 'asset_promoted'
   | 'scene_director_called'
   | 'image_director_called'
+  | 'thumbnail_director_called'
   | 'project_created'
   | 'episode_created'
   | 'episode_delivery_uploaded'

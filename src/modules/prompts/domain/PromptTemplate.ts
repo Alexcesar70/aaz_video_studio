@@ -22,6 +22,7 @@ export type PromptTemplateKind =
   | 'lyrics_director'         // Claude → letras de cantigas
   | 'storyboard_director'     // Claude → divisão da letra em cenas
   | 'song_prompt_generator'   // Claude → prompts de vídeo para storyboard
+  | 'thumbnail_director'      // Claude → prompts de thumbnail otimizados pra CTR
 
 export const PROMPT_TEMPLATE_KINDS: readonly PromptTemplateKind[] = [
   'scene_director',
@@ -30,6 +31,7 @@ export const PROMPT_TEMPLATE_KINDS: readonly PromptTemplateKind[] = [
   'lyrics_director',
   'storyboard_director',
   'song_prompt_generator',
+  'thumbnail_director',
 ] as const
 
 export interface PromptTemplate {

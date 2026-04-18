@@ -4,6 +4,7 @@ import {
   getStoryboardDirectorSystem,
   getPromptGeneratorSystem,
 } from '@/lib/lyricsDirectorSystem'
+import { THUMBNAIL_DIRECTOR_BASE } from '../composers/thumbnailDirector'
 import type { PromptTemplateRepository } from '../ports/PromptTemplateRepository'
 import type { PromptTemplateKind } from '../domain/PromptTemplate'
 import { upsertPromptTemplate } from './upsertPromptTemplate'
@@ -61,6 +62,13 @@ function collectDefaults(): SeedEntry[] {
       content: getPromptGeneratorSystem(),
       description:
         'Song Prompt Generator — converte ação em português em prompt de vídeo em inglês para Seedance.',
+    },
+    {
+      slug: 'thumbnail_director',
+      kind: 'thumbnail_director',
+      content: THUMBNAIL_DIRECTOR_BASE,
+      description:
+        'Thumbnail Director — gera prompts de thumbnail otimizados pra CTR. Usa referências do canal + boas práticas universais.',
     },
   ]
 }

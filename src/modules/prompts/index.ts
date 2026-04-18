@@ -48,3 +48,5 @@ export {
   buildImageDirectorSystem,
 } from './composers/imageDirector'
 export type { ResolvedImageDirectorSystem } from './composers/imageDirector'
+export { resolveThumbnailDirectorSystem } from './composers/thumbnailDirector'
+export type { ResolvedThumbnailDirectorSystem } from './composers/thumbnailDirector'
