@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
-import { useWorkspace } from './layout'
+import { useWorkspace } from '@/lib/workspaceContext'
 
 export default function WorkspaceHome() {
   const router = useRouter()

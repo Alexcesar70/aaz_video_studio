@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { C } from '@/components/studio/theme'
-import { useWorkspace } from '../layout'
+import { useWorkspace } from '@/lib/workspaceContext'
 
 export default function SpacesPage() {
   const { user } = useWorkspace()

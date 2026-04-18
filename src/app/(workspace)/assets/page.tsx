@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { C } from '@/components/studio/theme'
-import { useWorkspace } from '../layout'
+import { useWorkspace } from '@/lib/workspaceContext'
 import type { Asset } from '@/lib/assets'
 import { defaultEmoji } from '@/lib/assets'
 
