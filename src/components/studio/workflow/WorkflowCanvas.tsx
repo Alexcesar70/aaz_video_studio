@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -40,11 +40,14 @@ const nodeTypes: NodeTypes = {
   prompt: PromptNode,
 }
 
+export type SaveStatus = 'idle' | 'saving' | 'saved'
+
 interface WorkflowCanvasProps {
   boardId: string
   initialNodes: WorkflowNode[]
   initialConnections: Array<{ id: string; source: string; target: string }>
   onConnectionsChange?: (edges: Edge[]) => void
+  onSaveStatusChange?: (status: SaveStatus) => void
 }
 
 function toFlowNodes(wfNodes: WorkflowNode[]): Node[] {
@@ -82,15 +85,36 @@ export function WorkflowCanvas(props: WorkflowCanvasProps) {
   )
 }
 
-function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConnectionsChange }: WorkflowCanvasProps) {
+function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConnectionsChange, onSaveStatusChange }: WorkflowCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(toFlowNodes(initialNodes))
   const [edges, setEdges, onEdgesChange] = useEdgesState(toFlowEdges(initialConnections))
   const { screenToFlowPosition, getNode } = useReactFlow()
 
   const positionTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const connectionsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pendingOps = useRef(0)
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const beginSave = useCallback(() => {
+    pendingOps.current += 1
+    onSaveStatusChange?.('saving')
+    if (savedTimer.current) {
+      clearTimeout(savedTimer.current)
+      savedTimer.current = null
+    }
+  }, [onSaveStatusChange])
+
+  const endSave = useCallback(() => {
+    pendingOps.current = Math.max(0, pendingOps.current - 1)
+    if (pendingOps.current === 0) {
+      onSaveStatusChange?.('saved')
+      if (savedTimer.current) clearTimeout(savedTimer.current)
+      savedTimer.current = setTimeout(() => onSaveStatusChange?.('idle'), 2000)
+    }
+  }, [onSaveStatusChange])
 
   const patchNode = useCallback(async (nodeId: string, body: Record<string, unknown> | NodeUpdatePatch) => {
+    beginSave()
     try {
       await fetch(`/api/workflow/boards/${boardId}/nodes/${nodeId}`, {
         method: 'PATCH',
@@ -99,16 +123,21 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
       })
     } catch {
       // silent — UI já foi atualizada
+    } finally {
+      endSave()
     }
-  }, [boardId])
+  }, [boardId, beginSave, endSave])
 
   const deleteNodeApi = useCallback(async (nodeId: string) => {
+    beginSave()
     try {
       await fetch(`/api/workflow/boards/${boardId}/nodes/${nodeId}`, { method: 'DELETE' })
     } catch {
       // silent
+    } finally {
+      endSave()
     }
-  }, [boardId])
+  }, [boardId, beginSave, endSave])
 
   const schedulePositionSave = useCallback((nodeId: string, position: { x: number; y: number }) => {
     const existing = positionTimers.current.get(nodeId)
@@ -122,10 +151,15 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
 
   const scheduleConnectionsSave = useCallback((next: Edge[]) => {
     if (connectionsTimer.current) clearTimeout(connectionsTimer.current)
-    connectionsTimer.current = setTimeout(() => {
-      onConnectionsChange?.(next)
+    connectionsTimer.current = setTimeout(async () => {
+      beginSave()
+      try {
+        await onConnectionsChange?.(next)
+      } finally {
+        endSave()
+      }
     }, 800)
-  }, [onConnectionsChange])
+  }, [onConnectionsChange, beginSave, endSave])
 
   const updateNode = useCallback((id: string, patch: NodeUpdatePatch) => {
     setNodes(current => current.map(n => {
@@ -155,6 +189,7 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
     label = '',
     content: Record<string, unknown> = {},
   ): Promise<Node | null> => {
+    beginSave()
     try {
       const res = await fetch(`/api/workflow/boards/${boardId}/nodes`, {
         method: 'POST',
@@ -174,57 +209,80 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
       return flowNode
     } catch {
       return null
+    } finally {
+      endSave()
     }
-  }, [boardId, setNodes])
+  }, [boardId, setNodes, beginSave, endSave])
 
   const generateImageFromPrompt = useCallback(async (
     promptNodeId: string,
     prompt: string,
+    count: number = 1,
   ): Promise<GenerateImageResult> => {
     const trimmed = prompt.trim()
     if (!trimmed) return { ok: false, error: 'Prompt vazio.' }
 
     const promptNode = getNode(promptNodeId)
     const basePos = promptNode?.position ?? { x: 0, y: 0 }
-    const imagePosition = { x: basePos.x + 320, y: basePos.y }
+    const safeCount = Math.max(1, Math.min(count, 4))
 
     try {
       const res = await fetch('/api/generate-image', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: trimmed, num_outputs: 1 }),
+        body: JSON.stringify({ prompt: trimmed, num_outputs: safeCount }),
       })
       const data = await res.json() as { imageUrls?: string[]; error?: string }
       if (!res.ok) return { ok: false, error: data.error ?? 'Falha ao gerar.' }
-      const url = data.imageUrls?.[0]
-      if (!url) return { ok: false, error: 'Sem imagem retornada.' }
+      const urls = data.imageUrls ?? []
+      if (urls.length === 0) return { ok: false, error: 'Sem imagem retornada.' }
 
-      const imageNode = await createNodeAt('image', imagePosition, '', { url, sourcePrompt: trimmed })
-      if (!imageNode) return { ok: false, error: 'Falha ao criar n\u00f3.' }
+      const createdIds: string[] = []
+      for (let i = 0; i < urls.length; i++) {
+        const pos = { x: basePos.x + 320, y: basePos.y + i * 220 }
+        const node = await createNodeAt('image', pos, '', { url: urls[i], sourcePrompt: trimmed })
+        if (node) createdIds.push(node.id)
+      }
 
-      const edgeId = `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
-      const edge: Edge = {
-        id: edgeId,
+      if (createdIds.length === 0) return { ok: false, error: 'Falha ao criar nós.' }
+
+      const newEdges: Edge[] = createdIds.map(targetId => ({
+        id: `edge_${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${targetId}`,
         source: promptNodeId,
-        target: imageNode.id,
+        target: targetId,
         animated: true,
         style: { stroke: '#7F77DD', strokeWidth: 2 },
-      }
+      }))
       setEdges(current => {
-        const next = [...current, edge]
+        const next = [...current, ...newEdges]
         scheduleConnectionsSave(next)
         return next
       })
 
-      return { ok: true, imageNodeId: imageNode.id }
+      return { ok: true, imageNodeIds: createdIds }
     } catch {
-      return { ok: false, error: 'Erro de conex\u00e3o.' }
+      return { ok: false, error: 'Erro de conexão.' }
     }
   }, [getNode, createNodeAt, setEdges, scheduleConnectionsSave])
 
+  const duplicateNode = useCallback((id: string) => {
+    const node = getNode(id)
+    if (!node) return
+    const nodeType = (node.type ?? 'note') as NodeType
+    const offset = { x: node.position.x + 40, y: node.position.y + 40 }
+    const data = node.data as Record<string, unknown>
+    const { label: labelData, color: colorData, ...contentRest } = data
+    createNodeAt(
+      nodeType,
+      offset,
+      typeof labelData === 'string' ? labelData : '',
+      contentRest,
+    )
+  }, [getNode, createNodeAt])
+
   const contextValue = useMemo(
-    () => ({ updateNode, deleteNode, generateImageFromPrompt }),
-    [updateNode, deleteNode, generateImageFromPrompt],
+    () => ({ updateNode, deleteNode, duplicateNode, generateImageFromPrompt }),
+    [updateNode, deleteNode, duplicateNode, generateImageFromPrompt],
   )
 
   const onConnect: OnConnect = useCallback((params: Connection) => {
@@ -271,6 +329,22 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
     const position = { x: 200 + Math.random() * 300, y: 100 + Math.random() * 200 }
     createNodeAt(type, position)
   }, [createNodeAt])
+
+  useEffect(() => {
+    const handler = (ev: KeyboardEvent) => {
+      const isEditable = ev.target instanceof HTMLElement
+        && (ev.target.tagName === 'INPUT' || ev.target.tagName === 'TEXTAREA' || ev.target.isContentEditable)
+      if (isEditable) return
+
+      if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'd') {
+        ev.preventDefault()
+        const selected = nodes.filter(n => n.selected)
+        for (const n of selected) duplicateNode(n.id)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [nodes, duplicateNode])
 
   const onDragOver = useCallback((ev: React.DragEvent) => {
     ev.preventDefault()

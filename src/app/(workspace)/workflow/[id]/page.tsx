@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
-import { WorkflowCanvas } from '@/components/studio/workflow/WorkflowCanvas'
+import { WorkflowCanvas, type SaveStatus } from '@/components/studio/workflow/WorkflowCanvas'
 import { WorkflowSidebar } from '@/components/studio/workflow/WorkflowSidebar'
 import type { Board } from '@/modules/workflow'
 import type { Edge } from '@xyflow/react'
@@ -14,6 +14,7 @@ export default function BoardPage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true)
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
 
   useEffect(() => {
     fetch(`/api/workflow/boards/${params.id}`)
@@ -107,9 +108,7 @@ export default function BoardPage({ params }: { params: { id: string } }) {
           )}
           <span style={{ fontSize: 11, color: C.textDim }}>{board.nodes.length} nós</span>
         </div>
-        <div style={{ fontSize: 10, color: C.textDim }}>
-          auto-save ativo
-        </div>
+        <SaveIndicator status={saveStatus} />
       </div>
 
       {/* Sidebar + Canvas */}
@@ -121,9 +120,24 @@ export default function BoardPage({ params }: { params: { id: string } }) {
             initialNodes={board.nodes}
             initialConnections={board.connections}
             onConnectionsChange={handleConnectionsChange}
+            onSaveStatusChange={setSaveStatus}
           />
         </div>
       </div>
+    </div>
+  )
+}
+
+function SaveIndicator({ status }: { status: SaveStatus }) {
+  const meta = {
+    idle: { color: C.textDim, text: 'Auto-save ativo', icon: '•' },
+    saving: { color: '#E5B87A', text: 'Salvando...', icon: '⏳' },
+    saved: { color: '#5DCAA5', text: 'Salvo', icon: '✓' },
+  }[status]
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: meta.color }}>
+      <span>{meta.icon}</span>
+      <span>{meta.text}</span>
     </div>
   )
 }

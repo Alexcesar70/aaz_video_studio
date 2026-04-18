@@ -14,6 +14,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
   const [showRefiner, setShowRefiner] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [count, setCount] = useState<1 | 2 | 4>(((data.count as 1 | 2 | 4) ?? 1))
 
   const commitText = () => {
     setEditing(false)
@@ -26,9 +27,14 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
     if (generating || !text.trim()) return
     setGenerating(true)
     setError(null)
-    const result = await generateImageFromPrompt(id, text)
+    const result = await generateImageFromPrompt(id, text, count)
     setGenerating(false)
     if (!result.ok) setError(result.error ?? 'Erro ao gerar.')
+  }
+
+  const selectCount = (n: 1 | 2 | 4) => {
+    setCount(n)
+    updateNode(id, { content: { count: n } })
   }
 
   const handleRefined = (refined: string) => {
@@ -94,6 +100,25 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
         </div>
       )}
 
+      <div className="nodrag" style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+        <span style={{ fontSize: 10, color: '#9F9AB8', marginRight: 2 }}>Variações:</span>
+        {([1, 2, 4] as const).map(n => (
+          <button
+            key={n}
+            onClick={() => selectCount(n)}
+            disabled={generating}
+            style={{
+              padding: '3px 8px', borderRadius: 4,
+              background: count === n ? `${color}30` : 'transparent',
+              border: `1px solid ${count === n ? color : '#2A2545'}`,
+              color: count === n ? color : '#9F9AB8',
+              fontSize: 10, fontWeight: 600, fontFamily: 'inherit',
+              cursor: generating ? 'default' : 'pointer',
+            }}
+          >{n}</button>
+        ))}
+      </div>
+
       <div className="nodrag" style={{ display: 'flex', gap: 6 }}>
         <button
           onClick={() => setShowRefiner(s => !s)}
@@ -121,7 +146,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
             cursor: text.trim() && !generating ? 'pointer' : 'default',
           }}
         >
-          {generating ? '⏳' : '▶ Gerar'}
+          {generating ? '⏳' : `▶ Gerar${count > 1 ? ` (${count})` : ''}`}
         </button>
       </div>
 
