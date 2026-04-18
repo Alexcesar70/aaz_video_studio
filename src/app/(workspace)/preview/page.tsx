@@ -1,11 +1,19 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { SequentialPlayer, type PlayerScene } from '@/components/studio/VideoPlayer'
 
 export default function PreviewPage() {
+  return (
+    <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh', color: C.textDim }}>Carregando preview...</div>}>
+      <PreviewContent />
+    </Suspense>
+  )
+}
+
+function PreviewContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const episodeId = searchParams.get('episode')
