@@ -84,6 +84,7 @@ export async function POST(request: NextRequest) {
       topic?: string
       audience?: string
       tone?: string
+      duration?: string
       notes?: string
     }
 
@@ -97,6 +98,7 @@ export async function POST(request: NextRequest) {
       `Tema: ${body.topic}`,
       body.audience ? `Público-alvo: ${body.audience}` : '',
       body.tone ? `Tom: ${body.tone}` : '',
+      body.duration ? `Duração desejada: ${body.duration}` : '',
       body.notes ? `Notas adicionais: ${body.notes}` : '',
     ].filter(Boolean).join('\n')
 

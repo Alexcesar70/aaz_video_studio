@@ -298,6 +298,27 @@ export default function CreatorsPage() {
                 />
               </div>
 
+              {selectedPlatform?.id === 'youtube' && selectedFormat === 'Vídeo longo' && (
+                <div>
+                  <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 8 }}>DURAÇÃO ESTIMADA</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {['1 min', '3 min', '5 min', '10 min'].map(d => (
+                      <button
+                        key={d}
+                        onClick={() => setBrief(p => ({ ...p, duration: d }))}
+                        style={{
+                          flex: 1, padding: '10px', borderRadius: 8,
+                          background: brief.duration === d ? `${selectedPlatform.color}20` : C.card,
+                          border: `1px solid ${brief.duration === d ? selectedPlatform.color : C.border}`,
+                          color: brief.duration === d ? selectedPlatform.color : C.textDim,
+                          cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                        }}
+                      >{d}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: C.textDim, display: 'block', marginBottom: 8 }}>TOM</label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
