@@ -72,7 +72,7 @@ export default function BoardPage({ params }: { params: { id: string } }) {
       </div>
 
       {/* Canvas */}
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minHeight: 0, height: 'calc(100vh - 50px)' }}>
         <WorkflowCanvas
           boardId={board.id}
           initialNodes={board.nodes}
