@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { WorkflowCanvas } from '@/components/studio/workflow/WorkflowCanvas'
+import { WorkflowSidebar } from '@/components/studio/workflow/WorkflowSidebar'
 import type { Board } from '@/modules/workflow'
 import type { Edge } from '@xyflow/react'
 
@@ -111,14 +112,17 @@ export default function BoardPage({ params }: { params: { id: string } }) {
         </div>
       </div>
 
-      {/* Canvas */}
-      <div style={{ flex: 1, minHeight: 0, height: 'calc(100vh - 50px)' }}>
-        <WorkflowCanvas
-          boardId={board.id}
-          initialNodes={board.nodes}
-          initialConnections={board.connections}
-          onConnectionsChange={handleConnectionsChange}
-        />
+      {/* Sidebar + Canvas */}
+      <div style={{ flex: 1, minHeight: 0, height: 'calc(100vh - 50px)', display: 'flex' }}>
+        <WorkflowSidebar />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <WorkflowCanvas
+            boardId={board.id}
+            initialNodes={board.nodes}
+            initialConnections={board.connections}
+            onConnectionsChange={handleConnectionsChange}
+          />
+        </div>
       </div>
     </div>
   )

@@ -3,12 +3,14 @@
 import React, { useCallback, useMemo, useRef } from 'react'
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Node,
   type Edge,
   type Connection,
@@ -21,7 +23,10 @@ import { NoteNode } from './nodes/NoteNode'
 import { ImageNode } from './nodes/ImageNode'
 import { VideoNode } from './nodes/VideoNode'
 import { ReferenceNode } from './nodes/ReferenceNode'
+import { CharacterNode } from './nodes/CharacterNode'
+import { ScenarioNode } from './nodes/ScenarioNode'
 import { WorkflowContext, type NodeUpdatePatch } from './WorkflowContext'
+import type { DraggableItem } from './WorkflowSidebar'
 import type { WorkflowNode, NodeType } from '@/modules/workflow'
 
 const nodeTypes: NodeTypes = {
@@ -29,6 +34,8 @@ const nodeTypes: NodeTypes = {
   image: ImageNode,
   video: VideoNode,
   reference: ReferenceNode,
+  character: CharacterNode,
+  scenario: ScenarioNode,
 }
 
 interface WorkflowCanvasProps {
@@ -64,9 +71,18 @@ const TOOLBAR_ITEMS: { type: NodeType; icon: string; label: string }[] = [
   { type: 'reference', icon: '🔗', label: 'Ref' },
 ]
 
-export function WorkflowCanvas({ boardId, initialNodes, initialConnections, onConnectionsChange }: WorkflowCanvasProps) {
+export function WorkflowCanvas(props: WorkflowCanvasProps) {
+  return (
+    <ReactFlowProvider>
+      <WorkflowCanvasInner {...props} />
+    </ReactFlowProvider>
+  )
+}
+
+function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConnectionsChange }: WorkflowCanvasProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(toFlowNodes(initialNodes))
   const [edges, setEdges, onEdgesChange] = useEdgesState(toFlowEdges(initialConnections))
+  const { screenToFlowPosition } = useReactFlow()
 
   const positionTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const connectionsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -172,13 +188,17 @@ export function WorkflowCanvas({ boardId, initialNodes, initialConnections, onCo
     })
   }, [setEdges, scheduleConnectionsSave])
 
-  const addNode = useCallback(async (type: NodeType) => {
-    const position = { x: 200 + Math.random() * 300, y: 100 + Math.random() * 200 }
+  const createNodeAt = useCallback(async (
+    type: NodeType,
+    position: { x: number; y: number },
+    label = '',
+    content: Record<string, unknown> = {},
+  ) => {
     try {
       const res = await fetch(`/api/workflow/boards/${boardId}/nodes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, position, label: '', content: {} }),
+        body: JSON.stringify({ type, position, label, content }),
       })
       if (!res.ok) return
       const payload = await res.json() as { node: WorkflowNode }
@@ -195,9 +215,38 @@ export function WorkflowCanvas({ boardId, initialNodes, initialConnections, onCo
     }
   }, [boardId, setNodes])
 
+  const addNode = useCallback((type: NodeType) => {
+    const position = { x: 200 + Math.random() * 300, y: 100 + Math.random() * 200 }
+    createNodeAt(type, position)
+  }, [createNodeAt])
+
+  const onDragOver = useCallback((ev: React.DragEvent) => {
+    ev.preventDefault()
+    ev.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const onDrop = useCallback((ev: React.DragEvent) => {
+    ev.preventDefault()
+    const raw = ev.dataTransfer.getData('application/workflow-item')
+    if (!raw) return
+    let item: DraggableItem
+    try {
+      item = JSON.parse(raw) as DraggableItem
+    } catch {
+      return
+    }
+    const position = screenToFlowPosition({ x: ev.clientX, y: ev.clientY })
+    const type: NodeType = item.kind === 'character' ? 'character' : 'scenario'
+    createNodeAt(type, position, item.label, item.content)
+  }, [screenToFlowPosition, createNodeAt])
+
   return (
     <WorkflowContext.Provider value={contextValue}>
-      <div style={{ width: '100%', height: '100%', minHeight: 500, position: 'relative' }}>
+      <div
+        style={{ width: '100%', height: '100%', minHeight: 500, position: 'relative' }}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
+      >
         {/* Toolbar */}
         <div style={{
           position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
