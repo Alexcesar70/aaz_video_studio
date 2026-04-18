@@ -3850,87 +3850,27 @@ export function AAZStudio() {
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif", fontSize: 14 }}>
 
-      {/* Header */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{currentUser?.workspaceName ?? 'Creative Studio'}</div>
-          <Pill color={C.textDim}>{engine.name}</Pill>
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <Pill color={C.green}>{showBrl && brlRate ? `R$${(cp(engine.id, engine.pricePerSecond) * brlRate).toFixed(2)}/s` : `$${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s`}</Pill>
-          <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
-          {/* Budget pill pra creators com cap mensal */}
-          {myBudget && myBudget.capUsd !== undefined && (
-            <BudgetPill usedUsd={myBudget.usedUsd} capUsd={myBudget.capUsd} percentageUsed={myBudget.percentageUsed ?? 0} />
-          )}
-          {/* Wallet pill — saldo da org (click to open extrato) */}
-          {myWallet && (
-            <WalletPill wallet={myWallet} showBrl={showBrl} brlRate={brlRate} onClick={() => setShowExtrato(true)} />
-          )}
-          {/* BRL toggle */}
-          <button
-            onClick={toggleBrl}
-            title={showBrl ? 'Ocultar conversão BRL' : 'Mostrar valores em BRL'}
-            style={{
-              background: showBrl ? `${C.green}20` : 'transparent',
-              border: `1px solid ${showBrl ? C.green + '60' : C.border}`,
-              borderRadius: 14,
-              padding: '3px 10px',
-              cursor: 'pointer',
-              fontSize: 11,
-              fontWeight: 700,
-              color: showBrl ? C.green : C.textDim,
-              fontFamily: 'inherit',
-              transition: 'all 0.15s',
-            }}
-          >
-            R$
-          </button>
-
-          {/* Link para Super Admin — só para super_admin */}
-          {currentUser?.role === 'super_admin' && (
-            <a
-              href="/admin"
-              title="Painel da Plataforma"
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                background: `${C.gold}15`, border: `1px solid ${C.gold}40`,
-                borderRadius: 14, padding: '4px 12px', textDecoration: 'none',
-                fontSize: 11, fontWeight: 700, color: C.gold,
-                transition: 'all 0.15s',
-              }}
-            >
-              Painel
-            </a>
-          )}
-
-          {currentUser && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: '4px 12px 4px 6px' }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: isAdminUser ? C.gold : C.purple, color: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700 }}>
-                {currentUser.name.charAt(0).toUpperCase()}
-              </div>
-              <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{currentUser.name}</span>
-              {isAdminUser && <span style={{ fontSize: 9, color: C.gold, background: `${C.gold}20`, padding: '1px 6px', borderRadius: 8, border: `1px solid ${C.gold}50`, fontWeight: 700, letterSpacing: '0.3px' }}>ADMIN</span>}
-            </div>
-          )}
-          <button
-            onClick={handleLogout}
-            style={{ background: 'transparent', border: `1px solid ${C.border}`, borderRadius: 8, padding: '6px 14px', cursor: 'pointer', color: C.textDim, fontSize: 13, fontFamily: 'inherit' }}
-          >
-            Sair
-          </button>
-        </div>
+      {/* Info bar compacta */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '6px 24px', display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Pill color={C.textDim}>{engine.name}</Pill>
+        <Pill color={C.green}>{showBrl && brlRate ? `R$${(cp(engine.id, engine.pricePerSecond) * brlRate).toFixed(2)}/s` : `$${cp(engine.id, engine.pricePerSecond).toFixed(2)}/s`}</Pill>
+        <Pill color={C.purple}>{Object.keys(library).length} sheets</Pill>
+        {myBudget && myBudget.capUsd !== undefined && (
+          <BudgetPill usedUsd={myBudget.usedUsd} capUsd={myBudget.capUsd} percentageUsed={myBudget.percentageUsed ?? 0} />
+        )}
+        {myWallet && (
+          <WalletPill wallet={myWallet} showBrl={showBrl} brlRate={brlRate} onClick={() => setShowExtrato(true)} />
+        )}
+        <button onClick={toggleBrl} style={{ background: showBrl ? `${C.green}20` : 'transparent', border: `1px solid ${showBrl ? C.green + '60' : C.border}`, borderRadius: 14, padding: '3px 10px', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: showBrl ? C.green : C.textDim, fontFamily: 'inherit' }}>R$</button>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — só ferramentas criativas (nav principal está na sidebar) */}
       <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, padding: '0 24px' }}>
         {([
           ['studio', 'Estúdio'],
           ['cantigas', '🎵 Cantigas'],
           ['senoide', '🎙 Senoide'],
           ['atelier', '🎨 Atelier'],
-          ['library', 'Assets'],
-          ...(isAdminUser ? [['admin', '👑 Admin']] : []),
         ] as [string, string][]).map(([id, lbl]) => (
           <button key={id} onClick={() => {
             // Proteção de rota: avisa se está no meio de uma cantiga
