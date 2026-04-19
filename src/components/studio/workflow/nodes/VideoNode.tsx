@@ -222,9 +222,10 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
       const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
 
       // Reformata diálogos entre aspas em diretiva de fala pra
-      // disparar TTS+lip-sync no Seedance. Sem isso o trecho "'...'"
-      // vira descrição de cena e fica mudo.
-      let finalPrompt = shapeDialoguePrompt(effectivePrompt)
+      // disparar TTS+lip-sync no Seedance. Amarra ao @image1 quando
+      // há ref de imagem, senão cai em speaker genérico.
+      const speakerTag = refImages.length > 0 ? '@image1' : 'The person in the scene'
+      let finalPrompt = shapeDialoguePrompt(effectivePrompt, speakerTag)
       if (hasOmniRefs) {
         const mentions = (tag: string) => finalPrompt.toLowerCase().includes(tag.toLowerCase())
 

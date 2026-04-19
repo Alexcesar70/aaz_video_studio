@@ -4,22 +4,29 @@
  */
 
 /**
- * Detecta trechos entre aspas ("...", '...', "...", '...') no prompt
- * e os transforma em uma diretiva explícita de fala com lip-sync.
+ * Detecta trechos entre aspas no prompt e os transforma no formato
+ * que o Seedance reconhece como TTS+lip-sync.
  *
  * Problema que resolve:
  *   Prompt natural "Mulher diz 'oi tudo bem'" → Seedance trata tudo
  *   como descrição de cena e gera só movimento (sem TTS).
  *
- * Solução:
- *   Reformata pra "Mulher. Dialogue (spoken in Brazilian Portuguese
- *   with phoneme-accurate lip-sync): 'oi tudo bem'" — esse formato
- *   dispara a geração de fala sincronizada no Seedance.
+ * Padrão AAZ que FUNCIONA (copiado do Scene Director):
  *
- * Detecção de idioma é heurística simples (palavras comuns em PT-BR).
- * Se não bater português, assume inglês.
+ *   [descrição da cena]. @image1 says in Brazilian Portuguese:
+ *   "frase exata". Audio: @image1: "frase exata".
+ *
+ * A REPETIÇÃO do diálogo — primeiro inline na ação, depois num
+ * bloco "Audio:" — é o que dispara o speech generation no Seedance.
+ * Sem o bloco Audio, ele gera só ambient sound.
+ *
+ * Se o caller sabe que há ref image, passa `speakerTag='@image1'`.
+ * Sem ref, usa fallback 'The person in the scene'.
  */
-export function shapeDialoguePrompt(rawPrompt: string): string {
+export function shapeDialoguePrompt(
+  rawPrompt: string,
+  speakerTag: string = '@image1',
+): string {
   if (!rawPrompt) return rawPrompt
 
   // Match aspas retas ou "smart quotes" em qualquer ordem. Usa
@@ -30,17 +37,31 @@ export function shapeDialoguePrompt(rawPrompt: string): string {
   const dialogue = quoteMatch[1].trim()
   if (!dialogue) return rawPrompt
 
-  // Remove a parte da aspa + conectores típicos ("diz:", "fala:", "says:")
-  const scene = rawPrompt
-    .replace(quoteMatch[0], '')
-    .replace(/\s*(?:e\s+)?(?:diz|fala|says|says to\s+\w+|responde|answers|replies)\s*[:,]?\s*$/i, '')
+  // Remove a aspa + conectores redundantes que o user já escreveu,
+  // tipo "...e diz em portugues do Brasil:", "says in English:",
+  // "fala:", "responde:". A gente vai reconstruir esses nos padrões
+  // canônicos do Seedance.
+  let scene = rawPrompt.replace(quoteMatch[0], '').trim()
+
+  // PT: "e diz/fala/responde [em/no/na <idioma>]:"
+  scene = scene
+    .replace(/\s*(?:e\s+)?(?:diz|fala|responde)(?:\s+(?:em|no|na)\s+[^,:.]+?)?[:,]?$/i, '')
+    .replace(/\s*(?:says?|speaks?|answers?|replies)(?:\s+(?:in|with)\s+[^,:.]+?)?[:,]?$/i, '')
     .trim()
-    .replace(/[.,;]+$/, '')
+    .replace(/[.,;:]+$/, '')
+    .trim()
 
   const lang = detectLanguage(rawPrompt)
-
   const prefix = scene.length > 0 ? `${scene}. ` : ''
-  return `${prefix}Dialogue (spoken in ${lang} with phoneme-accurate lip-sync): "${dialogue}"`
+
+  // Formato canônico do Scene Director do AAZ:
+  //   inline: "@image1 says in X with phoneme-accurate lip-sync: ..."
+  //   audio:  "Audio: @image1: ..."
+  // A repetição é intencional e necessária pro TTS disparar.
+  return (
+    `${prefix}${speakerTag} says in ${lang} with phoneme-accurate lip-sync: "${dialogue}". ` +
+    `Audio: ${speakerTag}: "${dialogue}".`
+  )
 }
 
 /**
@@ -48,7 +69,7 @@ export function shapeDialoguePrompt(rawPrompt: string): string {
  * Brazilian Portuguese; senão, English.
  */
 function detectLanguage(text: string): string {
-  const portugueseMarkers = /\b(mulher|homem|menino|menina|ela|ele|vira|diz|fala|para|pra|na|no|do|da|que|se|seu|sua|olha|está|é o|é a|uma|um|com|vai|tem|foi|ser|estou|você|voce)\b/i
+  const portugueseMarkers = /\b(mulher|homem|menino|menina|ela|ele|vira|diz|fala|para|pra|na|no|do|da|que|se|seu|sua|olha|está|é o|é a|uma|um|com|vai|tem|foi|ser|estou|você|voce|portugu[eê]s|brasil)\b/i
   if (portugueseMarkers.test(text)) return 'Brazilian Portuguese'
   return 'English'
 }

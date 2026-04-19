@@ -128,9 +128,11 @@ export function useAvatarGeneration(): UseAvatarGenerationResult {
     const engine = getEngine(engineId)
 
     // ── Reformata diálogos entre aspas em diretiva de fala ──
-    // Trechos entre aspas viram "Dialogue (spoken in X with lip-sync):
-    // ...", que o Seedance reconhece como TTS explícito.
-    let finalPrompt = shapeDialoguePrompt(rawPrompt)
+    // Amarra ao @image1 quando há ref. Shaper emite formato
+    // "@image1 says ... Audio: @image1: ..." (padrão AAZ que
+    // dispara TTS+lip-sync no Seedance).
+    const speakerTag = refImages.length > 0 ? '@image1' : 'The person in the scene'
+    let finalPrompt = shapeDialoguePrompt(rawPrompt, speakerTag)
 
     // ── Substitui @Name/@charId por @imageN ──
     // Copia do AAZStudio.tsx:3562-3575. Essa é a etapa CRÍTICA que
