@@ -1,10 +1,9 @@
 import React from 'react'
 import type { NodeAction } from './NodeActionsToolbar'
 import type { WorkflowContextValue } from '../WorkflowContext'
-import { ActionIcons, DEFAULT_ICON_PROPS } from '../theme/icons'
+import { ActionIcons, type IconComponent } from '../theme/icons'
 
-const iconProps = { size: 14, ...DEFAULT_ICON_PROPS } as const
-const I = (C: typeof ActionIcons.duplicate) => React.createElement(C, iconProps)
+const I = (C: IconComponent) => React.createElement(C, { size: 14 })
 
 /**
  * Factory de ações padrão (duplicate/delete) que todo nó deveria expor.

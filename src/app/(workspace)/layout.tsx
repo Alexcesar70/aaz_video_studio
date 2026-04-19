@@ -4,13 +4,12 @@ import React from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspaceContext'
-import { NavIcons, DEFAULT_ICON_PROPS } from '@/components/studio/workflow/theme/icons'
-import type { LucideIcon } from 'lucide-react'
+import { NavIcons, DEFAULT_ICON_PROPS, type IconComponent } from '@/components/studio/workflow/theme/icons'
 
 interface NavItem {
   href: string
   label: string
-  Icon: LucideIcon
+  Icon: IconComponent
 }
 
 const NAV_ITEMS: NavItem[] = [
