@@ -9,6 +9,7 @@ import { SelectControl, type SelectOption } from '../components/controls/SelectC
 import { CountControl } from '../components/controls/CountControl'
 import { UploadControl } from '../components/controls/UploadControl'
 import { PromptEditor } from '../components/controls/PromptEditor'
+import { ReferenceChip } from '../components/ReferenceChip'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { useUpstreamText, useUpstreamImage } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
@@ -219,6 +220,33 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
             </div>
           )}
         </div>
+
+        {/* Referências anexadas — thumbnails visíveis */}
+        {(referenceImageUrl || (upstreamImage && !referenceImageUrl)) && (
+          <div style={{
+            padding: '0 12px 8px',
+            display: 'flex', gap: 5, flexWrap: 'wrap',
+          }}>
+            {referenceImageUrl && (
+              <ReferenceChip
+                url={referenceImageUrl}
+                kind="image"
+                label="Ref"
+                accent={accent}
+                onRemove={() => patchContent({ referenceImageUrl: undefined })}
+              />
+            )}
+            {upstreamImage && !referenceImageUrl && (
+              <ReferenceChip
+                url={upstreamImage}
+                kind="image"
+                label="Ref"
+                accent={accent}
+                fromUpstream
+              />
+            )}
+          </div>
+        )}
 
         {/* Editor de prompt inline: textarea + Refinar com IA */}
         <div style={{ padding: '0 12px 8px' }}>

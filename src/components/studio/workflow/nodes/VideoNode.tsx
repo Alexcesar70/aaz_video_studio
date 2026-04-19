@@ -7,7 +7,7 @@ import { NodeFrame } from '../components/NodeFrame'
 import { OutputsGrid } from '../components/OutputsGrid'
 import { SelectControl, type SelectOption } from '../components/controls/SelectControl'
 import { UploadControl } from '../components/controls/UploadControl'
-import { PromptEditor } from '../components/controls/PromptEditor'
+import { ReferenceChip } from '../components/ReferenceChip'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { useUpstreamText, useUpstreamImage, useUpstreamVideo, useUpstreamAudio } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
@@ -321,6 +321,63 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
             </div>
           )}
         </div>
+
+        {/* Referências anexadas — thumbnails visíveis */}
+        {(effectiveFirstFrame || effectiveLastFrame || effectiveRefVideo || effectiveAudio) && (
+          <div style={{
+            padding: '0 12px 8px',
+            display: 'flex', gap: 5, flexWrap: 'wrap',
+          }}>
+            {effectiveFirstFrame && (
+              <ReferenceChip
+                url={effectiveFirstFrame}
+                kind="image"
+                label="Start"
+                accent={accent}
+                fromUpstream={!firstFrameUrl && !!upstreamStartFrame}
+                onRemove={firstFrameUrl
+                  ? () => patchContent({ firstFrameUrl: undefined })
+                  : undefined}
+              />
+            )}
+            {effectiveLastFrame && (
+              <ReferenceChip
+                url={effectiveLastFrame}
+                kind="image"
+                label="End"
+                accent={accent}
+                fromUpstream={!lastFrameUrl && !!upstreamEndFrame}
+                onRemove={lastFrameUrl
+                  ? () => patchContent({ lastFrameUrl: undefined })
+                  : undefined}
+              />
+            )}
+            {effectiveRefVideo && (
+              <ReferenceChip
+                url={effectiveRefVideo}
+                kind="video"
+                label="Video ref"
+                accent={accent}
+                fromUpstream={!referenceVideoUrl && !!upstreamRefVideo}
+                onRemove={referenceVideoUrl
+                  ? () => patchContent({ referenceVideoUrl: undefined })
+                  : undefined}
+              />
+            )}
+            {effectiveAudio && (
+              <ReferenceChip
+                url={effectiveAudio}
+                kind="audio"
+                label="Trilha"
+                accent={accent}
+                fromUpstream={!referenceAudioUrl && !!upstreamAudio}
+                onRemove={referenceAudioUrl
+                  ? () => patchContent({ referenceAudioUrl: undefined })
+                  : undefined}
+              />
+            )}
+          </div>
+        )}
 
         {/* Error */}
         {error && (
