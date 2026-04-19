@@ -8,28 +8,42 @@ import { useStore } from '@xyflow/react'
  * mudanças em edges e nodes — re-renderiza automaticamente quando
  * alguém conecta/desconecta ou o texto upstream muda.
  *
- * Procura na data do source por (em ordem):
- * - `refinedPrompt` (saída de SmartPrompter)
- * - `text` (saída de TextNode/NoteNode)
- * - `prompt` (saída de outros nós com prompt)
+ * Faz BFS limitado (até 5 hops) seguindo edges upstream pra encontrar
+ * o primeiro texto concreto disponível. Isso permite "passthrough"
+ * automático: quando user conecta Texto → SmartPrompter → Vídeo SEM
+ * clicar Refinar, o Vídeo ainda recebe o texto cru do TextNode (em
+ * vez de ficar disabled silenciosamente esperando o refinamento).
  *
- * Retorna null se não há conexão ou nenhum campo compatível.
+ * Em cada source, procura (em ordem): refinedPrompt > text > prompt.
  *
- * Reutilizável em qualquer nó que consome texto upstream
- * (SmartPrompter, ImageGenerator, VideoGenerator, Assistant).
+ * Retorna null se nenhum hop ate maxHops trouxe texto compatível.
  */
-export function useUpstreamText(nodeId: string): string | null {
+export function useUpstreamText(nodeId: string, maxHops = 5): string | null {
   return useStore((state) => {
-    const inbound = state.edges.filter(e => e.target === nodeId)
-    if (inbound.length === 0) return null
-    const src = state.nodeLookup.get(inbound[0].source)
-    if (!src) return null
-    const d = src.data as Record<string, unknown>
-    const text = (d.refinedPrompt as string)
-      ?? (d.text as string)
-      ?? (d.prompt as string)
-      ?? null
-    return text && text.trim().length > 0 ? text : null
+    const visited = new Set<string>([nodeId])
+    let current = nodeId
+
+    for (let hop = 0; hop < maxHops; hop++) {
+      const inbound = state.edges.filter(e => e.target === current)
+      if (inbound.length === 0) return null
+      const sourceId = inbound[0].source
+      if (visited.has(sourceId)) return null
+      visited.add(sourceId)
+
+      const src = state.nodeLookup.get(sourceId)
+      if (!src) return null
+
+      const d = src.data as Record<string, unknown>
+      const text = (d.refinedPrompt as string)
+        ?? (d.text as string)
+        ?? (d.prompt as string)
+        ?? null
+      if (text && text.trim().length > 0) return text
+
+      // Sem texto neste source — segue pro upstream dele
+      current = sourceId
+    }
+    return null
   })
 }
 
