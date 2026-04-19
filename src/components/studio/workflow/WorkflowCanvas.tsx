@@ -6,7 +6,6 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
-  MiniMap,
   addEdge,
   useNodesState,
   useEdgesState,
@@ -422,6 +421,9 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
           onPaneClick={() => setContextMenu(null)}
           nodeTypes={nodeTypes}
           fitView
+          fitViewOptions={{ maxZoom: 1, padding: 0.2 }}
+          minZoom={0.25}
+          maxZoom={2}
           deleteKeyCode={['Backspace', 'Delete']}
           style={{ background: wfCanvasBackground }}
           defaultEdgeOptions={{
@@ -431,22 +433,14 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
         >
           <Background color={wfGridColor} gap={wfGridGap} size={1} />
           <Controls
+            showInteractive={false}
             style={{
               background: wfColors.surface,
               border: `1px solid ${wfColors.border}`,
               borderRadius: wfRadius.inner,
               boxShadow: wfShadow.card,
+              opacity: 0.85,
             }}
-          />
-          <MiniMap
-            style={{
-              background: wfColors.surface,
-              border: `1px solid ${wfColors.border}`,
-              borderRadius: wfRadius.inner,
-              boxShadow: wfShadow.card,
-            }}
-            nodeColor={(n) => getNodeTypeMeta((n.type ?? 'note') as NodeType).color}
-            maskColor="rgba(10,8,20,0.75)"
           />
         </ReactFlow>
       </div>
