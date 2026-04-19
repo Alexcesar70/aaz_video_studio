@@ -33,12 +33,21 @@ export interface WorkflowContextValue {
   /** Estado da conexão em drag — null quando idle. */
   connecting: ConnectingState | null
   /**
-   * Tipo de saída do nó atualmente selecionado (se houver). Usado pra
-   * destacar pins compatíveis de outros nós quando o usuário CLICA num
-   * nó (discoverability — "onde posso mandar esse output?"). null quando
-   * nada está selecionado ou o nó selecionado não tem output tipado.
+   * ID do nó atualmente selecionado (se houver). Usado pra identificar
+   * quando um handle pertence ao "próprio nó" (destaca todos os pins
+   * dele pra mostrar capacidade ao user).
+   */
+  selectedNodeId: string | null
+  /**
+   * Output type do nó selecionado. Usado pra destacar inputs
+   * compatíveis em OUTROS nós (direção "onde posso mandar").
    */
   selectedOutputType: DataType | null
+  /**
+   * Input types aceitos pelo nó selecionado. Usado pra destacar
+   * outputs compatíveis em OUTROS nós (direção "de onde posso receber").
+   */
+  selectedInputTypes: DataType[] | null
 }
 
 const noop = () => {}
@@ -49,7 +58,9 @@ export const WorkflowContext = createContext<WorkflowContextValue>({
   duplicateNode: noop,
   generateImageFromPrompt: async () => ({ ok: false, error: 'Canvas não inicializado.' }),
   connecting: null,
+  selectedNodeId: null,
   selectedOutputType: null,
+  selectedInputTypes: null,
 })
 
 export function useWorkflow() {

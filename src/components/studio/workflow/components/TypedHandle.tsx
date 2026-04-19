@@ -1,7 +1,7 @@
 'use client'
 
 import React from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { Handle, Position, useNodeId } from '@xyflow/react'
 import type { DataType } from '../theme/nodeTypeMeta'
 import { isCompatibleConnection } from '../theme/connectionRules'
 import { PortIcons } from '../theme/icons'
@@ -83,19 +83,23 @@ export function TypedHandle({
   label,
   verticalAnchor = 0.5,
 }: TypedHandleProps) {
-  const { connecting, selectedOutputType } = useWorkflow()
+  const { connecting, selectedNodeId, selectedOutputType, selectedInputTypes } = useWorkflow()
+  const myNodeId = useNodeId()
   const color = DATA_TYPE_COLORS[dataType]
   const PortIcon = PortIcons[DATA_TYPE_PORT_ICON[dataType]]
 
   // xyflow precisa saber de qual lado vem pra calcular curva da edge
   const xyPos = side === 'left' ? Position.Left : Position.Right
 
-  // Estado visual — calculado puro a partir de `connecting` + seleção
+  // Estado visual — 4 fases, ordem de prioridade: drag > seleção > idle
   const state = resolveHandleState({
     kind,
     dataType,
     connecting,
+    selectedNodeId,
     selectedOutputType,
+    selectedInputTypes,
+    myNodeId,
   })
 
   const tooltip = label ?? `${kind === 'source' ? 'Saída' : 'Entrada'}: ${DATA_TYPE_LABELS[dataType]}`
@@ -169,18 +173,43 @@ export function TypedHandle({
  * Resolve estado visual do handle a partir do contexto de drag e do tipo
  * do próprio pin. Função pura — toda a lógica visual concentrada aqui.
  */
+/**
+ * 4 fases de destaque, ordem de prioridade (drag > seleção > idle):
+ *
+ * 1. DRAG ATIVO (connecting): user está arrastando cabo — inputs
+ *    compatíveis com o source acendem cor cheia, incompatíveis quase
+ *    somem. Outputs (source) ficam neutros.
+ *
+ * 2. HANDLE DO NÓ SELECIONADO: o próprio nó clicado tem TODOS os pins
+ *    bem visíveis (mostra a "capacidade" do nó: quais ports ele tem).
+ *
+ * 3. HANDLE DE OUTRO NÓ + há nó selecionado: destaque BIDIRECIONAL —
+ *    a) kind=target: compatível se o OUTPUT do selecionado alimenta
+ *       este input (fluxo "onde posso mandar")
+ *    b) kind=source: compatível se este output alimenta algum INPUT
+ *       do selecionado (fluxo "de onde posso receber")
+ *    Incompatíveis ficam atenuados.
+ *
+ * 4. IDLE: sem drag nem seleção — neutro discreto.
+ */
 function resolveHandleState({
   kind,
   dataType,
   connecting,
+  selectedNodeId,
   selectedOutputType,
+  selectedInputTypes,
+  myNodeId,
 }: {
   kind: 'target' | 'source'
   dataType: DataType
   connecting: { sourceDataType: DataType; sourceNodeId: string } | null
+  selectedNodeId: string | null
   selectedOutputType: DataType | null
+  selectedInputTypes: DataType[] | null
+  myNodeId: string | null
 }): { opacity: number; highlight: boolean } {
-  // Durante drag ativo — prioridade máxima (usuário está conectando)
+  // Fase 1: durante drag ativo
   if (connecting) {
     if (kind === 'source') return { opacity: 0.3, highlight: false }
     const compatible = isCompatibleConnection(connecting.sourceDataType, dataType)
@@ -190,18 +219,31 @@ function resolveHandleState({
     }
   }
 
-  // Sem drag mas com nó SELECIONADO com output tipado — destaca
-  // entradas compatíveis pra ajudar o usuário a descobrir onde pode
-  // conectar (discoverability).
-  if (selectedOutputType && kind === 'target') {
-    const compatible = isCompatibleConnection(selectedOutputType, dataType)
+  // Fase 2: este handle pertence ao nó selecionado
+  if (selectedNodeId && myNodeId === selectedNodeId) {
+    return { opacity: 0.95, highlight: true }
+  }
+
+  // Fase 3: há OUTRO nó selecionado — destaque bidirecional
+  if (selectedNodeId) {
+    let compatible = false
+
+    // a) "onde posso mandar" — meu output do selected vai pra input deste
+    if (kind === 'target' && selectedOutputType) {
+      compatible = isCompatibleConnection(selectedOutputType, dataType)
+    }
+    // b) "de onde posso receber" — output deste vai pra algum input do selected
+    if (!compatible && kind === 'source' && selectedInputTypes) {
+      compatible = selectedInputTypes.some(t => isCompatibleConnection(dataType, t))
+    }
+
     return {
       opacity: compatible ? 0.95 : 0.25,
       highlight: compatible,
     }
   }
 
-  // Idle completo — estado neutro, discreto mas visível
+  // Fase 4: idle
   return { opacity: 0.6, highlight: false }
 }
 
