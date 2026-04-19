@@ -27,6 +27,7 @@ import { ScenarioNode } from './nodes/ScenarioNode'
 import { PromptNode } from './nodes/PromptNode'
 import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult } from './WorkflowContext'
 import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
+import { getDataTypeColor } from './components/TypedHandle'
 import { wfCanvasBackground, wfColors, wfGridColor, wfGridGap, wfRadius, wfShadow } from './theme/workflowTheme'
 import { getNodeTypeMeta } from './theme/nodeTypeMeta'
 import { getNodeTypeIcon, DEFAULT_ICON_PROPS } from './theme/icons'
@@ -289,17 +290,45 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
     [updateNode, deleteNode, duplicateNode, generateImageFromPrompt],
   )
 
+  const getEdgeColorFromSource = useCallback((sourceNodeId: string): string => {
+    const node = getNode(sourceNodeId)
+    if (!node) return wfColors.edgeDefault
+    const meta = getNodeTypeMeta((node.type ?? 'note') as NodeType)
+    return getDataTypeColor(meta.outputType ?? 'any')
+  }, [getNode])
+
   const onConnect: OnConnect = useCallback((params: Connection) => {
+    const color = params.source ? getEdgeColorFromSource(params.source) : wfColors.edgeDefault
     setEdges(eds => {
       const newEdges = addEdge({
         ...params,
-        animated: true,
-        style: { stroke: '#7F77DD', strokeWidth: 2 },
+        animated: false,
+        style: { stroke: color, strokeWidth: 2 },
       }, eds)
       scheduleConnectionsSave(newEdges)
       return newEdges
     })
-  }, [setEdges, scheduleConnectionsSave])
+  }, [setEdges, scheduleConnectionsSave, getEdgeColorFromSource])
+
+  // Repinta edges existentes pela cor do source output — roda quando
+  // nodes carregam/mudam. Skip se a cor já bate.
+  useEffect(() => {
+    if (nodes.length === 0) return
+    setEdges(curr => {
+      let changed = false
+      const next = curr.map(e => {
+        const src = nodes.find(n => n.id === e.source)
+        if (!src) return e
+        const meta = getNodeTypeMeta((src.type ?? 'note') as NodeType)
+        const color = getDataTypeColor(meta.outputType ?? 'any')
+        const currentStroke = (e.style as { stroke?: string } | undefined)?.stroke
+        if (currentStroke === color && !e.animated) return e
+        changed = true
+        return { ...e, style: { ...e.style, stroke: color, strokeWidth: 2 }, animated: false }
+      })
+      return changed ? next : curr
+    })
+  }, [nodes, setEdges])
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     onNodesChange(changes)
@@ -430,8 +459,13 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
           deleteKeyCode={['Backspace', 'Delete']}
           style={{ background: wfCanvasBackground }}
           defaultEdgeOptions={{
-            animated: true,
-            style: { stroke: wfColors.edgeDefault, strokeWidth: 1.5 },
+            animated: false,
+            style: { stroke: wfColors.edgeDefault, strokeWidth: 2 },
+          }}
+          connectionLineStyle={{
+            stroke: wfColors.textDim,
+            strokeWidth: 1.5,
+            strokeDasharray: '5 4',
           }}
         >
           <Background color={wfGridColor} gap={wfGridGap} size={1} />

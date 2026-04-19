@@ -1,15 +1,15 @@
 'use client'
 import React, { useState } from 'react'
-import { Handle, Position } from '@xyflow/react'
 import { useWorkflow } from '../WorkflowContext'
 import { SmartPrompter } from '../../SmartPrompter'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
-import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
+import { NodeFrame } from '../components/NodeFrame'
 import { standardNodeActions } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { ActionIcons, UIIcons, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
+import type { NodeAction } from '../components/NodeActionsToolbar'
 
 export function PromptNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
   const { updateNode, generateImageFromPrompt, duplicateNode, deleteNode } = useWorkflow()
@@ -63,10 +63,12 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
   ]
 
   return (
-    <NodeShell type="prompt" selected={selected} colorOverride={accent} width={280}>
-      <NodeActionsToolbar actions={actions} />
-      <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8 }} />
-
+    <NodeFrame
+      inputs={[{ dataType: 'text' }, { dataType: 'image', id: 'ref' }]}
+      outputs={[{ dataType: 'text' }]}
+      actions={actions}
+    >
+      <NodeShell type="prompt" selected={selected} colorOverride={accent} width={280}>
       <NodeHeader
         type="prompt"
         accent={accent}
@@ -173,7 +175,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
         </div>
       )}
 
-      <Handle type="source" position={Position.Right} style={{ background: accent, width: 8, height: 8 }} />
-    </NodeShell>
+      </NodeShell>
+    </NodeFrame>
   )
 }

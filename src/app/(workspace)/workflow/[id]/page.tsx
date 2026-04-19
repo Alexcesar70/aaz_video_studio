@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { WorkflowCanvas, type SaveStatus } from '@/components/studio/workflow/WorkflowCanvas'
 import { WorkflowSidebar } from '@/components/studio/workflow/WorkflowSidebar'
+import { NavIcons, UIIcons, DEFAULT_ICON_PROPS } from '@/components/studio/workflow/theme/icons'
 import type { Board } from '@/modules/workflow'
 import type { Edge } from '@xyflow/react'
 
@@ -15,6 +16,7 @@ export default function BoardPage({ params }: { params: { id: string } }) {
   const [editingName, setEditingName] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
+  const [libraryOpen, setLibraryOpen] = useState(false)
 
   useEffect(() => {
     fetch(`/api/workflow/boards/${params.id}`)
@@ -22,6 +24,25 @@ export default function BoardPage({ params }: { params: { id: string } }) {
       .then(data => setBoard(data?.board ?? null))
       .finally(() => setLoading(false))
   }, [params.id])
+
+  // Shortcut L — toggle biblioteca (não dispara em inputs/textareas)
+  useEffect(() => {
+    const onKey = (ev: KeyboardEvent) => {
+      const target = ev.target as HTMLElement | null
+      const editable = target && (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.isContentEditable
+      )
+      if (editable) return
+      if (ev.key.toLowerCase() === 'l' && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+        ev.preventDefault()
+        setLibraryOpen(o => !o)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const handleConnectionsChange = useCallback(async (edges: Edge[]) => {
     const connections = edges.map(e => ({
@@ -79,7 +100,31 @@ export default function BoardPage({ params }: { params: { id: string } }) {
         flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button onClick={() => router.push('/workflow')} style={{ background: 'transparent', border: 'none', color: C.textDim, cursor: 'pointer', fontSize: 14 }}>←</button>
+          <button
+            onClick={() => router.push('/workflow')}
+            title="Voltar"
+            style={{
+              background: 'transparent', border: 'none', color: C.textDim,
+              cursor: 'pointer', padding: 2, display: 'inline-flex', alignItems: 'center',
+            }}
+          >
+            <UIIcons.chevronLeft size={16} {...DEFAULT_ICON_PROPS} style={{ transform: 'rotate(90deg)' }} />
+          </button>
+          <button
+            onClick={() => setLibraryOpen(o => !o)}
+            title="Biblioteca (L)"
+            style={{
+              background: libraryOpen ? `${C.purple}25` : 'transparent',
+              border: `1px solid ${libraryOpen ? C.purple : 'transparent'}`,
+              color: libraryOpen ? C.text : C.textDim,
+              cursor: 'pointer', padding: '4px 6px', borderRadius: 6,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 11, fontFamily: 'inherit',
+              transition: 'all 120ms ease',
+            }}
+          >
+            <NavIcons.assets size={14} {...DEFAULT_ICON_PROPS} />
+          </button>
           {editingName ? (
             <input
               value={nameDraft}
@@ -111,18 +156,16 @@ export default function BoardPage({ params }: { params: { id: string } }) {
         <SaveIndicator status={saveStatus} />
       </div>
 
-      {/* Sidebar + Canvas */}
-      <div style={{ flex: 1, minHeight: 0, height: 'calc(100vh - 50px)', display: 'flex' }}>
-        <WorkflowSidebar />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <WorkflowCanvas
-            boardId={board.id}
-            initialNodes={board.nodes}
-            initialConnections={board.connections}
-            onConnectionsChange={handleConnectionsChange}
-            onSaveStatusChange={setSaveStatus}
-          />
-        </div>
+      {/* Canvas full width + drawer sobreposto */}
+      <div style={{ flex: 1, minHeight: 0, height: 'calc(100vh - 50px)', position: 'relative' }}>
+        <WorkflowCanvas
+          boardId={board.id}
+          initialNodes={board.nodes}
+          initialConnections={board.connections}
+          onConnectionsChange={handleConnectionsChange}
+          onSaveStatusChange={setSaveStatus}
+        />
+        <WorkflowSidebar open={libraryOpen} onClose={() => setLibraryOpen(false)} />
       </div>
     </div>
   )

@@ -1,14 +1,14 @@
 'use client'
 import React, { useState } from 'react'
-import { Handle, Position } from '@xyflow/react'
 import { useWorkflow } from '../WorkflowContext'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
-import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
+import { NodeFrame } from '../components/NodeFrame'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { ActionIcons, NODE_TYPE_ICONS, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
+import type { NodeAction } from '../components/NodeActionsToolbar'
 
 export function VideoNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
   const { updateNode, duplicateNode, deleteNode } = useWorkflow()
@@ -41,67 +41,68 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   }
 
   return (
-    <NodeShell type="video" selected={selected} colorOverride={accent} width={220} flush>
-      <NodeActionsToolbar actions={actions} />
-      <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8, marginTop: 24 }} />
-
-      <div style={{ padding: '10px 12px 6px' }}>
-        <NodeHeader
-          type="video"
-          accent={accent}
-          label={label || undefined}
-          right={duration !== undefined ? (
-            <span style={{ fontSize: 10, fontFamily: 'monospace', color: wfColors.textDim }}>{duration}s</span>
-          ) : undefined}
-        />
-      </div>
-
-      <div
-        onDoubleClick={() => setEditing(true)}
-        style={{
-          aspectRatio: '16/9', background: wfColors.surfaceDeep,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', position: 'relative',
-          borderTop: `1px solid ${wfColors.border}`,
-          borderBottom: `1px solid ${wfColors.border}`,
-        }}
-      >
-        {url ? (
-          <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted preload="metadata" />
-        ) : (
-          (() => { const I = NODE_TYPE_ICONS.video; return <I size={28} color={wfColors.textFaint} strokeWidth={1.25} /> })()
-        )}
-      </div>
-
-      {editing ? (
-        <div className="nodrag" style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <input
-            value={draftUrl}
-            onChange={e => setDraftUrl(e.target.value)}
-            placeholder="URL do vídeo"
-            autoFocus
-            style={inputStyle}
-          />
-          <input
-            value={draftLabel}
-            onChange={e => setDraftLabel(e.target.value)}
-            placeholder="Legenda"
-            onBlur={save}
-            onKeyDown={e => { if (e.key === 'Enter') save() }}
-            style={inputStyle}
+    <NodeFrame
+      inputs={[{ dataType: 'image', id: 'start' }, { dataType: 'text', id: 'prompt' }]}
+      outputs={[{ dataType: 'video' }]}
+      actions={actions}
+    >
+      <NodeShell type="video" selected={selected} colorOverride={accent} width={220} flush>
+        <div style={{ padding: '10px 12px 6px' }}>
+          <NodeHeader
+            type="video"
+            accent={accent}
+            label={label || undefined}
+            right={duration !== undefined ? (
+              <span style={{ fontSize: 10, fontFamily: 'monospace', color: wfColors.textDim }}>{duration}s</span>
+            ) : undefined}
           />
         </div>
-      ) : (
+
         <div
           onDoubleClick={() => setEditing(true)}
-          style={{ padding: '8px 12px', fontSize: 11, color: wfColors.textDim, cursor: 'text' }}
+          style={{
+            aspectRatio: '16/9', background: wfColors.surfaceDeep,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', position: 'relative',
+            borderTop: `1px solid ${wfColors.border}`,
+            borderBottom: `1px solid ${wfColors.border}`,
+          }}
         >
-          {label || <span style={{ color: wfColors.textFaint }}>Double-click pra editar</span>}
+          {url ? (
+            <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted preload="metadata" />
+          ) : (
+            (() => { const I = NODE_TYPE_ICONS.video; return <I size={28} color={wfColors.textFaint} strokeWidth={1.25} /> })()
+          )}
         </div>
-      )}
 
-      <Handle type="source" position={Position.Right} style={{ background: accent, width: 8, height: 8, marginTop: 24 }} />
-    </NodeShell>
+        {editing ? (
+          <div className="nodrag" style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <input
+              value={draftUrl}
+              onChange={e => setDraftUrl(e.target.value)}
+              placeholder="URL do vídeo"
+              autoFocus
+              style={inputStyle}
+            />
+            <input
+              value={draftLabel}
+              onChange={e => setDraftLabel(e.target.value)}
+              placeholder="Legenda"
+              onBlur={save}
+              onKeyDown={e => { if (e.key === 'Enter') save() }}
+              style={inputStyle}
+            />
+          </div>
+        ) : (
+          <div
+            onDoubleClick={() => setEditing(true)}
+            style={{ padding: '8px 12px', fontSize: 11, color: wfColors.textDim, cursor: 'text' }}
+          >
+            {label || <span style={{ color: wfColors.textFaint }}>Double-click pra editar</span>}
+          </div>
+        )}
+      </NodeShell>
+    </NodeFrame>
   )
 }
 
