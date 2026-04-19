@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useState } from 'react'
 import { Handle, Position, useNodeId } from '@xyflow/react'
 import type { DataType } from '../theme/nodeTypeMeta'
 import { isCompatibleConnection } from '../theme/connectionRules'
@@ -85,6 +85,7 @@ export function TypedHandle({
 }: TypedHandleProps) {
   const { connecting, selectedNodeId, selectedOutputType, selectedInputTypes } = useWorkflow()
   const myNodeId = useNodeId()
+  const [hovered, setHovered] = useState(false)
   const color = DATA_TYPE_COLORS[dataType]
   const PortIcon = PortIcons[DATA_TYPE_PORT_ICON[dataType]]
 
@@ -133,6 +134,8 @@ export function TypedHandle({
         type={kind}
         position={xyPos}
         id={id}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
           width: HITBOX_SIZE,
           height: HITBOX_SIZE,
@@ -155,7 +158,7 @@ export function TypedHandle({
           borderRadius: '50%',
           background: wfColors.surface,
           border: `1.5px solid ${color}`,
-          boxShadow: state.highlight
+          boxShadow: state.highlight || hovered
             ? `0 0 0 3px ${color}33, 0 0 12px ${color}55`
             : `0 0 0 2px ${wfColors.canvasBase}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -165,6 +168,42 @@ export function TypedHandle({
       >
         <PortIcon size={11} color={color} strokeWidth={1.75} />
       </div>
+
+      {/* Tooltip flutuante — só aparece no hover e não intercepta cliques */}
+      {hovered && !connecting && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            [side === 'left' ? 'right' : 'left']: HITBOX_SIZE + 6,
+            padding: '4px 8px',
+            background: wfColors.canvasBase,
+            border: `1px solid ${color}`,
+            borderRadius: 4,
+            color: wfColors.text,
+            fontSize: 10.5,
+            fontWeight: 500,
+            lineHeight: 1.2,
+            whiteSpace: 'nowrap',
+            boxShadow: `0 4px 12px rgba(0,0,0,0.4)`,
+            pointerEvents: 'none',
+            zIndex: 10,
+          } as React.CSSProperties}
+        >
+          <span style={{
+            color,
+            fontSize: 9,
+            fontWeight: 700,
+            letterSpacing: 0.5,
+            textTransform: 'uppercase',
+            marginRight: 6,
+          }}>
+            {kind === 'source' ? 'OUT' : 'IN'}
+          </span>
+          {tooltip}
+        </div>
+      )}
     </div>
   )
 }
