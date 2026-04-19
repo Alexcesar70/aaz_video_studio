@@ -2,12 +2,16 @@
 import React, { useState } from 'react'
 import { Handle, Position } from '@xyflow/react'
 import { useWorkflow } from '../WorkflowContext'
+import { NodeShell } from '../components/NodeShell'
+import { NodeHeader } from '../components/NodeHeader'
+import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function ImageNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
   const { updateNode } = useWorkflow()
   const url = data.url as string | undefined
   const label = (data.label as string) ?? ''
-  const color = '#E5B87A'
+  const accent = (data.color as string) || getNodeTypeMeta('image').color
 
   const [editing, setEditing] = useState(false)
   const [draftUrl, setDraftUrl] = useState(url ?? '')
@@ -22,37 +26,39 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
   }
 
   return (
-    <div style={{
-      background: '#1a1730',
-      border: `2px solid ${selected ? color : '#2A2545'}`,
-      borderRadius: 10,
-      overflow: 'hidden',
-      width: 200,
-      boxShadow: selected ? `0 0 16px ${color}30` : 'none',
-    }}>
-      <Handle type="target" position={Position.Left} style={{ background: color, width: 8, height: 8 }} />
+    <NodeShell type="image" selected={selected} colorOverride={accent} width={220} flush>
+      <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8, marginTop: 24 }} />
+
+      <div style={{ padding: '10px 12px 6px' }}>
+        <NodeHeader type="image" accent={accent} label={label || undefined} />
+      </div>
+
       <div
         onDoubleClick={() => setEditing(true)}
-        style={{ aspectRatio: '16/9', background: '#0f0d1a', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+        style={{
+          aspectRatio: '16/9',
+          background: wfColors.surfaceDeep,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer',
+          borderTop: `1px solid ${wfColors.border}`,
+          borderBottom: `1px solid ${wfColors.border}`,
+        }}
       >
         {url ? (
           <img src={url} alt={label || 'Imagem'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: 32 }}>🖼️</span>
+          <span style={{ fontSize: 28, opacity: 0.4 }}>🖼</span>
         )}
       </div>
+
       {editing ? (
-        <div className="nodrag" style={{ padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="nodrag" style={{ padding: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <input
             value={draftUrl}
             onChange={e => setDraftUrl(e.target.value)}
             placeholder="URL da imagem"
             autoFocus
-            style={{
-              width: '100%', padding: '4px 6px', borderRadius: 4,
-              background: '#0f0d1a', border: '1px solid #2A2545',
-              color: '#E8E5F0', fontSize: 10, fontFamily: 'inherit', outline: 'none',
-            }}
+            style={inputStyle}
           />
           <input
             value={draftLabel}
@@ -60,23 +66,25 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
             placeholder="Legenda"
             onBlur={save}
             onKeyDown={e => { if (e.key === 'Enter') save() }}
-            style={{
-              width: '100%', padding: '4px 6px', borderRadius: 4,
-              background: '#0f0d1a', border: '1px solid #2A2545',
-              color: '#E8E5F0', fontSize: 11, fontFamily: 'inherit', outline: 'none',
-            }}
+            style={inputStyle}
           />
         </div>
       ) : (
         <div
           onDoubleClick={() => setEditing(true)}
-          style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'text' }}
+          style={{ padding: '8px 12px', fontSize: 11, color: wfColors.textDim, cursor: 'text' }}
         >
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#E8E5F0' }}>{label || 'Imagem'}</div>
-          <span style={{ fontSize: 9, color: '#9F9AB8' }}>IMG</span>
+          {label || <span style={{ color: wfColors.textFaint }}>Double-click pra editar</span>}
         </div>
       )}
-      <Handle type="source" position={Position.Right} style={{ background: color, width: 8, height: 8 }} />
-    </div>
+
+      <Handle type="source" position={Position.Right} style={{ background: accent, width: 8, height: 8, marginTop: 24 }} />
+    </NodeShell>
   )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', padding: '5px 7px', borderRadius: wfRadius.control,
+  background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
+  color: wfColors.text, fontSize: 11, fontFamily: 'inherit', outline: 'none',
 }

@@ -28,6 +28,8 @@ import { ScenarioNode } from './nodes/ScenarioNode'
 import { PromptNode } from './nodes/PromptNode'
 import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult } from './WorkflowContext'
 import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
+import { wfCanvasBackground, wfColors, wfGridColor, wfGridGap, wfRadius, wfShadow } from './theme/workflowTheme'
+import { getNodeTypeMeta } from './theme/nodeTypeMeta'
 import type { DraggableItem } from './WorkflowSidebar'
 import type { WorkflowNode, NodeType } from '@/modules/workflow'
 
@@ -379,26 +381,30 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
         <div style={{
           position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)',
           zIndex: 10, display: 'flex', gap: 4,
-          background: '#1a1730', border: '1px solid #2A2545',
-          borderRadius: 10, padding: '6px 8px',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+          background: wfColors.surface, border: `1px solid ${wfColors.border}`,
+          borderRadius: wfRadius.card, padding: '6px 8px',
+          boxShadow: wfShadow.toolbar,
+          backdropFilter: 'blur(6px)',
         }}>
-          {TOOLBAR_ITEMS.map(item => (
-            <button
-              key={item.type}
-              onClick={() => addNode(item.type)}
-              title={item.label}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 5,
-                padding: '6px 12px', borderRadius: 6,
-                background: 'transparent', border: '1px solid #2A2545',
-                color: '#E8E5F0', cursor: 'pointer',
-                fontSize: 12, fontFamily: 'inherit',
-              }}
-            >
-              <span>{item.icon}</span> {item.label}
-            </button>
-          ))}
+          {TOOLBAR_ITEMS.map(item => {
+            const meta = getNodeTypeMeta(item.type)
+            return (
+              <button
+                key={item.type}
+                onClick={() => addNode(item.type)}
+                title={item.label}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 12px', borderRadius: wfRadius.control,
+                  background: 'transparent', border: `1px solid ${wfColors.border}`,
+                  color: wfColors.text, cursor: 'pointer',
+                  fontSize: 11, fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ color: meta.color }}>{item.icon}</span> {item.label}
+              </button>
+            )
+          })}
         </div>
 
         <ReactFlow
@@ -417,20 +423,30 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
           nodeTypes={nodeTypes}
           fitView
           deleteKeyCode={['Backspace', 'Delete']}
-          style={{ background: '#0A0814' }}
+          style={{ background: wfCanvasBackground }}
           defaultEdgeOptions={{
             animated: true,
-            style: { stroke: '#7F77DD', strokeWidth: 2 },
+            style: { stroke: wfColors.edgeDefault, strokeWidth: 1.5 },
           }}
         >
-          <Background color="#2A2545" gap={20} size={1} />
+          <Background color={wfGridColor} gap={wfGridGap} size={1} />
           <Controls
-            style={{ background: '#1a1730', border: '1px solid #2A2545', borderRadius: 8 }}
+            style={{
+              background: wfColors.surface,
+              border: `1px solid ${wfColors.border}`,
+              borderRadius: wfRadius.inner,
+              boxShadow: wfShadow.card,
+            }}
           />
           <MiniMap
-            style={{ background: '#1a1730', border: '1px solid #2A2545', borderRadius: 8 }}
-            nodeColor={() => '#7F77DD'}
-            maskColor="rgba(10,8,20,0.7)"
+            style={{
+              background: wfColors.surface,
+              border: `1px solid ${wfColors.border}`,
+              borderRadius: wfRadius.inner,
+              boxShadow: wfShadow.card,
+            }}
+            nodeColor={(n) => getNodeTypeMeta((n.type ?? 'note') as NodeType).color}
+            maskColor="rgba(10,8,20,0.75)"
           />
         </ReactFlow>
       </div>

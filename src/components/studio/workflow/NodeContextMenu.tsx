@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef } from 'react'
 import { useWorkflow } from './WorkflowContext'
+import { wfColors, wfRadius, wfShadow } from './theme/workflowTheme'
 
 export interface ContextMenuState {
   nodeId: string
@@ -16,11 +17,11 @@ interface Props {
 
 const COLORS = [
   { value: '', label: 'Padrão' },
-  { value: '#7F77DD', label: 'Roxo' },
-  { value: '#5DCAA5', label: 'Verde' },
-  { value: '#E5B87A', label: 'Âmbar' },
+  { value: '#8B5CF6', label: 'Roxo' },
+  { value: '#06B6D4', label: 'Ciano' },
+  { value: '#C6D66E', label: 'Verde' },
+  { value: '#E59866', label: 'Âmbar' },
   { value: '#D4A0C8', label: 'Rosa' },
-  { value: '#AFA9EC', label: 'Lavanda' },
 ]
 
 export function NodeContextMenu({ state, onClose }: Props) {
@@ -52,9 +53,10 @@ export function NodeContextMenu({ state, onClose }: Props) {
       ref={ref}
       style={{
         position: 'fixed', top: state.y, left: state.x, zIndex: 1000,
-        minWidth: 160, padding: 4,
-        background: '#1a1730', border: '1px solid #2A2545', borderRadius: 8,
-        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+        minWidth: 170, padding: 4,
+        background: wfColors.surface, border: `1px solid ${wfColors.border}`,
+        borderRadius: wfRadius.inner, boxShadow: wfShadow.menu,
+        backdropFilter: 'blur(8px)',
         fontFamily: 'inherit',
       }}
     >
@@ -63,19 +65,19 @@ export function NodeContextMenu({ state, onClose }: Props) {
         style={menuItemStyle}
       >
         <span style={{ width: 18 }}>⎘</span> Duplicar
-        <span style={{ marginLeft: 'auto', fontSize: 9, color: '#6B6688' }}>⌘D</span>
+        <span style={{ marginLeft: 'auto', fontSize: 9, color: wfColors.textFaint }}>⌘D</span>
       </button>
       <button
         onClick={handle(() => deleteNode(state.nodeId))}
         style={{ ...menuItemStyle, color: '#ff5d7a' }}
       >
         <span style={{ width: 18 }}>✕</span> Deletar
-        <span style={{ marginLeft: 'auto', fontSize: 9, color: '#6B6688' }}>Del</span>
+        <span style={{ marginLeft: 'auto', fontSize: 9, color: wfColors.textFaint }}>Del</span>
       </button>
 
-      <div style={{ height: 1, background: '#2A2545', margin: '4px 0' }} />
+      <div style={{ height: 1, background: wfColors.border, margin: '4px 0' }} />
 
-      <div style={{ padding: '4px 8px', fontSize: 9, color: '#9F9AB8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+      <div style={{ padding: '4px 8px', fontSize: 9, color: wfColors.textDim, textTransform: 'uppercase', letterSpacing: 0.5 }}>
         Cor
       </div>
       <div style={{ display: 'flex', gap: 4, padding: '2px 8px 6px', flexWrap: 'wrap' }}>
@@ -87,7 +89,7 @@ export function NodeContextMenu({ state, onClose }: Props) {
             style={{
               width: 18, height: 18, borderRadius: 4, padding: 0,
               background: c.value || 'transparent',
-              border: c.value ? '1px solid #2A2545' : '1px dashed #6B6688',
+              border: c.value ? `1px solid ${wfColors.border}` : `1px dashed ${wfColors.textFaint}`,
               cursor: 'pointer',
             }}
           />
@@ -101,6 +103,6 @@ const menuItemStyle: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6, width: '100%',
   padding: '6px 8px', borderRadius: 4,
   background: 'transparent', border: 'none',
-  color: '#E8E5F0', fontSize: 11, fontFamily: 'inherit',
+  color: wfColors.text, fontSize: 11, fontFamily: 'inherit',
   cursor: 'pointer', textAlign: 'left',
 }

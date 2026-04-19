@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { wfColors } from './theme/workflowTheme'
 
 export interface DraggableItem {
   kind: 'character' | 'scenario'
@@ -62,7 +63,7 @@ export function WorkflowSidebar() {
     return (
       <div style={{
         width: 32, flexShrink: 0,
-        background: '#0f0d1a', borderRight: '1px solid #2A2545',
+        background: wfColors.surfaceDeep, borderRight: `1px solid ${wfColors.border}`,
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         paddingTop: 12,
       }}>
@@ -70,7 +71,7 @@ export function WorkflowSidebar() {
           onClick={() => setCollapsed(false)}
           title="Mostrar biblioteca"
           style={{
-            background: 'transparent', border: 'none', color: '#9F9AB8',
+            background: 'transparent', border: 'none', color: wfColors.textDim,
             cursor: 'pointer', fontSize: 16, padding: 4,
           }}
         >→</button>
@@ -81,26 +82,26 @@ export function WorkflowSidebar() {
   return (
     <div style={{
       width: 240, flexShrink: 0,
-      background: '#0f0d1a', borderRight: '1px solid #2A2545',
+      background: wfColors.surfaceDeep, borderRight: `1px solid ${wfColors.border}`,
       display: 'flex', flexDirection: 'column',
     }}>
       {/* Header */}
       <div style={{
-        padding: '10px 12px', borderBottom: '1px solid #2A2545',
+        padding: '10px 12px', borderBottom: `1px solid ${wfColors.border}`,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
       }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: '#E8E5F0', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: wfColors.text, textTransform: 'uppercase', letterSpacing: 0.5 }}>
           Biblioteca
         </span>
         <button
           onClick={() => setCollapsed(true)}
           title="Esconder"
-          style={{ background: 'transparent', border: 'none', color: '#9F9AB8', cursor: 'pointer', fontSize: 14 }}
+          style={{ background: 'transparent', border: 'none', color: wfColors.textDim, cursor: 'pointer', fontSize: 14 }}
         >←</button>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', borderBottom: '1px solid #2A2545' }}>
+      <div style={{ display: 'flex', borderBottom: `1px solid ${wfColors.border}` }}>
         {([
           { key: 'characters' as const, label: 'Personagens', count: characters.length },
           { key: 'scenarios' as const, label: 'Cenários', count: scenarios.length },
@@ -110,9 +111,9 @@ export function WorkflowSidebar() {
             onClick={() => setTab(t.key)}
             style={{
               flex: 1, padding: '8px 4px',
-              background: tab === t.key ? '#1a1730' : 'transparent',
-              border: 'none', borderBottom: tab === t.key ? '2px solid #7F77DD' : '2px solid transparent',
-              color: tab === t.key ? '#E8E5F0' : '#9F9AB8',
+              background: tab === t.key ? wfColors.surface : 'transparent',
+              border: 'none', borderBottom: tab === t.key ? `2px solid ${wfColors.edgeDefault}` : '2px solid transparent',
+              color: tab === t.key ? wfColors.text : wfColors.textDim,
               fontSize: 10, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
@@ -129,8 +130,8 @@ export function WorkflowSidebar() {
           placeholder="Buscar..."
           style={{
             width: '100%', padding: '6px 8px', borderRadius: 6,
-            background: '#1a1730', border: '1px solid #2A2545',
-            color: '#E8E5F0', fontSize: 11, fontFamily: 'inherit', outline: 'none',
+            background: wfColors.surface, border: `1px solid ${wfColors.border}`,
+            color: wfColors.text, fontSize: 11, fontFamily: 'inherit', outline: 'none',
           }}
         />
       </div>
@@ -139,7 +140,7 @@ export function WorkflowSidebar() {
       <div style={{ flex: 1, overflowY: 'auto', padding: '4px 10px 10px' }}>
         {tab === 'characters' && (
           filteredChars.length === 0 ? (
-            <div style={{ fontSize: 11, color: '#6B6688', padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: wfColors.textFaint, padding: 12, textAlign: 'center' }}>
               Nenhum personagem.
             </div>
           ) : (
@@ -161,22 +162,22 @@ export function WorkflowSidebar() {
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: 6, marginBottom: 4, borderRadius: 6,
-                  background: '#1a1730', border: '1px solid #2A2545',
+                  background: wfColors.surface, border: `1px solid ${wfColors.border}`,
                   cursor: 'grab',
                 }}
               >
                 {c.sheetUrl ? (
                   <img src={c.sheetUrl} alt={c.name} style={{ width: 36, height: 36, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />
                 ) : (
-                  <div style={{ width: 36, height: 36, borderRadius: 4, background: '#0f0d1a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 4, background: wfColors.surfaceDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
                     {c.emoji || '👤'}
                   </div>
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#E8E5F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: wfColors.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {c.name}
                   </div>
-                  <div style={{ fontSize: 9, color: '#9F9AB8' }}>
+                  <div style={{ fontSize: 9, color: wfColors.textDim }}>
                     {c.photos || 0} foto{(c.photos || 0) === 1 ? '' : 's'}
                   </div>
                 </div>
@@ -187,7 +188,7 @@ export function WorkflowSidebar() {
 
         {tab === 'scenarios' && (
           filteredScen.length === 0 ? (
-            <div style={{ fontSize: 11, color: '#6B6688', padding: 12, textAlign: 'center' }}>
+            <div style={{ fontSize: 11, color: wfColors.textFaint, padding: 12, textAlign: 'center' }}>
               Nenhum cenário.
             </div>
           ) : (
@@ -203,16 +204,16 @@ export function WorkflowSidebar() {
                 title={`Arrastar ${s.name} pro canvas`}
                 style={{
                   marginBottom: 6, borderRadius: 6, overflow: 'hidden',
-                  background: '#1a1730', border: '1px solid #2A2545',
+                  background: wfColors.surface, border: `1px solid ${wfColors.border}`,
                   cursor: 'grab',
                 }}
               >
-                <div style={{ aspectRatio: '16/9', background: '#0f0d1a' }}>
+                <div style={{ aspectRatio: '16/9', background: wfColors.surfaceDeep }}>
                   {s.imageUrl && (
                     <img src={s.imageUrl} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   )}
                 </div>
-                <div style={{ padding: '4px 8px', fontSize: 11, fontWeight: 600, color: '#E8E5F0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ padding: '4px 8px', fontSize: 11, fontWeight: 600, color: wfColors.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {s.name}
                 </div>
               </div>
@@ -222,8 +223,8 @@ export function WorkflowSidebar() {
       </div>
 
       <div style={{
-        padding: '6px 10px', borderTop: '1px solid #2A2545',
-        fontSize: 9, color: '#6B6688', textAlign: 'center',
+        padding: '6px 10px', borderTop: `1px solid ${wfColors.border}`,
+        fontSize: 9, color: wfColors.textFaint, textAlign: 'center',
       }}>
         Arraste pro canvas
       </div>
