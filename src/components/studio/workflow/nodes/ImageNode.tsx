@@ -41,7 +41,7 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
 
   return (
     <NodeFrame
-      inputs={[{ dataType: 'text', id: 'prompt' }, { dataType: 'image', id: 'ref' }]}
+      inputs={[{ dataType: 'text' }]}
       outputs={[{ dataType: 'image' }]}
       actions={actions}
     >

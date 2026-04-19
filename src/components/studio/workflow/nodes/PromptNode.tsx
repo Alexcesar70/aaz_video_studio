@@ -64,7 +64,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
 
   return (
     <NodeFrame
-      inputs={[{ dataType: 'text' }, { dataType: 'image', id: 'ref' }]}
+      inputs={[{ dataType: 'text' }]}
       outputs={[{ dataType: 'text' }]}
       actions={actions}
     >

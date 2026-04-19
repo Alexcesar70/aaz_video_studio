@@ -42,7 +42,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
 
   return (
     <NodeFrame
-      inputs={[{ dataType: 'image', id: 'start' }, { dataType: 'text', id: 'prompt' }]}
+      inputs={[{ dataType: 'image' }]}
       outputs={[{ dataType: 'video' }]}
       actions={actions}
     >
