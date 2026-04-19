@@ -38,17 +38,23 @@ export function NoteNode({ id, data, selected }: { id: string; data: Record<stri
             autoFocus
             className="nodrag"
             style={{
-              width: '100%', minHeight: 120, padding: 10, borderRadius: wfRadius.inner,
+              width: '100%', minHeight: 150, padding: 12, borderRadius: wfRadius.inner,
               background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-              color: wfColors.text, fontSize: 13, fontFamily: 'inherit',
+              color: wfColors.text, fontSize: 14, fontFamily: 'inherit',
               resize: 'vertical', outline: 'none',
-              lineHeight: 1.5,
+              lineHeight: 1.55,
             }}
           />
         ) : (
           <div
             onDoubleClick={() => setEditing(true)}
-            style={{ fontSize: 13, color: wfColors.text, lineHeight: 1.5, cursor: 'text', minHeight: 100, whiteSpace: 'pre-wrap' }}
+            style={{
+              fontSize: 14, color: wfColors.text, lineHeight: 1.55,
+              cursor: 'text', minHeight: 130, whiteSpace: 'pre-wrap',
+              padding: 12, borderRadius: wfRadius.inner,
+              background: wfColors.surfaceDeep,
+              border: `1px solid ${wfColors.border}`,
+            }}
           >
             {text || <span style={{ color: wfColors.textFaint }}>Double-click pra editar...</span>}
           </div>

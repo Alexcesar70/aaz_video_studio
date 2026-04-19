@@ -5,18 +5,19 @@
  */
 
 export const wfColors = {
-  /** Fundo base do canvas (sólido de fallback) */
-  canvasBase: '#0A0814',
-  /** Topo do gradient radial do canvas */
-  canvasTop: '#140E28',
+  /** Fundo base do canvas (sólido de fallback). Tom acinzentado-roxo
+   *  pra dar respiro aos cards (preto puro comia os containers). */
+  canvasBase: '#14121F',
+  /** Topo do gradient radial do canvas — levemente mais claro */
+  canvasTop: '#1F1A30',
   /** Superfície de cards (nós, toolbar, sidebar) */
-  surface: '#14111F',
+  surface: '#1A1628',
   /** Superfície interna (textareas, inputs dentro de nós) */
-  surfaceDeep: '#0B0915',
-  /** Borda padrão de elementos */
-  border: '#2A2545',
+  surfaceDeep: '#0F0D1A',
+  /** Borda padrão de elementos — mais marcada pra destacar cards */
+  border: '#3A3555',
   /** Borda hover/selected sutil */
-  borderStrong: '#3B3562',
+  borderStrong: '#4F486F',
   /** Texto principal */
   text: '#E8E5F0',
   /** Texto secundário */

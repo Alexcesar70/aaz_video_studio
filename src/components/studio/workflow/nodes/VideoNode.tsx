@@ -188,11 +188,46 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         aspect_ratio: aspectRatio,
         duration,
       }
-      if (effectiveFirstFrame) body.first_frame_url = effectiveFirstFrame
-      if (effectiveLastFrame) body.last_frame_url = effectiveLastFrame
-      if (effectiveRefVideo) body.reference_videos = [effectiveRefVideo]
-      if (effectiveAudio) body.reference_audios = [effectiveAudio]
       if (!soundEnabled) body.generate_audio = false
+
+      /**
+       * Seedance tem 2 modos mutuamente exclusivos:
+       *
+       *   A) omni_reference: passa reference_images (identidade/estilo
+       *      do sujeito) + reference_videos (video-to-video) + audio.
+       *      É o modo "gera video usando essas imagens/videos como
+       *      guia visual". Resultado fiel ao input.
+       *
+       *   B) modo padrão: passa first_frame_url + last_frame_url pra
+       *      INTERPOLAÇÃO entre 2 frames específicos. Gera o video que
+       *      começa exatamente no frame A e termina no frame B.
+       *
+       * Usamos (A) sempre que há QUALQUER ref (imagem do pin start/end,
+       * video ref, audio). Só caímos em (B) se o user NÃO tem nenhuma
+       * ref — caso raro com 2 inputs de imagem frame-a-frame que a
+       * gente pode habilitar via toggle explicito no futuro.
+       *
+       * Isso replica o comportamento "fiel" que o user obteve testando
+       * direto no Seedance: omni_reference com a foto do sujeito +
+       * prompt descrevendo movimento.
+       */
+      const refImages: string[] = []
+      if (effectiveFirstFrame) refImages.push(effectiveFirstFrame)
+      if (effectiveLastFrame) refImages.push(effectiveLastFrame)
+
+      const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
+
+      if (hasOmniRefs) {
+        body.mode = 'omni_reference'
+        if (refImages.length > 0) body.reference_images = refImages
+        if (effectiveRefVideo) body.reference_videos = [effectiveRefVideo]
+        if (effectiveAudio) body.reference_audios = [effectiveAudio]
+      } else {
+        // Sem refs — modo padrão. Mantemos first/last pra eventual uso
+        // mas na prática o user não vai chegar aqui com ref nenhuma.
+        if (effectiveFirstFrame) body.first_frame_url = effectiveFirstFrame
+        if (effectiveLastFrame) body.last_frame_url = effectiveLastFrame
+      }
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -294,7 +329,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
           />
         </div>
 
-        {/* Preview area */}
+        {/* Preview area — outputs > video ref > start frame > placeholder */}
         <div style={{ padding: '0 12px', marginBottom: 8 }}>
           {hasOutputs ? (
             <OutputsGrid
@@ -306,6 +341,60 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
               accent={accent}
               isVideo
             />
+          ) : effectiveRefVideo ? (
+            /* Video ref em tamanho cheio — primeiro frame aparece naturalmente */
+            <div style={{
+              aspectRatio: cellAspect,
+              borderRadius: wfRadius.control,
+              overflow: 'hidden',
+              position: 'relative',
+              background: wfColors.surfaceDeep,
+              border: `1px solid ${accent}55`,
+            }}>
+              <video
+                src={effectiveRefVideo}
+                controls
+                playsInline
+                className="nodrag nowheel"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#000' }}
+              />
+              <div style={{
+                position: 'absolute', top: 6, left: 6, zIndex: 2,
+                padding: '2px 8px', borderRadius: 4,
+                background: accent, color: '#0A0814',
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              }}>
+                Ref · Vídeo
+              </div>
+            </div>
+          ) : effectiveFirstFrame ? (
+            /* Start frame (imagem) em tamanho cheio */
+            <div style={{
+              aspectRatio: cellAspect,
+              borderRadius: wfRadius.control,
+              overflow: 'hidden',
+              position: 'relative',
+              background: wfColors.surfaceDeep,
+              border: `1px solid ${accent}55`,
+            }}>
+              <img
+                src={effectiveFirstFrame}
+                alt="Start frame"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+              <div style={{
+                position: 'absolute', top: 6, left: 6,
+                padding: '2px 8px', borderRadius: 4,
+                background: accent, color: '#0A0814',
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              }}>
+                Start frame
+              </div>
+            </div>
           ) : (
             <div style={{
               aspectRatio: cellAspect,
