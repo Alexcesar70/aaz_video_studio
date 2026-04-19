@@ -53,7 +53,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
   const actions: NodeAction[] = [
     {
       id: 'run',
-      icon: <ActionIcons.run size={14} {...DEFAULT_ICON_PROPS} />,
+      icon: <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />,
       title: 'Gerar agora',
       tone: 'primary',
       disabled: !text.trim() || generating,

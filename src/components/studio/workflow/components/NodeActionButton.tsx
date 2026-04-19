@@ -27,12 +27,12 @@ export function NodeActionButton({ icon, title, onClick, tone = 'default', disab
       className="nodrag"
       style={{
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 26, height: 26, padding: 0,
+        width: 21, height: 21, padding: 0,
         background: 'transparent', border: 'none',
         borderRadius: wfRadius.control,
         color: disabled ? wfColors.textFaint : color,
         cursor: disabled ? 'default' : 'pointer',
-        fontSize: 13, fontFamily: 'inherit',
+        fontSize: 11, fontFamily: 'inherit',
         opacity: disabled ? 0.5 : 1,
         transition: 'background 120ms ease',
       }}

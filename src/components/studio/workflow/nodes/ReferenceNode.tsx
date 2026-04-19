@@ -24,7 +24,7 @@ export function ReferenceNode({ id, data, selected }: { id: string; data: Record
   const actions: NodeAction[] = [
     {
       id: 'edit-url',
-      icon: <ActionIcons.editUrl size={14} {...DEFAULT_ICON_PROPS} />,
+      icon: <ActionIcons.editUrl size={11} {...DEFAULT_ICON_PROPS} />,
       title: 'Editar URL',
       onClick: () => setEditing(true),
     },
