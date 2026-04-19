@@ -72,7 +72,14 @@ export function OutputsGrid({
             }}
           >
             {isVideo ? (
-              <video src={o.url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted preload="metadata" />
+              <video
+                src={o.url}
+                controls
+                preload="metadata"
+                playsInline
+                className="nodrag nowheel"
+                style={{ width: '100%', height: '100%', objectFit: 'cover', background: '#000' }}
+              />
             ) : (
               <img src={o.url} alt={o.alt ?? `Output ${idx + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             )}

@@ -77,7 +77,9 @@ export function NodeShell({
         boxShadow: glow ? undefined : defaultShadow, // animation controla box-shadow quando glow
         animation: glowAnimation,
         color: wfColors.text,
-        overflow: 'hidden',
+        // Sem overflow: hidden — permite dropdowns/popovers internos escaparem
+        // o card. Previews internos (ImageNode, VideoNode etc) têm seu próprio
+        // overflow + borderRadius pra ficar bem arredondados.
         padding: flush ? 0 : padding ?? 10,
         width,
         minWidth,

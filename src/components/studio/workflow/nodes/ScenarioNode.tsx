@@ -29,6 +29,7 @@ export function ScenarioNode({ id, data, selected }: { id: string; data: Record<
           aspectRatio: '16/9', background: wfColors.surfaceDeep,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           borderTop: `1px solid ${wfColors.border}`,
+          overflow: 'hidden',
         }}>
           {imageUrl ? (
             <img src={imageUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

@@ -115,17 +115,10 @@ export function AssistantNode({ id, data, selected }: { id: string; data: Record
     }
   }, [canRun, effectivePrompt, modelId, outputFormat, patchContent])
 
-  const actions: NodeAction[] = useMemo(() => [
-    {
-      id: 'run',
-      icon: <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />,
-      title: effectivePrompt ? 'Executar' : 'Escreva ou conecte um contexto',
-      tone: 'primary',
-      disabled: !canRun,
-      onClick: () => { void handleRun() },
-    },
-    ...standardNodeActions(id, { duplicateNode, deleteNode }),
-  ], [id, effectivePrompt, canRun, handleRun, duplicateNode, deleteNode])
+  const actions: NodeAction[] = useMemo(
+    () => standardNodeActions(id, { duplicateNode, deleteNode }),
+    [id, duplicateNode, deleteNode],
+  )
 
   const hasResult = persistedResult.length > 0
   const displayList = outputFormat === 'list' && persistedList && persistedList.length > 0
@@ -270,7 +263,7 @@ export function AssistantNode({ id, data, selected }: { id: string; data: Record
               cursor: canRun ? 'pointer' : 'default',
             }}
           >
-            <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />
+            <ActionIcons.run size={9} {...DEFAULT_ICON_PROPS} />
             {running ? 'Pensando…' : hasResult ? 'Refazer' : 'Executar'}
           </button>
         </div>

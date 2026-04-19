@@ -1,7 +1,6 @@
 'use client'
 
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import React, { useEffect, useRef, useState } from 'react'
 import { UIIcons, DEFAULT_ICON_PROPS } from '../../theme/icons'
 import { wfColors, wfRadius, wfShadow } from '../../theme/workflowTheme'
 
@@ -9,13 +8,11 @@ import { wfColors, wfRadius, wfShadow } from '../../theme/workflowTheme'
  * Dropdown compacto pra uso dentro de nós do canvas (model picker,
  * aspect picker, etc). Stateless — recebe opções, valor e callback.
  *
- * Painel de opções é renderizado via React Portal (document.body) com
- * position: fixed. Isso evita ser cortado pelo `overflow: hidden` do
- * NodeShell que envolve cada nó (caso contrário só algumas opções
- * apareciam visíveis).
- *
- * Posicionamento: anchor logo abaixo do botão, calculado a partir do
- * getBoundingClientRect. Recalcula em open + scroll/resize.
+ * Posicionamento: painel abre logo abaixo do trigger via `position:
+ * absolute`. Pra não ser cortado pelo card, o NodeShell usa
+ * `overflow: visible` (previews internos têm seu próprio overflow).
+ * Evitamos portal pro body porque isso quebra alinhamento quando o
+ * canvas aplica transforms (pan/zoom do xyflow).
  */
 
 export interface SelectOption {
@@ -35,12 +32,6 @@ export interface SelectControlProps {
   minWidth?: number | string
 }
 
-interface PanelPos {
-  top: number
-  left: number
-  width: number
-}
-
 export function SelectControl({
   options,
   value,
@@ -51,61 +42,30 @@ export function SelectControl({
   minWidth = 90,
 }: SelectControlProps) {
   const [open, setOpen] = useState(false)
-  const [panelPos, setPanelPos] = useState<PanelPos | null>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const panelRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const selected = options.find(o => o.value === value)
-  const [mounted, setMounted] = useState(false)
 
-  useEffect(() => { setMounted(true) }, [])
-
-  // Calcula posição do painel a partir do trigger
-  const recalc = () => {
-    const trigger = triggerRef.current
-    if (!trigger) return
-    const r = trigger.getBoundingClientRect()
-    setPanelPos({
-      top: r.bottom + 4,
-      left: r.left,
-      width: Math.max(r.width, 160),
-    })
-  }
-
-  useLayoutEffect(() => {
-    if (!open) return
-    recalc()
-  }, [open])
-
-  // Click fora / ESC / scroll/resize
   useEffect(() => {
     if (!open) return
     const onDown = (ev: MouseEvent) => {
-      const t = ev.target as Node
-      if (
-        triggerRef.current && !triggerRef.current.contains(t) &&
-        panelRef.current && !panelRef.current.contains(t)
-      ) {
-        setOpen(false)
-      }
+      if (rootRef.current && !rootRef.current.contains(ev.target as Node)) setOpen(false)
     }
     const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') setOpen(false) }
-    const onReposition = () => recalc()
     window.addEventListener('mousedown', onDown)
     window.addEventListener('keydown', onKey)
-    window.addEventListener('scroll', onReposition, true)
-    window.addEventListener('resize', onReposition)
     return () => {
       window.removeEventListener('mousedown', onDown)
       window.removeEventListener('keydown', onKey)
-      window.removeEventListener('scroll', onReposition, true)
-      window.removeEventListener('resize', onReposition)
     }
   }, [open])
 
   return (
-    <div className="nodrag" style={{ position: 'relative', minWidth, display: 'inline-block' }}>
+    <div
+      ref={rootRef}
+      className="nodrag nowheel"
+      style={{ position: 'relative', minWidth, display: 'inline-block' }}
+    >
       <button
-        ref={triggerRef}
         onClick={() => !disabled && setOpen(o => !o)}
         disabled={disabled}
         style={{
@@ -133,22 +93,20 @@ export function SelectControl({
         />
       </button>
 
-      {/* Painel via portal pra escapar do overflow:hidden do NodeShell */}
-      {open && mounted && panelPos && createPortal(
+      {open && (
         <div
-          ref={panelRef}
           className="nodrag nowheel"
           style={{
-            position: 'fixed',
-            top: panelPos.top,
-            left: panelPos.left,
-            minWidth: panelPos.width,
-            zIndex: 9999,
+            position: 'absolute',
+            top: 'calc(100% + 4px)',
+            left: 0,
+            minWidth: '100%',
+            zIndex: 999,
             background: wfColors.surface,
             border: `1px solid ${wfColors.border}`,
             borderRadius: wfRadius.inner,
             boxShadow: wfShadow.menu,
-            maxHeight: 280, overflowY: 'auto',
+            maxHeight: 260, overflowY: 'auto',
             padding: 2,
           }}
         >
@@ -164,6 +122,7 @@ export function SelectControl({
                 color: wfColors.text,
                 fontSize: 11, fontFamily: 'inherit',
                 cursor: 'pointer', textAlign: 'left',
+                whiteSpace: 'nowrap',
               }}
               onMouseEnter={e => { if (opt.value !== value) e.currentTarget.style.background = wfColors.surfaceDeep }}
               onMouseLeave={e => { if (opt.value !== value) e.currentTarget.style.background = 'transparent' }}
@@ -172,8 +131,7 @@ export function SelectControl({
               {opt.hint && <span style={{ fontSize: 9, color: wfColors.textFaint }}>{opt.hint}</span>}
             </button>
           ))}
-        </div>,
-        document.body,
+        </div>
       )}
     </div>
   )

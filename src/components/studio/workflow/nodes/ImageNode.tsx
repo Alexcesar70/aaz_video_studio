@@ -136,17 +136,9 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
   const selectedUrl = persistedOutputs[selectedIndex]?.url ?? legacyUrl
 
   const actions: NodeAction[] = useMemo(() => [
-    {
-      id: 'run',
-      icon: <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />,
-      title: effectivePrompt ? 'Gerar imagem' : 'Escreva ou conecte um prompt',
-      tone: 'primary',
-      disabled: !canRun,
-      onClick: () => { void handleRun() },
-    },
     ...(downloadAction(selectedUrl, 'image.png') ? [downloadAction(selectedUrl, 'image.png')!] : []),
     ...standardNodeActions(id, { duplicateNode, deleteNode }),
-  ], [id, effectivePrompt, canRun, selectedUrl, handleRun, duplicateNode, deleteNode])
+  ], [id, selectedUrl, duplicateNode, deleteNode])
 
   const modelOptions: SelectOption[] = useMemo(
     () => IMAGE_ENGINES.map(e => ({ value: e.id, label: e.name })),
@@ -282,7 +274,7 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
               cursor: canRun ? 'pointer' : 'default',
             }}
           >
-            <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />
+            <ActionIcons.run size={9} {...DEFAULT_ICON_PROPS} />
             {generating ? 'Gerando…' : 'Gerar'}
           </button>
         </div>

@@ -213,17 +213,9 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const selectedUrl = persistedOutputs[selectedIndex]?.url ?? legacyUrl
 
   const actions: NodeAction[] = useMemo(() => [
-    {
-      id: 'run',
-      icon: <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />,
-      title: effectivePrompt ? 'Gerar vídeo' : 'Escreva ou conecte um prompt',
-      tone: 'primary',
-      disabled: !canRun,
-      onClick: () => { void handleRun() },
-    },
     ...(downloadAction(selectedUrl, 'video.mp4') ? [downloadAction(selectedUrl, 'video.mp4')!] : []),
     ...standardNodeActions(id, { duplicateNode, deleteNode }),
-  ], [id, effectivePrompt, canRun, selectedUrl, handleRun, duplicateNode, deleteNode])
+  ], [id, selectedUrl, duplicateNode, deleteNode])
 
   const cellAspect = aspectRatio.replace(':', ' / ')
   const hasOutputs = persistedOutputs.length > 0
@@ -358,7 +350,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
               cursor: canRun ? 'pointer' : 'default',
             }}
           >
-            <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />
+            <ActionIcons.run size={9} {...DEFAULT_ICON_PROPS} />
             {generating ? 'Gerando…' : 'Gerar'}
           </button>
         </div>

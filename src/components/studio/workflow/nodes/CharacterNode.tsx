@@ -29,6 +29,7 @@ export function CharacterNode({ id, data, selected }: { id: string; data: Record
           aspectRatio: '1/1', background: wfColors.surfaceDeep,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           borderTop: `1px solid ${wfColors.border}`,
+          overflow: 'hidden',
         }}>
           {sheetUrl ? (
             <img src={sheetUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />

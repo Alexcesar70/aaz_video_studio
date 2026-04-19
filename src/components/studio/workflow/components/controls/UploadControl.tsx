@@ -86,7 +86,7 @@ export function UploadControl({
         {uploading ? (
           <span style={{ fontSize: 9 }}>…</span>
         ) : (
-          <UIIcons.attach size={11} {...DEFAULT_ICON_PROPS} />
+          <UIIcons.attach size={9} {...DEFAULT_ICON_PROPS} />
         )}
       </button>
       <input

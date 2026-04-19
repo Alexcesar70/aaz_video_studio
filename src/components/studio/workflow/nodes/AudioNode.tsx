@@ -111,17 +111,9 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
   }, [canRun, effectivePrompt, localTitle, style, mode, patchContent])
 
   const actions: NodeAction[] = useMemo(() => [
-    {
-      id: 'run',
-      icon: <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />,
-      title: effectivePrompt ? 'Gerar áudio' : 'Escreva ou conecte um prompt',
-      tone: 'primary',
-      disabled: !canRun,
-      onClick: () => { void handleRun() },
-    },
     ...(downloadAction(url, `${localTitle || 'audio'}.mp3`) ? [downloadAction(url, `${localTitle || 'audio'}.mp3`)!] : []),
     ...standardNodeActions(id, { duplicateNode, deleteNode }),
-  ], [id, effectivePrompt, canRun, url, localTitle, handleRun, duplicateNode, deleteNode])
+  ], [id, url, localTitle, duplicateNode, deleteNode])
 
   return (
     <NodeFrame
@@ -234,7 +226,7 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
               cursor: canRun ? 'pointer' : 'default',
             }}
           >
-            <ActionIcons.run size={11} {...DEFAULT_ICON_PROPS} />
+            <ActionIcons.run size={9} {...DEFAULT_ICON_PROPS} />
             {generating ? 'Gerando…' : 'Gerar'}
           </button>
         </div>

@@ -88,17 +88,10 @@ export function SmartPrompterNode({
     }
   }
 
-  const actions: NodeAction[] = useMemo(() => [
-    {
-      id: 'refine',
-      icon: <UIIcons.refine size={11} {...DEFAULT_ICON_PROPS} />,
-      title: sourcePrompt ? 'Refinar prompt' : 'Conecte um texto pra refinar',
-      tone: 'primary',
-      disabled: !canRefine,
-      onClick: () => { void runRefine() },
-    },
-    ...standardNodeActions(id, { duplicateNode, deleteNode }),
-  ], [id, canRefine, sourcePrompt, runRefine, duplicateNode, deleteNode])
+  const actions: NodeAction[] = useMemo(
+    () => standardNodeActions(id, { duplicateNode, deleteNode }),
+    [id, duplicateNode, deleteNode],
+  )
 
   return (
     <NodeFrame
