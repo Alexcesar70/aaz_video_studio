@@ -52,6 +52,7 @@ const DATA_TYPE_COLORS: Record<DataType, string> = {
   text: '#C6D66E',
   image: '#8B5CF6',
   video: '#06B6D4',
+  audio: '#F472B6',
   prompt: '#E59866',
   any: '#9F9AB8',
 }
@@ -60,6 +61,7 @@ const DATA_TYPE_PORT_ICON: Record<DataType, keyof typeof PortIcons> = {
   text: 'text',
   image: 'image',
   video: 'video',
+  audio: 'audio',
   prompt: 'text',
   any: 'connectorOut',
 }
@@ -68,6 +70,7 @@ const DATA_TYPE_LABELS: Record<DataType, string> = {
   text: 'texto',
   image: 'imagem',
   video: 'vídeo',
+  audio: 'áudio',
   prompt: 'prompt',
   any: 'qualquer',
 }
@@ -80,18 +83,19 @@ export function TypedHandle({
   label,
   verticalAnchor = 0.5,
 }: TypedHandleProps) {
-  const { connecting } = useWorkflow()
+  const { connecting, selectedOutputType } = useWorkflow()
   const color = DATA_TYPE_COLORS[dataType]
   const PortIcon = PortIcons[DATA_TYPE_PORT_ICON[dataType]]
 
   // xyflow precisa saber de qual lado vem pra calcular curva da edge
   const xyPos = side === 'left' ? Position.Left : Position.Right
 
-  // Estado visual — calculado puro a partir de `connecting`
+  // Estado visual — calculado puro a partir de `connecting` + seleção
   const state = resolveHandleState({
     kind,
     dataType,
     connecting,
+    selectedOutputType,
   })
 
   const tooltip = label ?? `${kind === 'source' ? 'Saída' : 'Entrada'}: ${DATA_TYPE_LABELS[dataType]}`
@@ -169,24 +173,36 @@ function resolveHandleState({
   kind,
   dataType,
   connecting,
+  selectedOutputType,
 }: {
   kind: 'target' | 'source'
   dataType: DataType
   connecting: { sourceDataType: DataType; sourceNodeId: string } | null
+  selectedOutputType: DataType | null
 }): { opacity: number; highlight: boolean } {
-  // Sem drag ativo — estado neutro, discreto mas visível
-  if (!connecting) return { opacity: 0.6, highlight: false }
-
-  // Durante drag:
-  // - Sources (outputs) não são alvo, ficam neutros
-  if (kind === 'source') return { opacity: 0.3, highlight: false }
-
-  // - Targets (inputs) acendem se compatíveis com o source ativo
-  const compatible = isCompatibleConnection(connecting.sourceDataType, dataType)
-  return {
-    opacity: compatible ? 1 : 0.12,
-    highlight: compatible,
+  // Durante drag ativo — prioridade máxima (usuário está conectando)
+  if (connecting) {
+    if (kind === 'source') return { opacity: 0.3, highlight: false }
+    const compatible = isCompatibleConnection(connecting.sourceDataType, dataType)
+    return {
+      opacity: compatible ? 1 : 0.12,
+      highlight: compatible,
+    }
   }
+
+  // Sem drag mas com nó SELECIONADO com output tipado — destaca
+  // entradas compatíveis pra ajudar o usuário a descobrir onde pode
+  // conectar (discoverability).
+  if (selectedOutputType && kind === 'target') {
+    const compatible = isCompatibleConnection(selectedOutputType, dataType)
+    return {
+      opacity: compatible ? 0.95 : 0.25,
+      highlight: compatible,
+    }
+  }
+
+  // Idle completo — estado neutro, discreto mas visível
+  return { opacity: 0.6, highlight: false }
 }
 
 export function getDataTypeColor(dataType: DataType): string {

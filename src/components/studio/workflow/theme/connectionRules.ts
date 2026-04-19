@@ -12,10 +12,11 @@ import type { DataType } from './nodeTypeMeta'
 
 /**
  * Matriz de compatibilidade: `source → targets aceitos`.
- * - `text`: prompt/nota livre → pode ir pra qualquer gerador (img, video, SP, assistant)
+ * - `text`: prompt/nota livre → pode ir pra qualquer gerador (img, video, SP, audio, assistant)
  * - `prompt`: prompt refinado (SmartPrompter out) → idem texto
  * - `image`: imagem pronta → pode alimentar gerador de imagem (edit/ref) ou vídeo (frame/ref)
  * - `video`: vídeo pronto → só outro gerador de vídeo (ref/video-to-video)
+ * - `audio`: áudio pronto → entra em video (trilha/narração)
  * - `any`: saída genérica (reference/upload) → aceita em qualquer entrada compatível
  */
 const COMPAT_MATRIX: Record<DataType, DataType[]> = {
@@ -23,7 +24,8 @@ const COMPAT_MATRIX: Record<DataType, DataType[]> = {
   prompt: ['text', 'prompt', 'any'],
   image: ['image', 'any'],
   video: ['video', 'any'],
-  any: ['text', 'prompt', 'image', 'video', 'any'],
+  audio: ['audio', 'any'],
+  any: ['text', 'prompt', 'image', 'video', 'audio', 'any'],
 }
 
 /**

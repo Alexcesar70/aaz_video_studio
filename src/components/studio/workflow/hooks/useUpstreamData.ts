@@ -48,21 +48,23 @@ export function useUpstreamText(nodeId: string, maxHops = 5): string | null {
 }
 
 /**
- * Variante pra buscar uma IMAGEM upstream (selectedOutput > url > sheetUrl/imageUrl).
- * Retorna null se não há conexão ou nenhum campo de imagem.
+ * Lê imagem upstream conectada a um handle específico (via `handleId`)
+ * ou, se omitido, ao primeiro input do nó. Ignora sources do tipo
+ * 'video' — se quer video, use `useUpstreamVideo`.
  *
- * Filtra pra considerar apenas edges cujo source produz tipo `image`
- * (Image Generator, Character, Scenario, Reference). Evita capturar
- * um VideoNode upstream quando o consumidor quer imagem.
+ * @param nodeId - id do nó consumidor
+ * @param handleId - id do handle alvo (ex: 'start', 'end'). Omitir
+ *                  pega primeiro input compatível.
  */
-export function useUpstreamImage(nodeId: string): string | null {
+export function useUpstreamImage(nodeId: string, handleId?: string): string | null {
   return useStore((state) => {
-    const inbound = state.edges.filter(e => e.target === nodeId)
+    const inbound = state.edges.filter(e =>
+      e.target === nodeId && (handleId ? e.targetHandle === handleId : true),
+    )
     for (const edge of inbound) {
       const src = state.nodeLookup.get(edge.source)
       if (!src) continue
-      // Por convenção, Video nodes têm 'video' no type. Pula pra não confundir imagem com vídeo.
-      if (src.type === 'video') continue
+      if (src.type === 'video') continue // pula videos
       const d = src.data as Record<string, unknown>
       const outputs = d.outputs as Array<{ url: string }> | undefined
       const selectedIndex = (d.selectedIndex as number) ?? 0
@@ -78,13 +80,15 @@ export function useUpstreamImage(nodeId: string): string | null {
 }
 
 /**
- * Variante pra buscar um VÍDEO upstream (outputs do Video Generator, ou
- * data.url legada). Só considera nodes do tipo 'video'. Permite
- * video-to-video e video-as-reference.
+ * Lê vídeo upstream conectado a um handle específico (ou ao primeiro).
+ * Só considera nós do tipo 'video'. Permite video-to-video e
+ * video-as-reference.
  */
-export function useUpstreamVideo(nodeId: string): string | null {
+export function useUpstreamVideo(nodeId: string, handleId?: string): string | null {
   return useStore((state) => {
-    const inbound = state.edges.filter(e => e.target === nodeId)
+    const inbound = state.edges.filter(e =>
+      e.target === nodeId && (handleId ? e.targetHandle === handleId : true),
+    )
     for (const edge of inbound) {
       const src = state.nodeLookup.get(edge.source)
       if (!src || src.type !== 'video') continue
@@ -93,6 +97,26 @@ export function useUpstreamVideo(nodeId: string): string | null {
       const selectedIndex = (d.selectedIndex as number) ?? 0
       const fromOutputs = outputs?.[selectedIndex]?.url
       const found = fromOutputs ?? (d.url as string)
+      if (found) return found
+    }
+    return null
+  })
+}
+
+/**
+ * Lê áudio upstream conectado a um handle (ou ao primeiro). Considera
+ * nós do tipo 'audio' — usado pra trilha/narração em VideoGenerator.
+ */
+export function useUpstreamAudio(nodeId: string, handleId?: string): string | null {
+  return useStore((state) => {
+    const inbound = state.edges.filter(e =>
+      e.target === nodeId && (handleId ? e.targetHandle === handleId : true),
+    )
+    for (const edge of inbound) {
+      const src = state.nodeLookup.get(edge.source)
+      if (!src || src.type !== 'audio') continue
+      const d = src.data as Record<string, unknown>
+      const found = (d.url as string) ?? (d.musicUrl as string)
       if (found) return found
     }
     return null

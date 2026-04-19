@@ -305,9 +305,18 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
   // acender pins compatíveis e apagar incompatíveis.
   const [connecting, setConnecting] = useState<ConnectingState | null>(null)
 
+  // Tipo de saída do nó atualmente selecionado — alimenta destaque dos
+  // pins compatíveis em outros nós (discoverability ao clicar).
+  const selectedOutputType = useMemo((): DataType | null => {
+    const sel = nodes.find(n => n.selected)
+    if (!sel) return null
+    const meta = getNodeTypeMeta((sel.type ?? 'note') as NodeType)
+    return meta.outputType ?? null
+  }, [nodes])
+
   const contextValue = useMemo(
-    () => ({ updateNode, deleteNode, duplicateNode, generateImageFromPrompt, connecting }),
-    [updateNode, deleteNode, duplicateNode, generateImageFromPrompt, connecting],
+    () => ({ updateNode, deleteNode, duplicateNode, generateImageFromPrompt, connecting, selectedOutputType }),
+    [updateNode, deleteNode, duplicateNode, generateImageFromPrompt, connecting, selectedOutputType],
   )
 
   const getNodeOutputType = useCallback((nodeId: string): DataType => {

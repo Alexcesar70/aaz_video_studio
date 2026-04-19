@@ -9,7 +9,7 @@ import { SelectControl, type SelectOption } from '../components/controls/SelectC
 import { UploadControl } from '../components/controls/UploadControl'
 import { PromptEditor } from '../components/controls/PromptEditor'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
-import { useUpstreamText, useUpstreamImage, useUpstreamVideo } from '../hooks/useUpstreamData'
+import { useUpstreamText, useUpstreamImage, useUpstreamVideo, useUpstreamAudio } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { ActionIcons, NODE_TYPE_ICONS, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
@@ -70,16 +70,21 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Upstream (reativo)
+  // Upstream (reativo) — cada handle tem id próprio pra distinguir
   const upstreamText = useUpstreamText(id)
-  const upstreamImage = useUpstreamImage(id)
-  const upstreamVideo = useUpstreamVideo(id)
+  const upstreamStartFrame = useUpstreamImage(id, 'start')
+  const upstreamEndFrame = useUpstreamImage(id, 'end')
+  const upstreamRefVideo = useUpstreamVideo(id, 'ref')
+  const upstreamAudio = useUpstreamAudio(id, 'audio')
 
   // Prompt efetivo: local tem precedência; se vazio, usa upstream
   const effectivePrompt = (localPrompt.trim() || upstreamText?.trim() || '')
-  const effectiveFirstFrame = firstFrameUrl ?? upstreamImage ?? undefined
+  const effectiveFirstFrame = firstFrameUrl ?? upstreamStartFrame ?? undefined
+  const effectiveLastFrame = lastFrameUrl ?? upstreamEndFrame ?? undefined
   const referenceVideoUrl = (data.referenceVideoUrl as string) ?? undefined
-  const effectiveRefVideo = upstreamVideo ?? referenceVideoUrl
+  const effectiveRefVideo = upstreamRefVideo ?? referenceVideoUrl
+  const referenceAudioUrl = (data.referenceAudioUrl as string) ?? undefined
+  const effectiveAudio = upstreamAudio ?? referenceAudioUrl
   const canRun = effectivePrompt.length > 0 && !generating
 
   const engine = useMemo(() => getEngine(modelId), [modelId])
@@ -169,8 +174,9 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         duration,
       }
       if (effectiveFirstFrame) body.first_frame_url = effectiveFirstFrame
-      if (lastFrameUrl) body.last_frame_url = lastFrameUrl
+      if (effectiveLastFrame) body.last_frame_url = effectiveLastFrame
       if (effectiveRefVideo) body.reference_videos = [effectiveRefVideo]
+      if (effectiveAudio) body.reference_audios = [effectiveAudio]
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -210,7 +216,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
       setError('Erro de conexão.')
       setGenerating(false)
     }
-  }, [canRun, effectivePrompt, modelId, aspectRatio, duration, effectiveFirstFrame, lastFrameUrl, effectiveRefVideo, patchContent])
+  }, [canRun, effectivePrompt, modelId, aspectRatio, duration, effectiveFirstFrame, effectiveLastFrame, effectiveRefVideo, effectiveAudio, patchContent])
 
   const handleSelectOutput = useCallback((idx: number) => {
     patchContent({ selectedIndex: idx, url: persistedOutputs[idx]?.url })
@@ -239,9 +245,11 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   return (
     <NodeFrame
       inputs={[
-        { dataType: 'text', id: 'prompt' },
-        { dataType: 'image', id: 'frame' },
-        { dataType: 'video', id: 'ref' },
+        { dataType: 'text', id: 'prompt', label: 'Prompt' },
+        { dataType: 'image', id: 'start', label: 'Start frame' },
+        { dataType: 'image', id: 'end', label: 'End frame' },
+        { dataType: 'video', id: 'ref', label: 'Referência (video-to-video)' },
+        { dataType: 'audio', id: 'audio', label: 'Trilha de áudio' },
       ]}
       outputs={[{ dataType: 'video' }]}
       actions={actions}

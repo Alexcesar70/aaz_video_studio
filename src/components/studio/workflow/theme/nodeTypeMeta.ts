@@ -20,7 +20,7 @@ export interface NodeTypeMeta {
 }
 
 export type NodeCategory = 'source' | 'generator' | 'transformer' | 'asset' | 'output'
-export type DataType = 'text' | 'image' | 'video' | 'prompt' | 'any'
+export type DataType = 'text' | 'image' | 'video' | 'audio' | 'prompt' | 'any'
 
 export const NODE_TYPE_META: Record<NodeType, NodeTypeMeta> = {
   note: {
@@ -59,7 +59,7 @@ export const NODE_TYPE_META: Record<NodeType, NodeTypeMeta> = {
     icon: '▶',
     label: 'Vídeo',
     category: 'generator',
-    inputTypes: ['image', 'text', 'video'],
+    inputTypes: ['image', 'text', 'video', 'audio'],
     outputType: 'video',
   },
   reference: {
@@ -89,7 +89,7 @@ export const NODE_TYPE_META: Record<NodeType, NodeTypeMeta> = {
     label: 'Áudio',
     category: 'generator',
     inputTypes: ['text', 'prompt'],
-    outputType: 'any',
+    outputType: 'audio',
   },
   assistant: {
     color: '#60A5FA',
