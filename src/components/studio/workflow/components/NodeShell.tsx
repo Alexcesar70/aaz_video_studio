@@ -68,6 +68,14 @@ export function NodeShell({
 
   const defaultShadow = selected ? wfShadow.cardSelected(accent) : wfShadow.card
 
+  // Quando width é definido numericamente, travamos minWidth = maxWidth = width
+  // pra prevenir que conteúdo interno (video nativo, dropdowns etc.) estique o
+  // card além do declarado.
+  const lockedWidth =
+    typeof width === 'number' && minWidth === undefined && maxWidth === undefined
+      ? { width, minWidth: width, maxWidth: width }
+      : { width, minWidth, maxWidth }
+
   return (
     <div
       style={{
@@ -77,13 +85,12 @@ export function NodeShell({
         boxShadow: glow ? undefined : defaultShadow, // animation controla box-shadow quando glow
         animation: glowAnimation,
         color: wfColors.text,
+        boxSizing: 'border-box',
         // Sem overflow: hidden — permite dropdowns/popovers internos escaparem
         // o card. Previews internos (ImageNode, VideoNode etc) têm seu próprio
         // overflow + borderRadius pra ficar bem arredondados.
         padding: flush ? 0 : padding ?? 10,
-        width,
-        minWidth,
-        maxWidth,
+        ...lockedWidth,
         transition: 'box-shadow 150ms ease, border-color 150ms ease',
         ...style,
       }}
