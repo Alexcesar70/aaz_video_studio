@@ -1,48 +1,65 @@
 'use client'
 import React, { useState } from 'react'
-import { Handle, Position } from '@xyflow/react'
+import { useWorkflow } from '../WorkflowContext'
+import { NodeShell } from '../components/NodeShell'
+import { NodeHeader } from '../components/NodeHeader'
+import { NodeFrame } from '../components/NodeFrame'
+import { standardNodeActions } from '../components/nodeActions'
+import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { wfColors, wfRadius } from '../theme/workflowTheme'
 
-export function NoteNode({ data, selected }: { data: Record<string, unknown>; selected: boolean }) {
+export function NoteNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
+  const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState((data.text as string) ?? '')
-  const color = (data.color as string) ?? '#7F77DD'
+  const accent = (data.color as string) || getNodeTypeMeta('note').color
+
+  const handleBlur = () => {
+    setEditing(false)
+    if (text !== (data.text ?? '')) {
+      updateNode(id, { content: { text } })
+    }
+  }
 
   return (
-    <div style={{
-      background: '#1a1730',
-      border: `2px solid ${selected ? color : '#2A2545'}`,
-      borderRadius: 10,
-      padding: '12px 14px',
-      minWidth: 180,
-      maxWidth: 280,
-      boxShadow: selected ? `0 0 16px ${color}30` : 'none',
-    }}>
-      <Handle type="target" position={Position.Left} style={{ background: color, width: 8, height: 8 }} />
-      <div style={{ fontSize: 10, color: '#9F9AB8', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span>📝</span> Nota
-      </div>
-      {editing ? (
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onBlur={() => { setEditing(false); if (data.onUpdate) (data.onUpdate as (v: Record<string, unknown>) => void)({ text }) }}
-          autoFocus
-          style={{
-            width: '100%', minHeight: 60, padding: 6, borderRadius: 6,
-            background: '#0f0d1a', border: '1px solid #2A2545',
-            color: '#E8E5F0', fontSize: 12, fontFamily: 'inherit',
-            resize: 'vertical', outline: 'none',
-          }}
-        />
-      ) : (
-        <div
-          onDoubleClick={() => setEditing(true)}
-          style={{ fontSize: 12, color: '#E8E5F0', lineHeight: 1.5, cursor: 'text', minHeight: 30 }}
-        >
-          {text || 'Double-click pra editar...'}
-        </div>
-      )}
-      <Handle type="source" position={Position.Right} style={{ background: color, width: 8, height: 8 }} />
-    </div>
+    <NodeFrame
+      inputs={[{ dataType: 'text' }]}
+      outputs={[{ dataType: 'text' }]}
+      actions={standardNodeActions(id, { duplicateNode, deleteNode })}
+    >
+      <NodeShell type="note" selected={selected} colorOverride={accent} width={300}>
+        <NodeHeader type="note" accent={accent} />
+
+        {editing ? (
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onBlur={handleBlur}
+            autoFocus
+            className="nodrag"
+            style={{
+              width: '100%', minHeight: 150, padding: 12, borderRadius: wfRadius.inner,
+              background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
+              color: wfColors.text, fontSize: 14, fontFamily: 'inherit',
+              resize: 'vertical', outline: 'none',
+              lineHeight: 1.55,
+            }}
+          />
+        ) : (
+          <div
+            onDoubleClick={() => setEditing(true)}
+            style={{
+              fontSize: 14, color: wfColors.text, lineHeight: 1.55,
+              cursor: 'text', minHeight: 130, whiteSpace: 'pre-wrap',
+              padding: 12, borderRadius: wfRadius.inner,
+              background: wfColors.surfaceDeep,
+              border: `1px solid ${wfColors.border}`,
+            }}
+          >
+            {text || <span style={{ color: wfColors.textFaint }}>Double-click pra editar...</span>}
+          </div>
+        )}
+      </NodeShell>
+    </NodeFrame>
   )
 }

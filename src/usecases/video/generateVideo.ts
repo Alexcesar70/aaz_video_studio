@@ -100,6 +100,11 @@ export async function generateVideo(
   })
 
   console.log(`[generateVideo] engine=${engine.id} duration=${req.duration}s`)
+  // Debug full payload for avatar troubleshooting — REMOVER depois
+  console.log(`[generateVideo] SEGMIND PAYLOAD →`, JSON.stringify({
+    endpoint,
+    ...enginePayload,
+  }, null, 2))
   const videoBuffer = await provider.generate(enginePayload, endpoint)
   const videoSizeMB = (videoBuffer.byteLength / 1024 / 1024).toFixed(2)
 

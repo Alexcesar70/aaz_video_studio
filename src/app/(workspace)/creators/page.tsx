@@ -81,18 +81,33 @@ export default function CreatorsHub() {
             Seu hub de conteúdo pra redes sociais
           </p>
         </div>
-        <button
-          onClick={() => router.push('/creators/new')}
-          style={{
-            background: `linear-gradient(135deg, ${C.purple}, #534AB7)`,
-            border: 'none', borderRadius: 10, padding: '12px 24px',
-            color: '#fff', fontSize: 14, fontWeight: 700,
-            cursor: 'pointer', fontFamily: 'inherit',
-            display: 'flex', alignItems: 'center', gap: 8,
-          }}
-        >
-          ✨ Novo Conteúdo
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={() => router.push('/creators/avatar/new')}
+            title="Criar vídeo de avatar falante usando Character da biblioteca"
+            style={{
+              background: 'transparent',
+              border: `1px solid #14B8A6`, borderRadius: 10, padding: '12px 20px',
+              color: '#14B8A6', fontSize: 14, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            🗣 Novo Avatar
+          </button>
+          <button
+            onClick={() => router.push('/creators/new')}
+            style={{
+              background: `linear-gradient(135deg, ${C.purple}, #534AB7)`,
+              border: 'none', borderRadius: 10, padding: '12px 24px',
+              color: '#fff', fontSize: 14, fontWeight: 700,
+              cursor: 'pointer', fontFamily: 'inherit',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}
+          >
+            ✨ Novo Conteúdo
+          </button>
+        </div>
       </div>
 
       {/* Stats cards */}

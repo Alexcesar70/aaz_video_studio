@@ -1,34 +1,377 @@
 'use client'
-import React from 'react'
-import { Handle, Position } from '@xyflow/react'
+import React, { useCallback, useMemo, useState } from 'react'
+import { useWorkflow } from '../WorkflowContext'
+import { NodeShell } from '../components/NodeShell'
+import { NodeHeader } from '../components/NodeHeader'
+import { NodeFrame } from '../components/NodeFrame'
+import { OutputsGrid } from '../components/OutputsGrid'
+import { SelectControl, type SelectOption } from '../components/controls/SelectControl'
+import { CountControl } from '../components/controls/CountControl'
+import { UploadControl } from '../components/controls/UploadControl'
+import { PromptEditor } from '../components/controls/PromptEditor'
+import { ReferenceChip } from '../components/ReferenceChip'
+import { standardNodeActions, downloadAction } from '../components/nodeActions'
+import { useUpstreamText, useUpstreamImage } from '../hooks/useUpstreamData'
+import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { ActionIcons, NODE_TYPE_ICONS, DEFAULT_ICON_PROPS } from '../theme/icons'
+import { wfColors, wfRadius } from '../theme/workflowTheme'
+import type { NodeAction } from '../components/NodeActionsToolbar'
+import { IMAGE_ENGINES, DEFAULT_IMAGE_ENGINE_ID } from '@/lib/imageEngines'
 
-export function ImageNode({ data, selected }: { data: Record<string, unknown>; selected: boolean }) {
-  const url = data.url as string | undefined
-  const label = (data.label as string) ?? 'Imagem'
-  const color = '#E5B87A'
+/**
+ * Image Generator — equivalente ao container "Image Generator" do
+ * Freepik Spaces. Funciona como nó gerador ativo:
+ *
+ * - Textarea interna (ou herda texto do upstream via edge)
+ * - Seletor de modelo (Segmind engines)
+ * - Seletor de aspect ratio
+ * - Seletor de quantidade (1/2/4)
+ * - Upload de imagem de referência (blob)
+ * - Botão Run dispara /api/generate-image
+ * - Outputs ficam DENTRO do card em grid adaptativo
+ * - Click num output → "selecionado" alimenta o handle de saída
+ * - Container adapta ao aspect ratio do output escolhido
+ *
+ * Mantém compatibilidade com boards antigos (campo legado `url` vira
+ * primeiro output). Uncle Bob: controles extraídos em components/
+ * separados, cada um single-responsibility.
+ */
+
+const ASPECT_OPTIONS: SelectOption[] = [
+  { value: '1:1', label: '1:1', hint: 'Quadrado' },
+  { value: '16:9', label: '16:9', hint: 'Wide' },
+  { value: '9:16', label: '9:16', hint: 'Stories' },
+  { value: '4:3', label: '4:3', hint: 'Clássico' },
+  { value: '3:4', label: '3:4', hint: 'Retrato' },
+]
+
+const COUNT_OPTIONS = [1, 2, 4] as const
+
+interface StoredOutput { url: string }
+
+type ImageCount = typeof COUNT_OPTIONS[number]
+
+function parseCount(raw: unknown): ImageCount {
+  return raw === 2 || raw === 4 ? raw : 1
+}
+
+export function ImageNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
+  const { updateNode, duplicateNode, deleteNode } = useWorkflow()
+  const accent = (data.color as string) || getNodeTypeMeta('image').color
+
+  // Estado persistido
+  const persistedPrompt = (data.prompt as string) ?? ''
+  const modelId = (data.modelId as string) ?? DEFAULT_IMAGE_ENGINE_ID
+  const aspectRatio = (data.aspectRatio as string) ?? '1:1'
+  const count = parseCount(data.count)
+  const referenceImageUrl = (data.referenceImageUrl as string) ?? undefined
+
+  // Outputs: retrocompat com boards antigos que só guardavam `url`
+  const legacyUrl = data.url as string | undefined
+  const persistedOutputs = (data.outputs as StoredOutput[] | undefined)
+    ?? (legacyUrl ? [{ url: legacyUrl }] : [])
+  const selectedIndex = typeof data.selectedIndex === 'number' ? data.selectedIndex : 0
+
+  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
+  const [generating, setGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const upstreamText = useUpstreamText(id)
+  const upstreamImage = useUpstreamImage(id)
+
+  // Prompt efetivo: local tem precedência; se vazio, usa upstream
+  const effectivePrompt = (localPrompt.trim() || upstreamText?.trim() || '')
+  const effectiveReference = upstreamImage ?? referenceImageUrl
+  const canRun = effectivePrompt.length > 0 && !generating
+
+  const patchContent = useCallback((patch: Record<string, unknown>) => {
+    updateNode(id, { content: patch })
+  }, [id, updateNode])
+
+  const commitPrompt = useCallback(() => {
+    if (localPrompt !== persistedPrompt) {
+      patchContent({ prompt: localPrompt })
+    }
+  }, [localPrompt, persistedPrompt, patchContent])
+
+  const handleRefined = useCallback((refined: string) => {
+    setLocalPrompt(refined)
+    patchContent({ prompt: refined })
+  }, [patchContent])
+
+  const handleRun = useCallback(async () => {
+    if (!canRun) return
+    setGenerating(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: effectivePrompt,
+          num_outputs: count,
+          aspect_ratio: aspectRatio,
+          engineId: modelId,
+          reference_image_url: effectiveReference,
+          // Quando há referência, força adesão alta pra preservar o sujeito
+          ...(effectiveReference ? { ref_strength: 0.9 } : {}),
+        }),
+      })
+      const payload = await res.json() as { imageUrls?: string[]; error?: string }
+      if (!res.ok) {
+        setError(payload.error ?? 'Falha ao gerar.')
+        return
+      }
+      const urls = payload.imageUrls ?? []
+      if (urls.length === 0) {
+        setError('Sem imagem retornada.')
+        return
+      }
+      const outputs: StoredOutput[] = urls.map(url => ({ url }))
+      patchContent({ outputs, selectedIndex: 0, url: urls[0] })
+    } catch {
+      setError('Erro de conexão.')
+    } finally {
+      setGenerating(false)
+    }
+  }, [canRun, effectivePrompt, count, aspectRatio, modelId, effectiveReference, patchContent])
+
+  const handleSelectOutput = useCallback((idx: number) => {
+    patchContent({ selectedIndex: idx, url: persistedOutputs[idx]?.url })
+  }, [patchContent, persistedOutputs])
+
+  const handleDeleteOutput = useCallback((idx: number) => {
+    const next = persistedOutputs.filter((_, i) => i !== idx)
+    const nextSelected = Math.min(selectedIndex, Math.max(0, next.length - 1))
+    patchContent({
+      outputs: next,
+      selectedIndex: next.length > 0 ? nextSelected : 0,
+      url: next[nextSelected]?.url,
+    })
+  }, [persistedOutputs, selectedIndex, patchContent])
+
+  const selectedUrl = persistedOutputs[selectedIndex]?.url ?? legacyUrl
+
+  const actions: NodeAction[] = useMemo(() => [
+    ...(downloadAction(selectedUrl, 'image.png') ? [downloadAction(selectedUrl, 'image.png')!] : []),
+    ...standardNodeActions(id, { duplicateNode, deleteNode }),
+  ], [id, selectedUrl, duplicateNode, deleteNode])
+
+  const modelOptions: SelectOption[] = useMemo(
+    () => IMAGE_ENGINES.map(e => ({ value: e.id, label: e.name })),
+    [],
+  )
+
+  const cellAspect = aspectRatio.replace(':', ' / ')
+  const hasOutputs = persistedOutputs.length > 0
 
   return (
-    <div style={{
-      background: '#1a1730',
-      border: `2px solid ${selected ? color : '#2A2545'}`,
-      borderRadius: 10,
-      overflow: 'hidden',
-      width: 200,
-      boxShadow: selected ? `0 0 16px ${color}30` : 'none',
-    }}>
-      <Handle type="target" position={Position.Left} style={{ background: color, width: 8, height: 8 }} />
-      <div style={{ aspectRatio: '16/9', background: '#0f0d1a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {url ? (
-          <img src={url} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-        ) : (
-          <span style={{ fontSize: 32 }}>🖼️</span>
+    <NodeFrame
+      inputs={[{ dataType: 'text' }]}
+      outputs={[{ dataType: 'image' }]}
+      actions={actions}
+    >
+      <NodeShell
+        type="image"
+        selected={selected}
+        colorOverride={accent}
+        width={300}
+        flush
+        glow={generating ? 'pulse' : undefined}
+      >
+        <div style={{ padding: '10px 12px 2px' }}>
+          <NodeHeader
+            type="image"
+            accent={accent}
+            right={generating ? (
+              <span style={{ fontSize: 10, color: accent }}>gerando…</span>
+            ) : hasOutputs ? (
+              <span style={{ fontSize: 10, color: wfColors.textDim }}>
+                {persistedOutputs.length} output{persistedOutputs.length > 1 ? 's' : ''}
+              </span>
+            ) : undefined}
+          />
+        </div>
+
+        {/* Preview area — outputs (se há) ou REFERÊNCIA (grande) ou placeholder */}
+        <div style={{
+          padding: '0 12px',
+          marginBottom: 8,
+        }}>
+          {hasOutputs ? (
+            <OutputsGrid
+              outputs={persistedOutputs}
+              selectedIndex={selectedIndex}
+              onSelect={handleSelectOutput}
+              onDelete={handleDeleteOutput}
+              cellAspect={cellAspect}
+              accent={accent}
+            />
+          ) : effectiveReference ? (
+            /* Mostra a referência em tamanho cheio pra user ver o que anexou */
+            <div style={{
+              aspectRatio: cellAspect,
+              borderRadius: wfRadius.control,
+              overflow: 'hidden',
+              position: 'relative',
+              background: wfColors.surfaceDeep,
+              border: `1px solid ${accent}55`,
+            }}>
+              <img
+                src={effectiveReference}
+                alt="Referência"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+              {/* Badge "REFERÊNCIA" no canto superior */}
+              <div style={{
+                position: 'absolute', top: 6, left: 6,
+                padding: '2px 8px', borderRadius: 4,
+                background: accent, color: '#0A0814',
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              }}>
+                Referência
+              </div>
+              {/* Botão X pra remover (só se é upload local) */}
+              {referenceImageUrl && (
+                <button
+                  onClick={() => patchContent({ referenceImageUrl: undefined })}
+                  title="Remover referência"
+                  className="nodrag"
+                  style={{
+                    position: 'absolute', top: 6, right: 6,
+                    width: 22, height: 22, padding: 0,
+                    background: 'rgba(10,8,20,0.7)', border: 'none',
+                    borderRadius: 4, color: '#fff',
+                    fontSize: 12, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >✕</button>
+              )}
+            </div>
+          ) : (
+            /* Placeholder quando não tem nada */
+            <div style={{
+              aspectRatio: cellAspect,
+              background: wfColors.surfaceDeep,
+              border: `1px dashed ${wfColors.border}`,
+              borderRadius: wfRadius.control,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {(() => {
+                const I = NODE_TYPE_ICONS.image
+                return <I size={28} color={wfColors.textFaint} strokeWidth={1.25} />
+              })()}
+            </div>
+          )}
+        </div>
+
+        {/* Chip de ref — só aparece quando JÁ tem outputs (ref saiu do preview) */}
+        {hasOutputs && (referenceImageUrl || (upstreamImage && !referenceImageUrl)) && (
+          <div style={{
+            padding: '0 12px 8px',
+            display: 'flex', gap: 5, flexWrap: 'wrap',
+          }}>
+            {referenceImageUrl && (
+              <ReferenceChip
+                url={referenceImageUrl}
+                kind="image"
+                label="Ref"
+                accent={accent}
+                onRemove={() => patchContent({ referenceImageUrl: undefined })}
+              />
+            )}
+            {upstreamImage && !referenceImageUrl && (
+              <ReferenceChip
+                url={upstreamImage}
+                kind="image"
+                label="Ref"
+                accent={accent}
+                fromUpstream
+              />
+            )}
+          </div>
         )}
-      </div>
-      <div style={{ padding: '8px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#E8E5F0' }}>{label}</div>
-        <span style={{ fontSize: 9, color: '#9F9AB8' }}>IMG</span>
-      </div>
-      <Handle type="source" position={Position.Right} style={{ background: color, width: 8, height: 8 }} />
-    </div>
+
+        {/* Editor de prompt inline: textarea + Refinar com IA */}
+        <div style={{ padding: '0 12px 8px' }}>
+          <PromptEditor
+            value={localPrompt}
+            onChange={setLocalPrompt}
+            onCommit={commitPrompt}
+            onRefined={handleRefined}
+            upstream={upstreamText}
+            accent={accent}
+            disabled={generating}
+            placeholder="Descreva a imagem…"
+            minHeight={80}
+          />
+        </div>
+
+        {/* Error banner */}
+        {error && (
+          <div style={{
+            margin: '0 12px 8px',
+            padding: '5px 8px', borderRadius: wfRadius.control,
+            background: '#ff5d7a15', border: '1px solid #ff5d7a30',
+            fontSize: 10, color: '#ff5d7a',
+          }}>
+            {error}
+          </div>
+        )}
+
+        {/* Controles inferiores */}
+        <div className="nodrag" style={{
+          padding: '8px 12px 10px',
+          borderTop: `1px solid ${wfColors.border}`,
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+        }}>
+          <SelectControl
+            options={modelOptions}
+            value={modelId}
+            onChange={v => patchContent({ modelId: v })}
+            minWidth={120}
+          />
+          <SelectControl
+            options={ASPECT_OPTIONS}
+            value={aspectRatio}
+            onChange={v => patchContent({ aspectRatio: v })}
+            minWidth={62}
+          />
+          <CountControl
+            options={COUNT_OPTIONS}
+            value={count}
+            onChange={n => patchContent({ count: n })}
+            accent={accent}
+            disabled={generating}
+          />
+          <UploadControl
+            onUploaded={url => patchContent({ referenceImageUrl: url })}
+            hasValue={!!referenceImageUrl}
+            accent={accent}
+            disabled={generating}
+            title={referenceImageUrl ? 'Referência anexada' : 'Anexar referência'}
+          />
+          <button
+            onClick={() => void handleRun()}
+            disabled={!canRun}
+            style={{
+              marginLeft: 'auto',
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              height: 22, padding: '0 10px',
+              background: canRun ? accent : wfColors.border,
+              border: 'none', borderRadius: wfRadius.control,
+              color: canRun ? '#0A0814' : wfColors.textFaint,
+              fontSize: 10, fontWeight: 700, fontFamily: 'inherit',
+              cursor: canRun ? 'pointer' : 'default',
+            }}
+          >
+            <ActionIcons.run size={9} {...DEFAULT_ICON_PROPS} />
+            {generating ? 'Gerando…' : 'Gerar'}
+          </button>
+        </div>
+      </NodeShell>
+    </NodeFrame>
   )
 }

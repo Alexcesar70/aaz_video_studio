@@ -12,3 +12,39 @@ html, body {
   background: #080A0F;
   color: #DCE1EE;
 }
+
+/* ─── Workflow identity ─────────────────────────────────────────────
+   Keyframes globais usados pelos nós do Workflow. Mantidos aqui (e
+   não inline) pra não recriar a animação a cada render. Cor laranja
+   pôr-do-sol inspirada no logo do Bear Studio.
+   ────────────────────────────────────────────────────────────────── */
+@keyframes wf-glow-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px rgba(249, 115, 22, 0.35),
+      0 0 18px rgba(249, 115, 22, 0.22),
+      0 0 36px rgba(249, 115, 22, 0.12);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px rgba(249, 115, 22, 0.55),
+      0 0 28px rgba(249, 115, 22, 0.42),
+      0 0 56px rgba(249, 115, 22, 0.22);
+  }
+}
+
+@keyframes wf-glow-flash {
+  0% { box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.6), 0 0 40px rgba(249, 115, 22, 0.5); }
+  100% { box-shadow: 0 0 0 1px rgba(249, 115, 22, 0), 0 0 0 rgba(249, 115, 22, 0); }
+}
+
+/* Edge selecionada — ganha glow branco sutil + stroke mais espesso.
+   Funciona sobre qualquer cor de edge (source do handle dita cor base). */
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3 !important;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.45));
+  transition: filter 160ms ease;
+}
+.react-flow__edge:not(.selected):hover .react-flow__edge-path {
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.2));
+}

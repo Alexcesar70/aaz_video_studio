@@ -1,0 +1,43 @@
+'use client'
+import React from 'react'
+import { useWorkflow } from '../WorkflowContext'
+import { NodeShell } from '../components/NodeShell'
+import { NodeHeader } from '../components/NodeHeader'
+import { NodeFrame } from '../components/NodeFrame'
+import { standardNodeActions } from '../components/nodeActions'
+import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { NODE_TYPE_ICONS } from '../theme/icons'
+import { wfColors } from '../theme/workflowTheme'
+
+export function CharacterNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
+  const { duplicateNode, deleteNode } = useWorkflow()
+  const name = (data.name as string) ?? (data.label as string) ?? 'Personagem'
+  const sheetUrl = data.sheetUrl as string | undefined
+  const accent = (data.color as string) || getNodeTypeMeta('character').color
+
+  return (
+    <NodeFrame
+      outputs={[{ dataType: 'image' }]}
+      actions={standardNodeActions(id, { duplicateNode, deleteNode })}
+    >
+      <NodeShell type="character" selected={selected} colorOverride={accent} width={230} flush>
+        <div style={{ padding: '10px 12px 6px' }}>
+          <NodeHeader type="character" accent={accent} label={name} />
+        </div>
+
+        <div style={{
+          aspectRatio: '1/1', background: wfColors.surfaceDeep,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          borderTop: `1px solid ${wfColors.border}`,
+          overflow: 'hidden',
+        }}>
+          {sheetUrl ? (
+            <img src={sheetUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            (() => { const I = NODE_TYPE_ICONS.character; return <I size={36} color={wfColors.textFaint} strokeWidth={1.25} /> })()
+          )}
+        </div>
+      </NodeShell>
+    </NodeFrame>
+  )
+}
