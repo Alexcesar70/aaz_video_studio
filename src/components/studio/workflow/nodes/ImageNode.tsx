@@ -113,6 +113,8 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
           aspect_ratio: aspectRatio,
           engineId: modelId,
           reference_image_url: effectiveReference,
+          // Quando há referência, força adesão alta pra preservar o sujeito
+          ...(effectiveReference ? { ref_strength: 0.9 } : {}),
         }),
       })
       const payload = await res.json() as { imageUrls?: string[]; error?: string }
@@ -191,7 +193,7 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
           />
         </div>
 
-        {/* Preview area — placeholder ou grid de outputs */}
+        {/* Preview area — outputs (se há) ou REFERÊNCIA (grande) ou placeholder */}
         <div style={{
           padding: '0 12px',
           marginBottom: 8,
@@ -205,7 +207,51 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
               cellAspect={cellAspect}
               accent={accent}
             />
+          ) : effectiveReference ? (
+            /* Mostra a referência em tamanho cheio pra user ver o que anexou */
+            <div style={{
+              aspectRatio: cellAspect,
+              borderRadius: wfRadius.control,
+              overflow: 'hidden',
+              position: 'relative',
+              background: wfColors.surfaceDeep,
+              border: `1px solid ${accent}55`,
+            }}>
+              <img
+                src={effectiveReference}
+                alt="Referência"
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+              {/* Badge "REFERÊNCIA" no canto superior */}
+              <div style={{
+                position: 'absolute', top: 6, left: 6,
+                padding: '2px 8px', borderRadius: 4,
+                background: accent, color: '#0A0814',
+                fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+                textTransform: 'uppercase',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+              }}>
+                Referência
+              </div>
+              {/* Botão X pra remover (só se é upload local) */}
+              {referenceImageUrl && (
+                <button
+                  onClick={() => patchContent({ referenceImageUrl: undefined })}
+                  title="Remover referência"
+                  className="nodrag"
+                  style={{
+                    position: 'absolute', top: 6, right: 6,
+                    width: 22, height: 22, padding: 0,
+                    background: 'rgba(10,8,20,0.7)', border: 'none',
+                    borderRadius: 4, color: '#fff',
+                    fontSize: 12, cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >✕</button>
+              )}
+            </div>
           ) : (
+            /* Placeholder quando não tem nada */
             <div style={{
               aspectRatio: cellAspect,
               background: wfColors.surfaceDeep,
@@ -221,8 +267,8 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
           )}
         </div>
 
-        {/* Referências anexadas — thumbnails visíveis */}
-        {(referenceImageUrl || (upstreamImage && !referenceImageUrl)) && (
+        {/* Chip de ref — só aparece quando JÁ tem outputs (ref saiu do preview) */}
+        {hasOutputs && (referenceImageUrl || (upstreamImage && !referenceImageUrl)) && (
           <div style={{
             padding: '0 12px 8px',
             display: 'flex', gap: 5, flexWrap: 'wrap',
