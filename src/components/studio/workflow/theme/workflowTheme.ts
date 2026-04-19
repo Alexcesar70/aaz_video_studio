@@ -25,6 +25,8 @@ export const wfColors = {
   textFaint: '#6B6688',
   /** Cor padrão de edges quando tipo desconhecido */
   edgeDefault: '#7F77DD',
+  /** Cor do "pôr do sol" do logo — usada em glow de geração */
+  glow: '#F97316',
 } as const
 
 export const wfRadius = {

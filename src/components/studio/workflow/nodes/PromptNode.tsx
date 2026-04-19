@@ -68,7 +68,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
       outputs={[{ dataType: 'text' }]}
       actions={actions}
     >
-      <NodeShell type="prompt" selected={selected} colorOverride={accent} width={280}>
+      <NodeShell type="prompt" selected={selected} colorOverride={accent} width={280} glow={generating ? 'pulse' : undefined}>
       <NodeHeader
         type="prompt"
         accent={accent}

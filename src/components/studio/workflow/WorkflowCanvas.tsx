@@ -5,6 +5,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Background,
+  BackgroundVariant,
   Controls,
   addEdge,
   useNodesState,
@@ -468,7 +469,23 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
             strokeDasharray: '5 4',
           }}
         >
-          <Background color={wfGridColor} gap={wfGridGap} size={1} />
+          {/* Grid base — estrutura sutil do canvas */}
+          <Background
+            id="wf-grid"
+            variant={BackgroundVariant.Dots}
+            color={wfGridColor}
+            gap={wfGridGap}
+            size={1}
+          />
+          {/* Starfield — pontinhos brancos quase imperceptíveis, identidade Bear */}
+          <Background
+            id="wf-stars"
+            variant={BackgroundVariant.Dots}
+            color="rgba(255,255,255,0.06)"
+            gap={72}
+            size={1.4}
+            offset={22}
+          />
           <Controls
             showInteractive={false}
             style={{

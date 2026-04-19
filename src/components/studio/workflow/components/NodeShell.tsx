@@ -30,6 +30,13 @@ export interface NodeShellProps {
   flush?: boolean
   /** Remove background (útil pra nós customizados que querem seu próprio fundo) */
   transparent?: boolean
+  /**
+   * Halo laranja "pôr-do-sol" indicando atividade/geração.
+   * - true ou 'pulse': pulsa continuamente (loading)
+   * - 'flash': flash único decaindo (sucesso)
+   * - false | undefined: sem halo
+   */
+  glow?: boolean | 'pulse' | 'flash'
   style?: React.CSSProperties
   children: React.ReactNode
 }
@@ -44,12 +51,22 @@ export function NodeShell({
   padding,
   flush = false,
   transparent = false,
+  glow,
   style,
   children,
 }: NodeShellProps) {
   const meta = getNodeTypeMeta(type)
   const accent = colorOverride || meta.color
-  const borderColor = selected ? accent : wfColors.border
+  const borderColor = glow ? wfColors.glow : (selected ? accent : wfColors.border)
+
+  // Animações definidas em globals.css (wf-glow-pulse / wf-glow-flash)
+  const glowAnimation = glow === 'flash'
+    ? 'wf-glow-flash 900ms ease-out 1'
+    : glow
+      ? 'wf-glow-pulse 1.6s ease-in-out infinite'
+      : undefined
+
+  const defaultShadow = selected ? wfShadow.cardSelected(accent) : wfShadow.card
 
   return (
     <div
@@ -57,7 +74,8 @@ export function NodeShell({
         background: transparent ? 'transparent' : wfColors.surface,
         border: `1px solid ${borderColor}`,
         borderRadius: wfRadius.card,
-        boxShadow: selected ? wfShadow.cardSelected(accent) : wfShadow.card,
+        boxShadow: glow ? undefined : defaultShadow, // animation controla box-shadow quando glow
+        animation: glowAnimation,
         color: wfColors.text,
         overflow: 'hidden',
         padding: flush ? 0 : padding ?? 12,
