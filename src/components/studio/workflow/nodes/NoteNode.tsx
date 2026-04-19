@@ -27,7 +27,7 @@ export function NoteNode({ id, data, selected }: { id: string; data: Record<stri
       outputs={[{ dataType: 'text' }]}
       actions={standardNodeActions(id, { duplicateNode, deleteNode })}
     >
-      <NodeShell type="note" selected={selected} colorOverride={accent} minWidth={200} maxWidth={300}>
+      <NodeShell type="note" selected={selected} colorOverride={accent} width={300}>
         <NodeHeader type="note" accent={accent} />
 
         {editing ? (
@@ -38,16 +38,17 @@ export function NoteNode({ id, data, selected }: { id: string; data: Record<stri
             autoFocus
             className="nodrag"
             style={{
-              width: '100%', minHeight: 60, padding: 6, borderRadius: wfRadius.inner,
+              width: '100%', minHeight: 120, padding: 10, borderRadius: wfRadius.inner,
               background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-              color: wfColors.text, fontSize: 12, fontFamily: 'inherit',
+              color: wfColors.text, fontSize: 13, fontFamily: 'inherit',
               resize: 'vertical', outline: 'none',
+              lineHeight: 1.5,
             }}
           />
         ) : (
           <div
             onDoubleClick={() => setEditing(true)}
-            style={{ fontSize: 12, color: wfColors.text, lineHeight: 1.5, cursor: 'text', minHeight: 30, whiteSpace: 'pre-wrap' }}
+            style={{ fontSize: 13, color: wfColors.text, lineHeight: 1.5, cursor: 'text', minHeight: 100, whiteSpace: 'pre-wrap' }}
           >
             {text || <span style={{ color: wfColors.textFaint }}>Double-click pra editar...</span>}
           </div>

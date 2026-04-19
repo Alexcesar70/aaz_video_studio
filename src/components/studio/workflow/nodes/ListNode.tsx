@@ -57,7 +57,7 @@ export function ListNode({ id, data, selected }: { id: string; data: Record<stri
         type="list"
         selected={selected}
         colorOverride={accent}
-        width={240}
+        width={300}
       >
         <NodeHeader
           type="list"
@@ -74,9 +74,9 @@ export function ListNode({ id, data, selected }: { id: string; data: Record<stri
             placeholder="um item por linha…"
             className="nodrag"
             style={{
-              width: '100%', minHeight: 100, padding: 8, borderRadius: wfRadius.inner,
+              width: '100%', minHeight: 140, padding: 10, borderRadius: wfRadius.inner,
               background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-              color: wfColors.text, fontSize: 12, fontFamily: 'inherit',
+              color: wfColors.text, fontSize: 13, fontFamily: 'inherit',
               resize: 'vertical', outline: 'none',
               lineHeight: 1.5,
             }}
@@ -85,21 +85,21 @@ export function ListNode({ id, data, selected }: { id: string; data: Record<stri
           <div
             onDoubleClick={() => setEditing(true)}
             style={{
-              padding: 8, borderRadius: wfRadius.inner,
+              padding: 10, borderRadius: wfRadius.inner,
               background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-              minHeight: 80, maxHeight: 220, overflowY: 'auto', cursor: 'text',
+              minHeight: 120, maxHeight: 260, overflowY: 'auto', cursor: 'text',
             }}
           >
             {persistedItems.length > 0 ? (
-              <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <ol style={{ margin: 0, paddingLeft: 22, display: 'flex', flexDirection: 'column', gap: 5 }}>
                 {persistedItems.map((item, i) => (
-                  <li key={i} style={{ color: wfColors.text, fontSize: 12, lineHeight: 1.4 }}>
+                  <li key={i} style={{ color: wfColors.text, fontSize: 13, lineHeight: 1.5 }}>
                     {item}
                   </li>
                 ))}
               </ol>
             ) : (
-              <span style={{ fontSize: 12, color: wfColors.textFaint }}>Double-click pra adicionar itens…</span>
+              <span style={{ fontSize: 13, color: wfColors.textFaint }}>Double-click pra adicionar itens…</span>
             )}
           </div>
         )}

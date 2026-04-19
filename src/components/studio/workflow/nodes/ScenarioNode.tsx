@@ -20,7 +20,7 @@ export function ScenarioNode({ id, data, selected }: { id: string; data: Record<
       outputs={[{ dataType: 'image' }]}
       actions={standardNodeActions(id, { duplicateNode, deleteNode })}
     >
-      <NodeShell type="scenario" selected={selected} colorOverride={accent} width={220} flush>
+      <NodeShell type="scenario" selected={selected} colorOverride={accent} width={260} flush>
         <div style={{ padding: '10px 12px 6px' }}>
           <NodeHeader type="scenario" accent={accent} label={name} />
         </div>

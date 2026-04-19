@@ -103,7 +103,7 @@ export function SmartPrompterNode({
         type="smart-prompter"
         selected={selected}
         colorOverride={accent}
-        width={290}
+        width={300}
         glow={refining ? 'pulse' : undefined}
       >
         <NodeHeader
@@ -157,10 +157,11 @@ export function SmartPrompterNode({
                 autoFocus
                 className="nodrag"
                 style={{
-                  width: '100%', minHeight: 96, padding: 8, borderRadius: wfRadius.inner,
+                  width: '100%', minHeight: 140, padding: 10, borderRadius: wfRadius.inner,
                   background: wfColors.surfaceDeep, border: `1px solid ${accent}55`,
-                  color: wfColors.text, fontSize: 12, fontFamily: 'inherit',
-                  resize: 'vertical', outline: 'none', marginBottom: 6,
+                  color: wfColors.text, fontSize: 13, fontFamily: 'inherit',
+                  resize: 'vertical', outline: 'none', marginBottom: 8,
+                  lineHeight: 1.5,
                 }}
               />
             ) : (
@@ -169,9 +170,9 @@ export function SmartPrompterNode({
                 style={{
                   padding: 10, borderRadius: wfRadius.inner,
                   background: wfColors.surfaceDeep, border: `1px solid ${accent}35`,
-                  fontSize: 12, color: wfColors.text, lineHeight: 1.5,
-                  cursor: 'text', marginBottom: 6,
-                  maxHeight: 140, overflowY: 'auto', whiteSpace: 'pre-wrap',
+                  fontSize: 13, color: wfColors.text, lineHeight: 1.5,
+                  cursor: 'text', marginBottom: 8,
+                  minHeight: 110, maxHeight: 200, overflowY: 'auto', whiteSpace: 'pre-wrap',
                 }}
               >
                 {currentText || <span style={{ color: wfColors.textFaint }}>(vazio)</span>}

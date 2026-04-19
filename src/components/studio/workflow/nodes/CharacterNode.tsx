@@ -20,7 +20,7 @@ export function CharacterNode({ id, data, selected }: { id: string; data: Record
       outputs={[{ dataType: 'image' }]}
       actions={standardNodeActions(id, { duplicateNode, deleteNode })}
     >
-      <NodeShell type="character" selected={selected} colorOverride={accent} width={190} flush>
+      <NodeShell type="character" selected={selected} colorOverride={accent} width={230} flush>
         <div style={{ padding: '10px 12px 6px' }}>
           <NodeHeader type="character" accent={accent} label={name} />
         </div>

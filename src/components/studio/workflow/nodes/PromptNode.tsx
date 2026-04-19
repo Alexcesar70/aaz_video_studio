@@ -43,7 +43,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
       outputs={[{ dataType: 'text' }]}
       actions={actions}
     >
-      <NodeShell type="prompt" selected={selected} colorOverride={accent} minWidth={220} maxWidth={300}>
+      <NodeShell type="prompt" selected={selected} colorOverride={accent} width={300}>
         <NodeHeader type="prompt" accent={accent} />
 
         {editing ? (

@@ -100,7 +100,7 @@ export function ReferenceNode({ id, data, selected }: { id: string; data: Record
       outputs={[{ dataType: outputType }]}
       actions={actions}
     >
-      <NodeShell type="reference" selected={selected} colorOverride={accent} width={220} flush>
+      <NodeShell type="reference" selected={selected} colorOverride={accent} width={260} flush>
         <div style={{ padding: '10px 12px 6px' }}>
           <NodeHeader
             type="reference"

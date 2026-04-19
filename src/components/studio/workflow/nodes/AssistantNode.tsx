@@ -171,11 +171,11 @@ export function AssistantNode({ id, data, selected }: { id: string; data: Record
           placeholder={hasUpstream ? 'Instrução adicional (opcional)…' : 'O que você quer que eu faça?'}
           className="nodrag"
           style={{
-            width: '100%', minHeight: 56, padding: 8, borderRadius: wfRadius.inner,
+            width: '100%', minHeight: 100, padding: 10, borderRadius: wfRadius.inner,
             background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-            color: wfColors.text, fontSize: 12, fontFamily: 'inherit',
+            color: wfColors.text, fontSize: 13, fontFamily: 'inherit',
             resize: 'vertical', outline: 'none', marginBottom: 8,
-            lineHeight: 1.4,
+            lineHeight: 1.5,
           }}
         />
 
@@ -190,7 +190,7 @@ export function AssistantNode({ id, data, selected }: { id: string; data: Record
                 autoFocus
                 className="nodrag"
                 style={{
-                  width: '100%', minHeight: 80, padding: 8, borderRadius: wfRadius.inner,
+                  width: '100%', minHeight: 140, padding: 10, borderRadius: wfRadius.inner,
                   background: wfColors.surfaceDeep, border: `1px solid ${accent}55`,
                   color: wfColors.text, fontSize: 12, fontFamily: 'inherit',
                   resize: 'vertical', outline: 'none',

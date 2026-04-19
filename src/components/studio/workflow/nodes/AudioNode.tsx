@@ -125,7 +125,7 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
         type="audio"
         selected={selected}
         colorOverride={accent}
-        width={280}
+        width={300}
         glow={generating ? 'pulse' : undefined}
       >
         <NodeHeader
@@ -142,12 +142,12 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
 
         {/* Preview */}
         {url ? (
-          <div style={{ marginBottom: 8 }}>
-            <audio controls src={url} className="nodrag" style={{ width: '100%', height: 32 }} />
+          <div style={{ marginBottom: 10 }}>
+            <audio controls src={url} className="nodrag nowheel" style={{ width: '100%', height: 38 }} />
           </div>
         ) : (
           <div style={{
-            height: 48, marginBottom: 8,
+            height: 90, marginBottom: 10,
             background: wfColors.surfaceDeep,
             border: `1px dashed ${wfColors.border}`,
             borderRadius: wfRadius.inner,
@@ -155,7 +155,7 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
           }}>
             {(() => {
               const I = NODE_TYPE_ICONS.audio
-              return <I size={22} color={wfColors.textFaint} strokeWidth={1.25} />
+              return <I size={36} color={wfColors.textFaint} strokeWidth={1.25} />
             })()}
           </div>
         )}

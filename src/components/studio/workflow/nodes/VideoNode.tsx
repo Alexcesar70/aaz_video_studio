@@ -235,7 +235,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         type="video"
         selected={selected}
         colorOverride={accent}
-        width={310}
+        width={300}
         flush
         glow={generating ? 'pulse' : undefined}
       >
