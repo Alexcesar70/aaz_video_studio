@@ -33,6 +33,8 @@ import { AudioNode } from './nodes/AudioNode'
 import { StickyNote } from './nodes/StickyNote'
 import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult, type ConnectingState } from './WorkflowContext'
 import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
+import { CanvasBackgroundPicker } from './components/CanvasBackgroundPicker'
+import { DEFAULT_CANVAS_BG, CANVAS_BG_STORAGE_KEY } from './theme/canvasPalette'
 import { getDataTypeColor } from './components/TypedHandle'
 import { isCompatibleConnection } from './theme/connectionRules'
 import { wfCanvasBackground, wfColors, wfGridColor, wfGridGap, wfRadius, wfShadow } from './theme/workflowTheme'
@@ -115,6 +117,21 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
   const pendingOps = useRef(0)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+
+  // Cor do canvas — persistida em localStorage (per-user, per-browser)
+  const [canvasBg, setCanvasBg] = useState<string>(DEFAULT_CANVAS_BG.value)
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CANVAS_BG_STORAGE_KEY)
+      if (saved) setCanvasBg(saved)
+    } catch {
+      // storage bloqueado — mantém default
+    }
+  }, [])
+  const handleChangeCanvasBg = useCallback((value: string) => {
+    setCanvasBg(value)
+    try { localStorage.setItem(CANVAS_BG_STORAGE_KEY, value) } catch {}
+  }, [])
 
   const beginSave = useCallback(() => {
     pendingOps.current += 1
@@ -525,6 +542,11 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
               </button>
             )
           })}
+
+          {/* Separador vertical antes do color picker */}
+          <div style={{ width: 1, background: wfColors.border, margin: '4px 2px' }} />
+
+          <CanvasBackgroundPicker current={canvasBg} onChange={handleChangeCanvasBg} />
         </div>
 
         <ReactFlow
@@ -549,7 +571,7 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
           minZoom={0.25}
           maxZoom={2}
           deleteKeyCode={['Backspace', 'Delete']}
-          style={{ background: wfCanvasBackground }}
+          style={{ background: canvasBg }}
           defaultEdgeOptions={{
             animated: false,
             style: { stroke: wfColors.edgeDefault, strokeWidth: 2 },

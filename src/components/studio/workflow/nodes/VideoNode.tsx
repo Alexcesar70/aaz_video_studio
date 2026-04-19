@@ -523,13 +523,45 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
               : 'Anexar vídeo de referência (video-to-video)'}
           />
 
+          {/* Botão Download — só aparece quando há video gerado, bem visível */}
+          {selectedUrl && (
+            <button
+              onClick={() => {
+                const a = document.createElement('a')
+                a.href = selectedUrl
+                a.download = 'video.mp4'
+                a.target = '_blank'
+                a.rel = 'noopener'
+                document.body.appendChild(a)
+                a.click()
+                document.body.removeChild(a)
+              }}
+              title="Baixar vídeo gerado"
+              className="nodrag"
+              style={{
+                marginLeft: 'auto',
+                height: 22, padding: '0 8px',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: `${accent}25`,
+                border: `1px solid ${accent}66`,
+                borderRadius: wfRadius.control,
+                color: accent,
+                fontSize: 10, fontWeight: 600, fontFamily: 'inherit',
+                cursor: 'pointer',
+              }}
+            >
+              <ActionIcons.download size={11} {...DEFAULT_ICON_PROPS} />
+              Baixar
+            </button>
+          )}
+
           {/* Toggle Som — mesma altura do Gerar */}
           <button
             onClick={() => patchContent({ soundEnabled: !soundEnabled })}
             disabled={generating}
             title={soundEnabled ? 'Som: ligado (clique pra desligar)' : 'Som: desligado (clique pra ligar)'}
             style={{
-              marginLeft: 'auto',
+              marginLeft: selectedUrl ? 0 : 'auto',
               height: 22, padding: '0 8px',
               display: 'inline-flex', alignItems: 'center', gap: 4,
               background: soundEnabled ? `${accent}25` : 'transparent',
