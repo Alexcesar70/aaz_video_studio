@@ -187,8 +187,10 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         engineId: modelId,
         aspect_ratio: aspectRatio,
         duration,
+        // SEMPRE explícito pra não cair no default `?? false` do
+        // buildEnginePayload. Bug do silêncio resolvido.
+        generate_audio: soundEnabled,
       }
-      if (!soundEnabled) body.generate_audio = false
 
       /**
        * Seedance tem 2 modos mutuamente exclusivos:
