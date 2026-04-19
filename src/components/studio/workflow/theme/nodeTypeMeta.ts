@@ -59,7 +59,7 @@ export const NODE_TYPE_META: Record<NodeType, NodeTypeMeta> = {
     icon: '▶',
     label: 'Vídeo',
     category: 'generator',
-    inputTypes: ['image', 'text'],
+    inputTypes: ['image', 'text', 'video'],
     outputType: 'video',
   },
   reference: {
