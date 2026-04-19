@@ -22,6 +22,7 @@ import '@xyflow/react/dist/style.css'
 import { NoteNode } from './nodes/NoteNode'
 import { ImageNode } from './nodes/ImageNode'
 import { VideoNode } from './nodes/VideoNode'
+import { AvatarNode } from './nodes/AvatarNode'
 import { ReferenceNode } from './nodes/ReferenceNode'
 import { CharacterNode } from './nodes/CharacterNode'
 import { ScenarioNode } from './nodes/ScenarioNode'
@@ -47,6 +48,7 @@ const nodeTypes: NodeTypes = {
   note: NoteNode,
   image: ImageNode,
   video: VideoNode,
+  avatar: AvatarNode,
   reference: ReferenceNode,
   character: CharacterNode,
   scenario: ScenarioNode,
@@ -94,6 +96,7 @@ const TOOLBAR_ITEMS: { type: NodeType; label: string }[] = [
   { type: 'assistant', label: 'Assistant' },
   { type: 'image', label: 'Imagem' },
   { type: 'video', label: 'Vídeo' },
+  { type: 'avatar', label: 'Avatar' },
   { type: 'audio', label: 'Áudio' },
   { type: 'reference', label: 'Ref' },
   { type: 'sticky', label: 'Post-it' },

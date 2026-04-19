@@ -84,6 +84,7 @@ export const NODE_TYPE_ICONS: Record<NodeType, IconComponent> = {
   sticky: TextBlockIcon,
   image: ImageGeneratorIcon,
   video: VideoGeneratorIcon,
+  avatar: CharacterIcon,
   reference: StyleReferenceIcon,
   character: CharacterIcon,
   scenario: SceneIcon,

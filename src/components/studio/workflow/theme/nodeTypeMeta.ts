@@ -62,6 +62,14 @@ export const NODE_TYPE_META: Record<NodeType, NodeTypeMeta> = {
     inputTypes: ['image', 'text', 'video', 'audio'],
     outputType: 'video',
   },
+  avatar: {
+    color: '#14B8A6',
+    icon: '🗣',
+    label: 'Avatar',
+    category: 'generator',
+    inputTypes: ['text', 'prompt'],
+    outputType: 'video',
+  },
   reference: {
     color: '#9F9AB8',
     icon: '🔗',
