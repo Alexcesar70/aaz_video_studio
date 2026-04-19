@@ -186,9 +186,13 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
        * Seedance 2.0 ativa seus modos (avatar com lip-sync, identity-ref,
        * video-to-video, voice-clone) via TAGS dentro do prompt: @image1,
        * @image2, @video1, @audio1. As tags casam 1-based com a posição
-       * nos arrays reference_images/videos/audios. Sem as tags, o
-       * Seedance trata os refs como style genérico — perde lip-sync e
-       * não preserva identidade. Doc: seed.bytedance.com/en/seedance2_0
+       * nos arrays reference_images/videos/audios.
+       *
+       * Estrutura do prompt segue a doc da Segmind:
+       *   "@image1 is the character. @video1 provides motion. {prompt}"
+       * Essa forma explícita força o modelo a preservar identidade. Sem
+       * a declaração "is the character / provides motion", Seedance
+       * trata como style fraco e perde fidelidade.
        */
       const refImages: string[] = []
       if (effectiveFirstFrame) refImages.push(effectiveFirstFrame)
@@ -196,38 +200,36 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
 
       const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
 
-      const imageTags = refImages.map((_, i) => `@image${i + 1}`)
-      const hasImage = imageTags.length > 0
+      const hasImage = refImages.length > 0
       const hasVideo = !!effectiveRefVideo
       const hasAudio = !!effectiveAudio
 
       let finalPrompt = effectivePrompt
       if (hasOmniRefs) {
         const manifest: string[] = []
-        if (hasImage) manifest.push(imageTags.join(' '))
-        if (hasVideo) manifest.push('@video1')
-        finalPrompt = `${manifest.join(' ')} ${finalPrompt}`
 
-        // Hints que ativam os modos certos no Seedance. Cobrem TODAS
-        // as combinações de avatar:
-        //   só foto          → Seedance gera voz sintética a partir do
-        //                      prompt (o que o avatar fala vem do texto)
-        //   foto + áudio     → voz/lip-sync vem do áudio (fala do áudio)
-        //   foto + vídeo     → voz/motion/lip-sync vêm do vídeo fonte
-        //   foto + ambos     → motion do vídeo + voz do áudio
-        //                      (prompt = o que ele fala, se for diferente)
-        if (hasImage && hasAudio && hasVideo) {
-          finalPrompt += ', voice from @audio1, motion and lip-sync aligned with @video1'
-        } else if (hasImage && hasAudio) {
-          finalPrompt += ', voice driven by @audio1 with phoneme-accurate lip-sync'
-        } else if (hasImage && hasVideo) {
-          finalPrompt += ', speaking with voice and lip-sync transferred from @video1'
-        } else if (hasImage) {
-          // Foto-sozinha: avatar fala o conteúdo descrito no prompt,
-          // Seedance sintetiza voz natural (timbre estimado do sujeito).
-          finalPrompt += ', speaking with natural voice, phoneme-accurate lip-sync'
+        if (refImages.length === 1) {
+          manifest.push('@image1 is the main character — preserve face, hair, skin tone and outfit exactly')
+        } else if (refImages.length >= 2) {
+          manifest.push('@image1 is the main character — preserve face, hair, skin tone and outfit exactly; @image2 is an additional reference angle')
         }
+
+        if (hasVideo && hasAudio) {
+          manifest.push('@video1 provides the motion and framing; @audio1 is the voice source, generate phoneme-accurate lip-sync')
+        } else if (hasVideo) {
+          manifest.push('@video1 provides the motion, voice timbre, and phoneme-accurate lip-sync — match the mouth movements to the audio in @video1 exactly')
+        } else if (hasAudio) {
+          manifest.push('@audio1 is the voice source — generate phoneme-accurate lip-sync')
+        } else if (hasImage) {
+          manifest.push('speak with natural voice and phoneme-accurate lip-sync')
+        }
+
+        finalPrompt = `${manifest.join('. ')}. Scene: ${finalPrompt}`
       }
+
+      // Debug: loga o prompt final montado pra comparar com o que chega
+      // no Segmind. Remover depois que o comportamento estabilizar.
+      console.log('[VideoNode] finalPrompt:', finalPrompt)
 
       const body: Record<string, unknown> = {
         prompt: finalPrompt,
