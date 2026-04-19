@@ -18,8 +18,12 @@ export type EngineFeatures = {
   maxRefImages: number
   /** Suporta reference_videos */
   referenceVideos: boolean
+  /** Número máximo de reference_videos aceitos (0 quando não suportado) */
+  maxRefVideos: number
   /** Suporta reference_audios */
   referenceAudios: boolean
+  /** Número máximo de reference_audios aceitos (0 quando não suportado) */
+  maxRefAudios: number
 }
 
 export type VideoEngine = {
@@ -56,9 +60,11 @@ export const VIDEO_ENGINES: VideoEngine[] = [
       audio: true,
       maxRefImages: 9,
       referenceVideos: true,
+      maxRefVideos: 3,
       referenceAudios: true,
+      maxRefAudios: 3,
     },
-    description: 'Padrão — Omni Reference (9 refs), áudio, first/last frame',
+    description: 'Padrão — Omni Reference (9 imgs + 3 vídeos + 3 áudios), avatar com lip-sync',
   },
   {
     id: 'seedance-2.0-fast',
@@ -76,7 +82,9 @@ export const VIDEO_ENGINES: VideoEngine[] = [
       audio: true,
       maxRefImages: 9,
       referenceVideos: false,
+      maxRefVideos: 0,
       referenceAudios: false,
+      maxRefAudios: 0,
     },
     description: 'Mesmo estilo, mais rápido e mais barato',
   },
@@ -96,7 +104,9 @@ export const VIDEO_ENGINES: VideoEngine[] = [
       audio: false,
       maxRefImages: 4,
       referenceVideos: false,
+      maxRefVideos: 0,
       referenceAudios: false,
+      maxRefAudios: 0,
     },
     description: 'Reference-to-video: até 4 imagens, bom para consistência',
   },
@@ -116,7 +126,9 @@ export const VIDEO_ENGINES: VideoEngine[] = [
       audio: false,
       maxRefImages: 1,
       referenceVideos: false,
+      maxRefVideos: 0,
       referenceAudios: false,
+      maxRefAudios: 0,
     },
     description: 'Alta qualidade cinematográfica, 1 imagem de referência',
   },
@@ -136,7 +148,9 @@ export const VIDEO_ENGINES: VideoEngine[] = [
       audio: true,
       maxRefImages: 1,
       referenceVideos: false,
+      maxRefVideos: 0,
       referenceAudios: false,
+      maxRefAudios: 0,
     },
     description: 'Google Veo 3.1 — áudio nativo, alta fidelidade',
   },
@@ -156,7 +170,9 @@ export const VIDEO_ENGINES: VideoEngine[] = [
       audio: true,
       maxRefImages: 1,
       referenceVideos: false,
+      maxRefVideos: 0,
       referenceAudios: false,
+      maxRefAudios: 0,
     },
     description: 'Veo 3.1 full — máxima qualidade, áudio nativo',
   },
@@ -217,10 +233,10 @@ export function buildEnginePayload(
       base.image_url = body.reference_images[0]
     }
     if (engine.features.referenceVideos && body.reference_videos?.length) {
-      base.reference_videos = body.reference_videos
+      base.reference_videos = body.reference_videos.slice(0, engine.features.maxRefVideos)
     }
     if (engine.features.referenceAudios && body.reference_audios?.length) {
-      base.reference_audios = body.reference_audios
+      base.reference_audios = body.reference_audios.slice(0, engine.features.maxRefAudios)
     }
   }
 

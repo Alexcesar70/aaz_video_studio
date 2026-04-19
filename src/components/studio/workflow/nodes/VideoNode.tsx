@@ -182,8 +182,34 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
     setGenerating(true)
     setError(null)
     try {
+      /**
+       * Seedance 2.0 ativa seus modos (avatar com lip-sync, identity-ref,
+       * video-to-video, voice-clone) via TAGS dentro do prompt: @image1,
+       * @image2, @video1, @audio1. As tags casam 1-based com a posição
+       * nos arrays reference_images/videos/audios. Sem as tags, o
+       * Seedance trata os refs como style genérico — perde lip-sync e
+       * não preserva identidade. Doc: seed.bytedance.com/en/seedance2_0
+       */
+      const refImages: string[] = []
+      if (effectiveFirstFrame) refImages.push(effectiveFirstFrame)
+      if (effectiveLastFrame) refImages.push(effectiveLastFrame)
+
+      const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
+
+      const tagPrefixes: string[] = []
+      refImages.forEach((_, i) => tagPrefixes.push(`@image${i + 1}`))
+      if (effectiveRefVideo) tagPrefixes.push('@video1')
+
+      let finalPrompt = effectivePrompt
+      if (tagPrefixes.length > 0) {
+        finalPrompt = `${tagPrefixes.join(' ')} ${finalPrompt}`
+      }
+      if (effectiveAudio) {
+        finalPrompt = `${finalPrompt}, voice driven by @audio1 with phoneme-accurate lip-sync`
+      }
+
       const body: Record<string, unknown> = {
-        prompt: effectivePrompt,
+        prompt: finalPrompt,
         engineId: modelId,
         aspect_ratio: aspectRatio,
         duration,
@@ -192,41 +218,16 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         generate_audio: soundEnabled,
       }
 
-      /**
-       * Seedance tem 2 modos mutuamente exclusivos:
-       *
-       *   A) omni_reference: passa reference_images (identidade/estilo
-       *      do sujeito) + reference_videos (video-to-video) + audio.
-       *      É o modo "gera video usando essas imagens/videos como
-       *      guia visual". Resultado fiel ao input.
-       *
-       *   B) modo padrão: passa first_frame_url + last_frame_url pra
-       *      INTERPOLAÇÃO entre 2 frames específicos. Gera o video que
-       *      começa exatamente no frame A e termina no frame B.
-       *
-       * Usamos (A) sempre que há QUALQUER ref (imagem do pin start/end,
-       * video ref, audio). Só caímos em (B) se o user NÃO tem nenhuma
-       * ref — caso raro com 2 inputs de imagem frame-a-frame que a
-       * gente pode habilitar via toggle explicito no futuro.
-       *
-       * Isso replica o comportamento "fiel" que o user obteve testando
-       * direto no Seedance: omni_reference com a foto do sujeito +
-       * prompt descrevendo movimento.
-       */
-      const refImages: string[] = []
-      if (effectiveFirstFrame) refImages.push(effectiveFirstFrame)
-      if (effectiveLastFrame) refImages.push(effectiveLastFrame)
-
-      const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
-
       if (hasOmniRefs) {
+        // `mode` é flag interna pro buildEnginePayload rotear —
+        // não vai pro Segmind. Segmind ativa omni implicitamente
+        // pela presença dos arrays.
         body.mode = 'omni_reference'
         if (refImages.length > 0) body.reference_images = refImages
         if (effectiveRefVideo) body.reference_videos = [effectiveRefVideo]
         if (effectiveAudio) body.reference_audios = [effectiveAudio]
       } else {
-        // Sem refs — modo padrão. Mantemos first/last pra eventual uso
-        // mas na prática o user não vai chegar aqui com ref nenhuma.
+        // Sem refs — modo first/last frame (interpolação entre 2 frames).
         if (effectiveFirstFrame) body.first_frame_url = effectiveFirstFrame
         if (effectiveLastFrame) body.last_frame_url = effectiveLastFrame
       }
