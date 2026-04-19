@@ -3,6 +3,7 @@
 import React, { useEffect, useRef } from 'react'
 import { useWorkflow } from './WorkflowContext'
 import { wfColors, wfRadius, wfShadow } from './theme/workflowTheme'
+import { ActionIcons, DEFAULT_ICON_PROPS } from './theme/icons'
 
 export interface ContextMenuState {
   nodeId: string
@@ -64,14 +65,16 @@ export function NodeContextMenu({ state, onClose }: Props) {
         onClick={handle(() => duplicateNode(state.nodeId))}
         style={menuItemStyle}
       >
-        <span style={{ width: 18 }}>⎘</span> Duplicar
+        <ActionIcons.duplicate size={13} {...DEFAULT_ICON_PROPS} />
+        <span>Duplicar</span>
         <span style={{ marginLeft: 'auto', fontSize: 9, color: wfColors.textFaint }}>⌘D</span>
       </button>
       <button
         onClick={handle(() => deleteNode(state.nodeId))}
         style={{ ...menuItemStyle, color: '#ff5d7a' }}
       >
-        <span style={{ width: 18 }}>✕</span> Deletar
+        <ActionIcons.delete size={13} {...DEFAULT_ICON_PROPS} />
+        <span>Deletar</span>
         <span style={{ marginLeft: 'auto', fontSize: 9, color: wfColors.textFaint }}>Del</span>
       </button>
 

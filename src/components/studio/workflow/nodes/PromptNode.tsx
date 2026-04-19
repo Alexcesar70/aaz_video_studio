@@ -8,6 +8,7 @@ import { NodeHeader } from '../components/NodeHeader'
 import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
 import { standardNodeActions } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { ActionIcons, UIIcons, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function PromptNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
@@ -52,7 +53,7 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
   const actions: NodeAction[] = [
     {
       id: 'run',
-      icon: '▶',
+      icon: <ActionIcons.run size={14} {...DEFAULT_ICON_PROPS} />,
       title: 'Gerar agora',
       tone: 'primary',
       disabled: !text.trim() || generating,
@@ -137,29 +138,32 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
           onClick={() => setShowRefiner(s => !s)}
           disabled={!text.trim() || generating}
           style={{
-            flex: 1, padding: '6px 8px', borderRadius: wfRadius.control,
+            flex: 1, padding: '6px 10px', borderRadius: wfRadius.control,
             background: showRefiner ? `${accent}25` : 'transparent',
             border: `1px solid ${text.trim() ? `${accent}40` : wfColors.border}`,
             color: text.trim() ? accent : wfColors.textFaint,
             fontSize: 11, fontWeight: 600, fontFamily: 'inherit',
             cursor: text.trim() ? 'pointer' : 'default',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}
         >
-          ⚡ Refinar
+          <UIIcons.refine size={12} {...DEFAULT_ICON_PROPS} /> Refinar
         </button>
         <button
           onClick={handleGenerate}
           disabled={!text.trim() || generating}
           style={{
-            flex: 1, padding: '6px 8px', borderRadius: wfRadius.control,
+            flex: 1, padding: '6px 10px', borderRadius: wfRadius.control,
             background: text.trim() && !generating ? '#5DCAA5' : wfColors.border,
             border: 'none',
             color: text.trim() && !generating ? '#0A0814' : wfColors.textFaint,
             fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
             cursor: text.trim() && !generating ? 'pointer' : 'default',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
           }}
         >
-          {generating ? '⏳' : `▶ Gerar${count > 1 ? ` (${count})` : ''}`}
+          <ActionIcons.run size={12} {...DEFAULT_ICON_PROPS} />
+          {generating ? 'Gerando...' : `Gerar${count > 1 ? ` (${count})` : ''}`}
         </button>
       </div>
 

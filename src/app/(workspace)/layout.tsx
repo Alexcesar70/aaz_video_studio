@@ -4,22 +4,30 @@ import React from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspaceContext'
+import { NavIcons, DEFAULT_ICON_PROPS } from '@/components/studio/workflow/theme/icons'
+import type { LucideIcon } from 'lucide-react'
 
-const NAV_ITEMS = [
-  { href: '/', label: 'Home', icon: '🏠' },
-  { href: '/studio', label: 'BearStudio', icon: '🎬' },
-  { href: '/creators', label: 'Creators', icon: '🎯' },
-  { href: '/projects', label: 'Projetos', icon: '📁' },
-  { href: '/assets', label: 'Assets', icon: '🎨' },
-  { href: '/music', label: 'Música', icon: '🎵' },
-  { href: '/voices', label: 'Vozes', icon: '🎙' },
-  { href: '/workflow', label: 'Workflow', icon: '🔄' },
+interface NavItem {
+  href: string
+  label: string
+  Icon: LucideIcon
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { href: '/', label: 'Home', Icon: NavIcons.home },
+  { href: '/studio', label: 'BearStudio', Icon: NavIcons.studio },
+  { href: '/creators', label: 'Creators', Icon: NavIcons.creators },
+  { href: '/projects', label: 'Projetos', Icon: NavIcons.projects },
+  { href: '/assets', label: 'Assets', Icon: NavIcons.assets },
+  { href: '/music', label: 'Música', Icon: NavIcons.music },
+  { href: '/voices', label: 'Vozes', Icon: NavIcons.voices },
+  { href: '/workflow', label: 'Workflow', Icon: NavIcons.workflow },
 ]
 
-const BOTTOM_NAV = [
-  { href: '/team', label: 'Time', icon: '👥' },
-  { href: '/settings', label: 'Config', icon: '⚙️' },
-  { href: '/profile', label: 'Perfil', icon: '👤' },
+const BOTTOM_NAV: NavItem[] = [
+  { href: '/team', label: 'Time', Icon: NavIcons.team },
+  { href: '/settings', label: 'Config', Icon: NavIcons.settings },
+  { href: '/profile', label: 'Perfil', Icon: NavIcons.profile },
 ]
 
 /**
@@ -59,11 +67,17 @@ function Sidebar() {
         textAlign: compact ? 'center' : 'left',
       }}>
         {compact ? (
-          <div
+          <button
             onClick={() => router.push('/')}
             title={user?.workspaceName ?? 'Creative Studio'}
-            style={{ fontSize: 18, cursor: 'pointer' }}
-          >🏠</div>
+            style={{
+              background: 'transparent', border: 'none', padding: 0,
+              color: C.text, cursor: 'pointer',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <NavIcons.home size={18} {...DEFAULT_ICON_PROPS} />
+          </button>
         ) : (
           <>
             <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -77,29 +91,32 @@ function Sidebar() {
       </div>
 
       <div style={{ flex: 1, padding: '8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {NAV_ITEMS.map(item => (
-          <button
-            key={item.href}
-            onClick={() => router.push(item.href)}
-            title={compact ? item.label : undefined}
-            style={{
-              display: 'flex', alignItems: 'center',
-              gap: compact ? 0 : 10,
-              justifyContent: compact ? 'center' : 'flex-start',
-              padding: compact ? '8px 0' : '8px 12px',
-              borderRadius: 8, border: 'none',
-              background: isActive(item.href) ? `${C.purple}20` : 'transparent',
-              color: isActive(item.href) ? C.text : C.textDim,
-              cursor: 'pointer', fontSize: 13,
-              fontWeight: isActive(item.href) ? 600 : 400,
-              fontFamily: 'inherit', textAlign: 'left',
-              transition: 'all 0.1s',
-            }}
-          >
-            <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>{item.icon}</span>
-            {!compact && item.label}
-          </button>
-        ))}
+        {NAV_ITEMS.map(item => {
+          const active = isActive(item.href)
+          return (
+            <button
+              key={item.href}
+              onClick={() => router.push(item.href)}
+              title={compact ? item.label : undefined}
+              style={{
+                display: 'flex', alignItems: 'center',
+                gap: compact ? 0 : 10,
+                justifyContent: compact ? 'center' : 'flex-start',
+                padding: compact ? '8px 0' : '8px 12px',
+                borderRadius: 8, border: 'none',
+                background: active ? `${C.purple}20` : 'transparent',
+                color: active ? C.text : C.textDim,
+                cursor: 'pointer', fontSize: 13,
+                fontWeight: active ? 600 : 400,
+                fontFamily: 'inherit', textAlign: 'left',
+                transition: 'all 0.1s',
+              }}
+            >
+              <item.Icon size={16} {...DEFAULT_ICON_PROPS} />
+              {!compact && item.label}
+            </button>
+          )
+        })}
       </div>
 
       <div style={{ padding: '8px', borderTop: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -118,32 +135,35 @@ function Sidebar() {
               fontFamily: 'inherit', textAlign: 'left',
             }}
           >
-            <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>👑</span>
+            <NavIcons.admin size={16} {...DEFAULT_ICON_PROPS} />
             {!compact && 'Admin'}
           </button>
         )}
-        {BOTTOM_NAV.map(item => (
-          <button
-            key={item.href}
-            onClick={() => router.push(item.href)}
-            title={compact ? item.label : undefined}
-            style={{
-              display: 'flex', alignItems: 'center',
-              gap: compact ? 0 : 10,
-              justifyContent: compact ? 'center' : 'flex-start',
-              padding: compact ? '8px 0' : '8px 12px',
-              borderRadius: 8, border: 'none',
-              background: isActive(item.href) ? `${C.purple}20` : 'transparent',
-              color: isActive(item.href) ? C.text : C.textDim,
-              cursor: 'pointer', fontSize: 13,
-              fontWeight: isActive(item.href) ? 600 : 400,
-              fontFamily: 'inherit', textAlign: 'left',
-            }}
-          >
-            <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>{item.icon}</span>
-            {!compact && item.label}
-          </button>
-        ))}
+        {BOTTOM_NAV.map(item => {
+          const active = isActive(item.href)
+          return (
+            <button
+              key={item.href}
+              onClick={() => router.push(item.href)}
+              title={compact ? item.label : undefined}
+              style={{
+                display: 'flex', alignItems: 'center',
+                gap: compact ? 0 : 10,
+                justifyContent: compact ? 'center' : 'flex-start',
+                padding: compact ? '8px 0' : '8px 12px',
+                borderRadius: 8, border: 'none',
+                background: active ? `${C.purple}20` : 'transparent',
+                color: active ? C.text : C.textDim,
+                cursor: 'pointer', fontSize: 13,
+                fontWeight: active ? 600 : 400,
+                fontFamily: 'inherit', textAlign: 'left',
+              }}
+            >
+              <item.Icon size={16} {...DEFAULT_ICON_PROPS} />
+              {!compact && item.label}
+            </button>
+          )
+        })}
 
         <button
           onClick={() => { fetch('/api/auth/logout', { method: 'POST' }); router.push('/login') }}
@@ -159,7 +179,7 @@ function Sidebar() {
             textAlign: 'left', marginTop: 4,
           }}
         >
-          <span style={{ fontSize: 16, width: 20, textAlign: 'center' }}>🚪</span>
+          <NavIcons.logout size={16} {...DEFAULT_ICON_PROPS} />
           {!compact && 'Sair'}
         </button>
       </div>

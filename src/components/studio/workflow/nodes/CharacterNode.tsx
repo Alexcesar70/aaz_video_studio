@@ -7,13 +7,13 @@ import { NodeHeader } from '../components/NodeHeader'
 import { NodeActionsToolbar } from '../components/NodeActionsToolbar'
 import { standardNodeActions } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { NODE_TYPE_ICONS } from '../theme/icons'
 import { wfColors } from '../theme/workflowTheme'
 
 export function CharacterNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
   const { duplicateNode, deleteNode } = useWorkflow()
   const name = (data.name as string) ?? (data.label as string) ?? 'Personagem'
   const sheetUrl = data.sheetUrl as string | undefined
-  const emoji = (data.emoji as string) ?? '👤'
   const accent = (data.color as string) || getNodeTypeMeta('character').color
 
   return (
@@ -33,7 +33,7 @@ export function CharacterNode({ id, data, selected }: { id: string; data: Record
         {sheetUrl ? (
           <img src={sheetUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: 40, opacity: 0.6 }}>{emoji}</span>
+          (() => { const I = NODE_TYPE_ICONS.character; return <I size={36} color={wfColors.textFaint} strokeWidth={1.25} /> })()
         )}
       </div>
 

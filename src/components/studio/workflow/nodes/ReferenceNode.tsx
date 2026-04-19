@@ -7,6 +7,7 @@ import { NodeHeader } from '../components/NodeHeader'
 import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
 import { standardNodeActions, openLinkAction } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { ActionIcons, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function ReferenceNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
@@ -23,7 +24,7 @@ export function ReferenceNode({ id, data, selected }: { id: string; data: Record
   const actions: NodeAction[] = [
     {
       id: 'edit-url',
-      icon: '✎',
+      icon: <ActionIcons.editUrl size={14} {...DEFAULT_ICON_PROPS} />,
       title: 'Editar URL',
       onClick: () => setEditing(true),
     },

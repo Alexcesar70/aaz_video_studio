@@ -3,6 +3,7 @@
 import React from 'react'
 import type { NodeType } from '@/modules/workflow'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { getNodeTypeIcon, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors } from '../theme/workflowTheme'
 
 /**
@@ -25,6 +26,7 @@ export interface NodeHeaderProps {
 export function NodeHeader({ type, label, right, accent, style }: NodeHeaderProps) {
   const meta = getNodeTypeMeta(type)
   const color = accent || meta.color
+  const Icon = getNodeTypeIcon(type)
 
   return (
     <div
@@ -42,7 +44,7 @@ export function NodeHeader({ type, label, right, accent, style }: NodeHeaderProp
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 12, color, filter: 'saturate(1.2)' }}>{meta.icon}</span>
+        <Icon size={13} color={color} {...DEFAULT_ICON_PROPS} />
         <span style={{ fontWeight: 600 }}>{label ?? meta.label}</span>
       </span>
       {right !== undefined && (

@@ -7,6 +7,7 @@ import { NodeHeader } from '../components/NodeHeader'
 import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { ActionIcons, NODE_TYPE_ICONS, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function VideoNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
@@ -23,7 +24,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const actions: NodeAction[] = [
     {
       id: 'edit-url',
-      icon: '✎',
+      icon: <ActionIcons.editUrl size={14} {...DEFAULT_ICON_PROPS} />,
       title: 'Editar URL',
       onClick: () => setEditing(true),
     },
@@ -68,7 +69,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         {url ? (
           <video src={url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} muted preload="metadata" />
         ) : (
-          <span style={{ fontSize: 28, opacity: 0.4 }}>▶</span>
+          (() => { const I = NODE_TYPE_ICONS.video; return <I size={28} color={wfColors.textFaint} strokeWidth={1.25} /> })()
         )}
       </div>
 

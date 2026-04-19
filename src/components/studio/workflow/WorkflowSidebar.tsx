@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react'
 import { wfColors } from './theme/workflowTheme'
+import { NODE_TYPE_ICONS, UIIcons, DEFAULT_ICON_PROPS } from './theme/icons'
 
 export interface DraggableItem {
   kind: 'character' | 'scenario'
@@ -72,9 +73,11 @@ export function WorkflowSidebar() {
           title="Mostrar biblioteca"
           style={{
             background: 'transparent', border: 'none', color: wfColors.textDim,
-            cursor: 'pointer', fontSize: 16, padding: 4,
+            cursor: 'pointer', padding: 4, display: 'inline-flex', alignItems: 'center',
           }}
-        >→</button>
+        >
+          <UIIcons.chevronRight size={16} {...DEFAULT_ICON_PROPS} />
+        </button>
       </div>
     )
   }
@@ -96,8 +99,10 @@ export function WorkflowSidebar() {
         <button
           onClick={() => setCollapsed(true)}
           title="Esconder"
-          style={{ background: 'transparent', border: 'none', color: wfColors.textDim, cursor: 'pointer', fontSize: 14 }}
-        >←</button>
+          style={{ background: 'transparent', border: 'none', color: wfColors.textDim, cursor: 'pointer', padding: 2, display: 'inline-flex', alignItems: 'center' }}
+        >
+          <UIIcons.chevronLeft size={14} {...DEFAULT_ICON_PROPS} />
+        </button>
       </div>
 
       {/* Tabs */}
@@ -169,8 +174,11 @@ export function WorkflowSidebar() {
                 {c.sheetUrl ? (
                   <img src={c.sheetUrl} alt={c.name} style={{ width: 36, height: 36, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }} />
                 ) : (
-                  <div style={{ width: 36, height: 36, borderRadius: 4, background: wfColors.surfaceDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
-                    {c.emoji || '👤'}
+                  <div style={{ width: 36, height: 36, borderRadius: 4, background: wfColors.surfaceDeep, display: 'flex', alignItems: 'center', justifyContent: 'center', color: wfColors.textFaint, flexShrink: 0 }}>
+                    {(() => {
+                      const Icon = NODE_TYPE_ICONS.character
+                      return <Icon size={18} {...DEFAULT_ICON_PROPS} />
+                    })()}
                   </div>
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>

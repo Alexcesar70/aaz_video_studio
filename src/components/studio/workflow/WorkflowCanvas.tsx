@@ -29,6 +29,7 @@ import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult } from 
 import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
 import { wfCanvasBackground, wfColors, wfGridColor, wfGridGap, wfRadius, wfShadow } from './theme/workflowTheme'
 import { getNodeTypeMeta } from './theme/nodeTypeMeta'
+import { getNodeTypeIcon, DEFAULT_ICON_PROPS } from './theme/icons'
 import type { DraggableItem } from './WorkflowSidebar'
 import type { WorkflowNode, NodeType } from '@/modules/workflow'
 
@@ -71,12 +72,12 @@ function toFlowEdges(connections: Array<{ id: string; source: string; target: st
   }))
 }
 
-const TOOLBAR_ITEMS: { type: NodeType; icon: string; label: string }[] = [
-  { type: 'note', icon: '📝', label: 'Nota' },
-  { type: 'prompt', icon: '✍️', label: 'Prompt' },
-  { type: 'image', icon: '🖼️', label: 'Imagem' },
-  { type: 'video', icon: '🎬', label: 'Vídeo' },
-  { type: 'reference', icon: '🔗', label: 'Ref' },
+const TOOLBAR_ITEMS: { type: NodeType; label: string }[] = [
+  { type: 'note', label: 'Nota' },
+  { type: 'prompt', label: 'Prompt' },
+  { type: 'image', label: 'Imagem' },
+  { type: 'video', label: 'Vídeo' },
+  { type: 'reference', label: 'Ref' },
 ]
 
 export function WorkflowCanvas(props: WorkflowCanvasProps) {
@@ -387,20 +388,22 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
         }}>
           {TOOLBAR_ITEMS.map(item => {
             const meta = getNodeTypeMeta(item.type)
+            const Icon = getNodeTypeIcon(item.type)
             return (
               <button
                 key={item.type}
                 onClick={() => addNode(item.type)}
                 title={item.label}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '6px 12px', borderRadius: wfRadius.control,
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '6px 10px', borderRadius: wfRadius.control,
                   background: 'transparent', border: `1px solid ${wfColors.border}`,
                   color: wfColors.text, cursor: 'pointer',
                   fontSize: 11, fontFamily: 'inherit',
                 }}
               >
-                <span style={{ color: meta.color }}>{item.icon}</span> {item.label}
+                <Icon size={13} color={meta.color} {...DEFAULT_ICON_PROPS} />
+                {item.label}
               </button>
             )
           })}

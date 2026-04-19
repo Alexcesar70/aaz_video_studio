@@ -1,5 +1,10 @@
+import React from 'react'
 import type { NodeAction } from './NodeActionsToolbar'
 import type { WorkflowContextValue } from '../WorkflowContext'
+import { ActionIcons, DEFAULT_ICON_PROPS } from '../theme/icons'
+
+const iconProps = { size: 14, ...DEFAULT_ICON_PROPS } as const
+const I = (C: typeof ActionIcons.duplicate) => React.createElement(C, iconProps)
 
 /**
  * Factory de ações padrão (duplicate/delete) que todo nó deveria expor.
@@ -20,13 +25,13 @@ export function standardNodeActions(
   return [
     {
       id: 'duplicate',
-      icon: '⎘',
+      icon: I(ActionIcons.duplicate),
       title: 'Duplicar (⌘D)',
       onClick: () => ctx.duplicateNode(nodeId),
     },
     {
       id: 'delete',
-      icon: '✕',
+      icon: I(ActionIcons.delete),
       title: 'Deletar (Del)',
       tone: 'danger',
       onClick: () => ctx.deleteNode(nodeId),
@@ -42,7 +47,7 @@ export function downloadAction(url: string | undefined, filename = 'asset'): Nod
   if (!url) return null
   return {
     id: 'download',
-    icon: '⬇',
+    icon: I(ActionIcons.download),
     title: 'Baixar',
     onClick: () => {
       const a = document.createElement('a')
@@ -64,7 +69,7 @@ export function openLinkAction(url: string | undefined): NodeAction | null {
   if (!url) return null
   return {
     id: 'open',
-    icon: '↗',
+    icon: I(ActionIcons.openLink),
     title: 'Abrir em nova aba',
     onClick: () => {
       window.open(url, '_blank', 'noopener,noreferrer')

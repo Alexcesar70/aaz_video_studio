@@ -7,6 +7,7 @@ import { NodeHeader } from '../components/NodeHeader'
 import { NodeActionsToolbar } from '../components/NodeActionsToolbar'
 import { standardNodeActions } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
+import { NODE_TYPE_ICONS } from '../theme/icons'
 import { wfColors } from '../theme/workflowTheme'
 
 export function ScenarioNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
@@ -32,7 +33,7 @@ export function ScenarioNode({ id, data, selected }: { id: string; data: Record<
         {imageUrl ? (
           <img src={imageUrl} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         ) : (
-          <span style={{ fontSize: 28, opacity: 0.4 }}>🏞</span>
+          (() => { const I = NODE_TYPE_ICONS.scenario; return <I size={28} color={wfColors.textFaint} strokeWidth={1.25} /> })()
         )}
       </div>
 

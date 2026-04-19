@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
+import { NavIcons, DEFAULT_ICON_PROPS } from '@/components/studio/workflow/theme/icons'
 
 interface BoardSummary {
   id: string
@@ -88,7 +89,9 @@ export default function WorkflowPage() {
         <div style={{ color: C.textDim, padding: 40, textAlign: 'center' }}>Carregando...</div>
       ) : boards.length === 0 ? (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '60px 40px', textAlign: 'center' }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🔄</div>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'center', color: C.textDim }}>
+            <NavIcons.workflow size={40} {...DEFAULT_ICON_PROPS} strokeWidth={1.25} />
+          </div>
           <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Nenhum board ainda</div>
           <div style={{ fontSize: 13, color: C.textDim }}>Crie seu primeiro board pra organizar referências, cenas e assets visualmente.</div>
         </div>
