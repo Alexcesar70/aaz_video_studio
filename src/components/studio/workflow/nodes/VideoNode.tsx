@@ -74,7 +74,8 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
 
   const effectivePrompt = (upstreamText ?? '').trim()
   const effectiveFirstFrame = firstFrameUrl ?? upstreamImage ?? undefined
-  const effectiveRefVideo = upstreamVideo ?? undefined
+  const referenceVideoUrl = (data.referenceVideoUrl as string) ?? undefined
+  const effectiveRefVideo = upstreamVideo ?? referenceVideoUrl
   const canRun = effectivePrompt.length > 0 && !generating
 
   const engine = useMemo(() => getEngine(modelId), [modelId])
@@ -334,7 +335,17 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
             hasValue={!!firstFrameUrl}
             accent={accent}
             disabled={generating}
-            title={firstFrameUrl ? 'Start frame anexado' : 'Anexar start frame'}
+            title={firstFrameUrl ? 'Start frame anexado (clique pra trocar)' : 'Anexar imagem como start frame'}
+          />
+          <UploadControl
+            accept="video/*"
+            onUploaded={url => patchContent({ referenceVideoUrl: url })}
+            hasValue={!!(data.referenceVideoUrl as string | undefined)}
+            accent={accent}
+            disabled={generating}
+            title={(data.referenceVideoUrl as string | undefined)
+              ? 'Vídeo de referência anexado (clique pra trocar)'
+              : 'Anexar vídeo de referência (video-to-video)'}
           />
           <button
             onClick={() => void handleRun()}
