@@ -37,6 +37,7 @@
 import { useCallback, useState } from 'react'
 import { pollJobUntilDone, type JobPollingView } from '@/lib/jobPolling'
 import { getEngine, DEFAULT_ENGINE_ID } from '@/lib/videoEngines'
+import { shapeDialoguePrompt } from './promptShapers'
 
 /** Uma imagem de referência, com opção de nome/charId pra substituição de tags. */
 export interface AvatarRefImage {
@@ -126,10 +127,14 @@ export function useAvatarGeneration(): UseAvatarGenerationResult {
 
     const engine = getEngine(engineId)
 
+    // ── Reformata diálogos entre aspas em diretiva de fala ──
+    // Trechos entre aspas viram "Dialogue (spoken in X with lip-sync):
+    // ...", que o Seedance reconhece como TTS explícito.
+    let finalPrompt = shapeDialoguePrompt(rawPrompt)
+
     // ── Substitui @Name/@charId por @imageN ──
     // Copia do AAZStudio.tsx:3562-3575. Essa é a etapa CRÍTICA que
     // casa o nome do personagem no prompt com a posição no array.
-    let finalPrompt = rawPrompt
     refImages.forEach((r, i) => {
       const imgTag = `@image${i + 1}`
       if (r.name) {

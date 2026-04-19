@@ -13,6 +13,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react'
 import type { Asset } from '@/lib/assets'
+import { CharacterCreateModal } from './CharacterCreateModal'
 
 export interface CharacterPickerProps {
   /** slug do character atualmente selecionado, ou null */
@@ -37,6 +38,21 @@ export function CharacterPicker({ value, onChange, accent = '#8B5CF6', compact =
   const [characters, setCharacters] = useState<Asset[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
+
+  const loadCharacters = () => {
+    setLoading(true)
+    return fetch('/api/assets?type=character')
+      .then(r => r.json())
+      .then((data: { assets?: Asset[] }) => {
+        setCharacters(data.assets ?? [])
+        setLoading(false)
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err.message : 'Falha ao carregar.')
+        setLoading(false)
+      })
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -56,26 +72,42 @@ export function CharacterPicker({ value, onChange, accent = '#8B5CF6', compact =
     return () => { cancelled = true }
   }, [])
 
+  const handleCreated = (asset: Asset) => {
+    setModalOpen(false)
+    // Adiciona o novo ao topo da lista localmente e seleciona
+    setCharacters(prev => [asset, ...prev.filter(c => c.id !== asset.id)])
+    onChange(asset)
+    // Re-fetch em background pra sincronizar com o servidor
+    void loadCharacters()
+  }
+
   const selected = useMemo(
     () => characters.find(c => c.id === value) ?? null,
     [characters, value],
   )
 
-  if (loading) {
-    return <div style={{ color: C.textFaint, fontSize: 11, padding: 8 }}>Carregando personagens…</div>
-  }
-  if (error) {
-    return <div style={{ color: '#ff5d7a', fontSize: 11, padding: 8 }}>{error}</div>
-  }
-  if (characters.length === 0) {
-    return (
-      <div style={{ color: C.textFaint, fontSize: 11, padding: 8 }}>
-        Nenhum personagem na biblioteca.
-      </div>
-    )
-  }
-
   const cellSize = compact ? 56 : 72
+  const createBtn = (
+    <button
+      key="__create__"
+      onClick={() => setModalOpen(true)}
+      title="Criar novo personagem"
+      style={{
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', gap: 3, padding: 4,
+        background: 'transparent',
+        border: `1px dashed ${accent}`,
+        borderRadius: 8,
+        color: accent, cursor: 'pointer',
+        fontFamily: 'inherit', fontSize: 10,
+        minHeight: cellSize,
+        transition: 'all 120ms ease',
+      }}
+    >
+      <div style={{ fontSize: compact ? 16 : 20, lineHeight: 1 }}>＋</div>
+      <span style={{ fontSize: compact ? 9 : 10 }}>Novo</span>
+    </button>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -101,6 +133,20 @@ export function CharacterPicker({ value, onChange, accent = '#8B5CF6', compact =
         </div>
       )}
 
+      {loading && (
+        <div style={{ color: C.textFaint, fontSize: 11, padding: 4 }}>
+          Carregando personagens…
+        </div>
+      )}
+      {error && (
+        <div style={{ color: '#ff5d7a', fontSize: 11, padding: 4 }}>{error}</div>
+      )}
+      {!loading && !error && characters.length === 0 && (
+        <div style={{ color: C.textFaint, fontSize: 11, padding: 4 }}>
+          Nenhum personagem na biblioteca — clique em ＋ Novo pra criar.
+        </div>
+      )}
+
       <div style={{
         display: 'grid',
         gridTemplateColumns: `repeat(auto-fill, minmax(${cellSize}px, 1fr))`,
@@ -109,6 +155,7 @@ export function CharacterPicker({ value, onChange, accent = '#8B5CF6', compact =
         overflowY: 'auto',
         padding: 4,
       }}>
+        {createBtn}
         {characters.map(c => {
           const isSelected = c.id === value
           const firstImg = c.imageUrls?.[0]
@@ -170,6 +217,13 @@ export function CharacterPicker({ value, onChange, accent = '#8B5CF6', compact =
           )
         })}
       </div>
+
+      <CharacterCreateModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={handleCreated}
+        accent={accent}
+      />
     </div>
   )
 }

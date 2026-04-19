@@ -15,6 +15,7 @@ import { ActionIcons, NODE_TYPE_ICONS, UIIcons, DEFAULT_ICON_PROPS } from '../th
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 import type { NodeAction } from '../components/NodeActionsToolbar'
 import { VIDEO_ENGINES, DEFAULT_ENGINE_ID, getEngine } from '@/lib/videoEngines'
+import { shapeDialoguePrompt } from '@/components/avatar/promptShapers'
 
 /**
  * Video Generator — equivalente ao Image Generator mas pra vídeo.
@@ -201,7 +202,10 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
 
       const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
 
-      let finalPrompt = effectivePrompt
+      // Reformata diálogos entre aspas em diretiva de fala pra
+      // disparar TTS+lip-sync no Seedance. Sem isso o trecho "'...'"
+      // vira descrição de cena e fica mudo.
+      let finalPrompt = shapeDialoguePrompt(effectivePrompt)
       if (hasOmniRefs) {
         const mentions = (tag: string) => finalPrompt.toLowerCase().includes(tag.toLowerCase())
 
