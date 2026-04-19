@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspaceContext'
 import { NavIcons, DEFAULT_ICON_PROPS, type IconComponent } from '@/components/studio/workflow/theme/icons'
+import { BearIntro } from '@/components/intro/BearIntro'
+import { useSessionIntro } from '@/components/intro/useSessionIntro'
 
 interface NavItem {
   href: string
@@ -189,12 +191,26 @@ function Sidebar() {
 export default function WorkspaceLayout({ children }: { children: React.ReactNode }) {
   return (
     <WorkspaceProvider>
-      <div style={{ display: 'flex', minHeight: '100vh', background: C.bg }}>
-        <Sidebar />
-        <main style={{ flex: 1, overflow: 'auto' }}>
-          {children}
-        </main>
-      </div>
+      <WorkspaceShell>{children}</WorkspaceShell>
     </WorkspaceProvider>
+  )
+}
+
+/**
+ * Casca visível do workspace. Fica dentro do WorkspaceProvider pra ter
+ * acesso ao `user` quando precisar (e no futuro gatear o intro por
+ * role/flag). Hoje: renderiza sidebar + main + intro one-shot.
+ */
+function WorkspaceShell({ children }: { children: React.ReactNode }) {
+  const { show: showIntro, markShown } = useSessionIntro()
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', background: C.bg }}>
+      <Sidebar />
+      <main style={{ flex: 1, overflow: 'auto' }}>
+        {children}
+      </main>
+      {showIntro && <BearIntro onDone={markShown} />}
+    </div>
   )
 }
