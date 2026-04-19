@@ -208,16 +208,24 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         if (hasVideo) manifest.push('@video1')
         finalPrompt = `${manifest.join(' ')} ${finalPrompt}`
 
-        // Hints que ativam os modos certos no Seedance. A combinação
-        // foto + vídeo é o caso "avatar herda voz+lip-sync do vídeo
-        // fonte" — Seedance extrai áudio do vídeo e transfere pra
-        // identidade da foto.
+        // Hints que ativam os modos certos no Seedance. Cobrem TODAS
+        // as combinações de avatar:
+        //   só foto          → Seedance gera voz sintética a partir do
+        //                      prompt (o que o avatar fala vem do texto)
+        //   foto + áudio     → voz/lip-sync vem do áudio (fala do áudio)
+        //   foto + vídeo     → voz/motion/lip-sync vêm do vídeo fonte
+        //   foto + ambos     → motion do vídeo + voz do áudio
+        //                      (prompt = o que ele fala, se for diferente)
         if (hasImage && hasAudio && hasVideo) {
-          finalPrompt += ', voice and lip-sync from @audio1, motion from @video1'
+          finalPrompt += ', voice from @audio1, motion and lip-sync aligned with @video1'
         } else if (hasImage && hasAudio) {
           finalPrompt += ', voice driven by @audio1 with phoneme-accurate lip-sync'
         } else if (hasImage && hasVideo) {
           finalPrompt += ', speaking with voice and lip-sync transferred from @video1'
+        } else if (hasImage) {
+          // Foto-sozinha: avatar fala o conteúdo descrito no prompt,
+          // Seedance sintetiza voz natural (timbre estimado do sujeito).
+          finalPrompt += ', speaking with natural voice, phoneme-accurate lip-sync'
         }
       }
 
