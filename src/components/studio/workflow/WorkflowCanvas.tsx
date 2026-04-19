@@ -27,6 +27,8 @@ import { CharacterNode } from './nodes/CharacterNode'
 import { ScenarioNode } from './nodes/ScenarioNode'
 import { PromptNode } from './nodes/PromptNode'
 import { SmartPrompterNode } from './nodes/SmartPrompterNode'
+import { AssistantNode } from './nodes/AssistantNode'
+import { ListNode } from './nodes/ListNode'
 import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult, type ConnectingState } from './WorkflowContext'
 import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
 import { getDataTypeColor } from './components/TypedHandle'
@@ -46,6 +48,8 @@ const nodeTypes: NodeTypes = {
   scenario: ScenarioNode,
   prompt: PromptNode,
   'smart-prompter': SmartPrompterNode,
+  assistant: AssistantNode,
+  list: ListNode,
 }
 
 export type SaveStatus = 'idle' | 'saving' | 'saved'
@@ -79,7 +83,9 @@ function toFlowEdges(connections: Array<{ id: string; source: string; target: st
 
 const TOOLBAR_ITEMS: { type: NodeType; label: string }[] = [
   { type: 'note', label: 'Texto' },
+  { type: 'list', label: 'Lista' },
   { type: 'smart-prompter', label: 'Smart Prompter' },
+  { type: 'assistant', label: 'Assistant' },
   { type: 'image', label: 'Imagem' },
   { type: 'video', label: 'Vídeo' },
   { type: 'reference', label: 'Ref' },
