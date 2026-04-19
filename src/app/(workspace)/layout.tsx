@@ -5,8 +5,6 @@ import { usePathname, useRouter } from 'next/navigation'
 import { C } from '@/components/studio/theme'
 import { WorkspaceProvider, useWorkspace } from '@/lib/workspaceContext'
 import { NavIcons, DEFAULT_ICON_PROPS, type IconComponent } from '@/components/studio/workflow/theme/icons'
-import { BearIntro } from '@/components/intro/BearIntro'
-import { useSessionIntro } from '@/components/intro/useSessionIntro'
 
 interface NavItem {
   href: string
@@ -197,20 +195,17 @@ export default function WorkspaceLayout({ children }: { children: React.ReactNod
 }
 
 /**
- * Casca visível do workspace. Fica dentro do WorkspaceProvider pra ter
- * acesso ao `user` quando precisar (e no futuro gatear o intro por
- * role/flag). Hoje: renderiza sidebar + main + intro one-shot.
+ * Casca visível do workspace. O intro animado do urso NÃO mora aqui —
+ * fica restrito ao layout de /workflow (ver `(workspace)/workflow/layout.tsx`),
+ * pra rodar só quando o usuário clica em "Workflow" no menu.
  */
 function WorkspaceShell({ children }: { children: React.ReactNode }) {
-  const { show: showIntro, markShown } = useSessionIntro()
-
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.bg }}>
       <Sidebar />
       <main style={{ flex: 1, overflow: 'auto' }}>
         {children}
       </main>
-      {showIntro && <BearIntro onDone={markShown} />}
     </div>
   )
 }
