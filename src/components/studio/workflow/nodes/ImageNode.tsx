@@ -8,6 +8,7 @@ import { OutputsGrid } from '../components/OutputsGrid'
 import { SelectControl, type SelectOption } from '../components/controls/SelectControl'
 import { CountControl } from '../components/controls/CountControl'
 import { UploadControl } from '../components/controls/UploadControl'
+import { PromptEditor } from '../components/controls/PromptEditor'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { useUpstreamText, useUpstreamImage } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
@@ -57,7 +58,8 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
   const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const accent = (data.color as string) || getNodeTypeMeta('image').color
 
-  // Estado persistido (sem prompt local — prompt vem sempre de upstream)
+  // Estado persistido
+  const persistedPrompt = (data.prompt as string) ?? ''
   const modelId = (data.modelId as string) ?? DEFAULT_IMAGE_ENGINE_ID
   const aspectRatio = (data.aspectRatio as string) ?? '1:1'
   const count = parseCount(data.count)
@@ -69,20 +71,32 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
     ?? (legacyUrl ? [{ url: legacyUrl }] : [])
   const selectedIndex = typeof data.selectedIndex === 'number' ? data.selectedIndex : 0
 
+  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Prompt vem SEMPRE de upstream (TextNode ou SmartPrompter conectado)
   const upstreamText = useUpstreamText(id)
   const upstreamImage = useUpstreamImage(id)
 
-  const effectivePrompt = (upstreamText ?? '').trim()
+  // Prompt efetivo: local tem precedência; se vazio, usa upstream
+  const effectivePrompt = (localPrompt.trim() || upstreamText?.trim() || '')
   const effectiveReference = upstreamImage ?? referenceImageUrl
   const canRun = effectivePrompt.length > 0 && !generating
 
   const patchContent = useCallback((patch: Record<string, unknown>) => {
     updateNode(id, { content: patch })
   }, [id, updateNode])
+
+  const commitPrompt = useCallback(() => {
+    if (localPrompt !== persistedPrompt) {
+      patchContent({ prompt: localPrompt })
+    }
+  }, [localPrompt, persistedPrompt, patchContent])
+
+  const handleRefined = useCallback((refined: string) => {
+    setLocalPrompt(refined)
+    patchContent({ prompt: refined })
+  }, [patchContent])
 
   const handleRun = useCallback(async () => {
     if (!canRun) return
@@ -206,15 +220,20 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
           )}
         </div>
 
-        {/* Hint quando faltam conexões */}
-        {!upstreamText && (
-          <div style={{
-            padding: '0 12px 8px',
-            fontSize: 10, color: wfColors.textFaint, textAlign: 'center',
-          }}>
-            conecte um Texto ou Smart Prompter ←
-          </div>
-        )}
+        {/* Editor de prompt inline: textarea + Refinar com IA */}
+        <div style={{ padding: '0 12px 8px' }}>
+          <PromptEditor
+            value={localPrompt}
+            onChange={setLocalPrompt}
+            onCommit={commitPrompt}
+            onRefined={handleRefined}
+            upstream={upstreamText}
+            accent={accent}
+            disabled={generating}
+            placeholder="Descreva a imagem…"
+            minHeight={80}
+          />
+        </div>
 
         {/* Error banner */}
         {error && (

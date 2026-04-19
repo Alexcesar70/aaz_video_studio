@@ -5,6 +5,7 @@ import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
 import { NodeFrame } from '../components/NodeFrame'
 import { SelectControl, type SelectOption } from '../components/controls/SelectControl'
+import { PromptEditor } from '../components/controls/PromptEditor'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { useUpstreamText } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
@@ -49,18 +50,19 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
   const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const accent = (data.color as string) || getNodeTypeMeta('audio').color
 
+  const persistedPrompt = (data.prompt as string) ?? ''
   const mode = ((data.mode as string) ?? 'song') as 'song' | 'lyrics' | 'instrumental'
   const style = (data.style as string) ?? ''
   const title = (data.title as string) ?? ''
   const url = (data.url as string) ?? (data.musicUrl as string) ?? undefined
 
+  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
   const [localTitle, setLocalTitle] = useState(title)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Prompt vem SEMPRE de upstream (TextNode ou SmartPrompter conectado)
   const upstreamText = useUpstreamText(id)
-  const effectivePrompt = (upstreamText ?? '').trim()
+  const effectivePrompt = (localPrompt.trim() || upstreamText?.trim() || '')
   const canRun = effectivePrompt.length > 0 && !generating
 
   const commitTitle = useCallback(() => {
@@ -70,6 +72,15 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
   const patchContent = useCallback((patch: Record<string, unknown>) => {
     updateNode(id, { content: patch })
   }, [id, updateNode])
+
+  const commitPrompt = useCallback(() => {
+    if (localPrompt !== persistedPrompt) patchContent({ prompt: localPrompt })
+  }, [localPrompt, persistedPrompt, patchContent])
+
+  const handleRefined = useCallback((refined: string) => {
+    setLocalPrompt(refined)
+    patchContent({ prompt: refined })
+  }, [patchContent])
 
   const handleRun = useCallback(async () => {
     if (!canRun) return
@@ -175,14 +186,20 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
           }}
         />
 
-        {/* Hint quando faltam conexões */}
-        {!upstreamText && (
-          <div style={{
-            fontSize: 10, color: wfColors.textFaint, textAlign: 'center', marginBottom: 8,
-          }}>
-            conecte um Texto ou Smart Prompter ←
-          </div>
-        )}
+        {/* Editor de prompt inline: letra/descrição + Refinar com IA */}
+        <div style={{ marginBottom: 8 }}>
+          <PromptEditor
+            value={localPrompt}
+            onChange={setLocalPrompt}
+            onCommit={commitPrompt}
+            onRefined={handleRefined}
+            upstream={upstreamText}
+            accent={accent}
+            disabled={generating}
+            placeholder={mode === 'lyrics' ? 'Cole a letra…' : 'Descreva a música…'}
+            minHeight={70}
+          />
+        </div>
 
         {error && (
           <div style={{

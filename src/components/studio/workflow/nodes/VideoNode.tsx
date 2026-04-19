@@ -7,6 +7,7 @@ import { NodeFrame } from '../components/NodeFrame'
 import { OutputsGrid } from '../components/OutputsGrid'
 import { SelectControl, type SelectOption } from '../components/controls/SelectControl'
 import { UploadControl } from '../components/controls/UploadControl'
+import { PromptEditor } from '../components/controls/PromptEditor'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { useUpstreamText, useUpstreamImage, useUpstreamVideo } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
@@ -51,6 +52,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const accent = (data.color as string) || getNodeTypeMeta('video').color
 
   // Estado persistido
+  const persistedPrompt = (data.prompt as string) ?? ''
   const modelId = (data.modelId as string) ?? DEFAULT_ENGINE_ID
   const aspectRatio = (data.aspectRatio as string) ?? '16:9'
   const duration = (data.duration as number) ?? 5
@@ -62,7 +64,8 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
     ?? (legacyUrl ? [{ url: legacyUrl }] : [])
   const selectedIndex = typeof data.selectedIndex === 'number' ? data.selectedIndex : 0
 
-  // Sem textarea local — prompt vem SEMPRE de upstream (TextNode/SmartPrompter)
+  // Prompt local editável (persistido on blur); upstream é fallback
+  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
   const [jobId, setJobId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -72,7 +75,8 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const upstreamImage = useUpstreamImage(id)
   const upstreamVideo = useUpstreamVideo(id)
 
-  const effectivePrompt = (upstreamText ?? '').trim()
+  // Prompt efetivo: local tem precedência; se vazio, usa upstream
+  const effectivePrompt = (localPrompt.trim() || upstreamText?.trim() || '')
   const effectiveFirstFrame = firstFrameUrl ?? upstreamImage ?? undefined
   const referenceVideoUrl = (data.referenceVideoUrl as string) ?? undefined
   const effectiveRefVideo = upstreamVideo ?? referenceVideoUrl
@@ -98,6 +102,17 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const patchContent = useCallback((patch: Record<string, unknown>) => {
     updateNode(id, { content: patch })
   }, [id, updateNode])
+
+  const commitPrompt = useCallback(() => {
+    if (localPrompt !== persistedPrompt) {
+      patchContent({ prompt: localPrompt })
+    }
+  }, [localPrompt, persistedPrompt, patchContent])
+
+  const handleRefined = useCallback((refined: string) => {
+    setLocalPrompt(refined)
+    patchContent({ prompt: refined })
+  }, [patchContent])
 
   // ─── Polling do job ──────────────────────────────────────────
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -283,15 +298,20 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
           )}
         </div>
 
-        {/* Hint quando faltam conexões — micro, sem ocupar muito espaço */}
-        {!upstreamText && (
-          <div style={{
-            padding: '0 12px 6px',
-            fontSize: 10, color: wfColors.textFaint, textAlign: 'center',
-          }}>
-            conecte um Texto ou Smart Prompter ←
-          </div>
-        )}
+        {/* Editor de prompt inline: textarea + Refinar com IA */}
+        <div style={{ padding: '0 12px 8px' }}>
+          <PromptEditor
+            value={localPrompt}
+            onChange={setLocalPrompt}
+            onCommit={commitPrompt}
+            onRefined={handleRefined}
+            upstream={upstreamText}
+            accent={accent}
+            disabled={generating}
+            placeholder="Descreva o vídeo…"
+            minHeight={80}
+          />
+        </div>
 
         {/* Error */}
         {error && (
