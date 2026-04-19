@@ -49,26 +49,19 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
   const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const accent = (data.color as string) || getNodeTypeMeta('audio').color
 
-  const persistedPrompt = (data.prompt as string) ?? ''
   const mode = ((data.mode as string) ?? 'song') as 'song' | 'lyrics' | 'instrumental'
   const style = (data.style as string) ?? ''
   const title = (data.title as string) ?? ''
   const url = (data.url as string) ?? (data.musicUrl as string) ?? undefined
 
-  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
   const [localTitle, setLocalTitle] = useState(title)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Prompt vem SEMPRE de upstream (TextNode ou SmartPrompter conectado)
   const upstreamText = useUpstreamText(id)
-  const effectivePrompt = (upstreamText ?? localPrompt).trim()
+  const effectivePrompt = (upstreamText ?? '').trim()
   const canRun = effectivePrompt.length > 0 && !generating
-
-  const commitPrompt = useCallback(() => {
-    if (localPrompt !== persistedPrompt) {
-      updateNode(id, { content: { prompt: localPrompt } })
-    }
-  }, [id, localPrompt, persistedPrompt, updateNode])
 
   const commitTitle = useCallback(() => {
     if (localTitle !== title) updateNode(id, { content: { title: localTitle } })
@@ -190,34 +183,13 @@ export function AudioNode({ id, data, selected }: { id: string; data: Record<str
           }}
         />
 
-        {/* Prompt / Letra */}
-        {upstreamText ? (
+        {/* Hint quando faltam conexões */}
+        {!upstreamText && (
           <div style={{
-            padding: '6px 8px', borderRadius: wfRadius.control,
-            background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-            fontSize: 10, color: wfColors.textDim, marginBottom: 8,
-            display: 'flex', alignItems: 'center', gap: 5,
+            fontSize: 10, color: wfColors.textFaint, textAlign: 'center', marginBottom: 8,
           }}>
-            <span style={{ color: accent }}>●</span>
-            <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Texto conectado — {upstreamText.slice(0, 50)}{upstreamText.length > 50 ? '…' : ''}
-            </span>
+            conecte um Texto ou Smart Prompter ←
           </div>
-        ) : (
-          <textarea
-            value={localPrompt}
-            onChange={e => setLocalPrompt(e.target.value)}
-            onBlur={commitPrompt}
-            placeholder={mode === 'lyrics' ? 'Cole a letra…' : 'Descreva a música…'}
-            className="nodrag"
-            style={{
-              width: '100%', minHeight: 56, padding: 8, borderRadius: wfRadius.control,
-              background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-              color: wfColors.text, fontSize: 11, fontFamily: 'inherit',
-              resize: 'vertical', outline: 'none',
-              lineHeight: 1.4, marginBottom: 8,
-            }}
-          />
         )}
 
         {error && (

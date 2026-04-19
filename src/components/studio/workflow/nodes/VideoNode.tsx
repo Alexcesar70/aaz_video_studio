@@ -51,7 +51,6 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const accent = (data.color as string) || getNodeTypeMeta('video').color
 
   // Estado persistido
-  const persistedPrompt = (data.prompt as string) ?? ''
   const modelId = (data.modelId as string) ?? DEFAULT_ENGINE_ID
   const aspectRatio = (data.aspectRatio as string) ?? '16:9'
   const duration = (data.duration as number) ?? 5
@@ -63,8 +62,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
     ?? (legacyUrl ? [{ url: legacyUrl }] : [])
   const selectedIndex = typeof data.selectedIndex === 'number' ? data.selectedIndex : 0
 
-  // Prompt local (digitação). Commit on blur.
-  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
+  // Sem textarea local — prompt vem SEMPRE de upstream (TextNode/SmartPrompter)
   const [jobId, setJobId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -74,7 +72,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const upstreamImage = useUpstreamImage(id)
   const upstreamVideo = useUpstreamVideo(id)
 
-  const effectivePrompt = (upstreamText ?? localPrompt).trim()
+  const effectivePrompt = (upstreamText ?? '').trim()
   const effectiveFirstFrame = firstFrameUrl ?? upstreamImage ?? undefined
   const effectiveRefVideo = upstreamVideo ?? undefined
   const canRun = effectivePrompt.length > 0 && !generating
@@ -95,12 +93,6 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
     () => engine.durations.map(d => ({ value: String(d), label: `${d}s` })),
     [engine],
   )
-
-  const commitPrompt = useCallback(() => {
-    if (localPrompt !== persistedPrompt) {
-      updateNode(id, { content: { prompt: localPrompt } })
-    }
-  }, [id, localPrompt, persistedPrompt, updateNode])
 
   const patchContent = useCallback((patch: Record<string, unknown>) => {
     updateNode(id, { content: patch })
@@ -298,41 +290,13 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
           )}
         </div>
 
-        {/* Connections summary */}
-        {(upstreamText || upstreamImage || upstreamVideo) && (
+        {/* Hint quando faltam conexões — micro, sem ocupar muito espaço */}
+        {!upstreamText && (
           <div style={{
             padding: '0 12px 6px',
-            display: 'flex', gap: 4, flexWrap: 'wrap',
+            fontSize: 10, color: wfColors.textFaint, textAlign: 'center',
           }}>
-            {upstreamText && (
-              <ConnectionChip label="Prompt" value={upstreamText} color="#C6D66E" />
-            )}
-            {upstreamImage && !firstFrameUrl && (
-              <ConnectionChip label="Start" value="imagem conectada" color={accent} />
-            )}
-            {upstreamVideo && (
-              <ConnectionChip label="Ref" value="vídeo conectado" color={accent} />
-            )}
-          </div>
-        )}
-
-        {/* Prompt editor — só se não conectado */}
-        {!upstreamText && (
-          <div style={{ padding: '0 12px 8px' }}>
-            <textarea
-              value={localPrompt}
-              onChange={e => setLocalPrompt(e.target.value)}
-              onBlur={commitPrompt}
-              placeholder="Descreva o vídeo…"
-              className="nodrag"
-              style={{
-                width: '100%', minHeight: 56, padding: 8, borderRadius: wfRadius.control,
-                background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-                color: wfColors.text, fontSize: 11, fontFamily: 'inherit',
-                resize: 'vertical', outline: 'none',
-                lineHeight: 1.4,
-              }}
-            />
+            conecte um Texto ou Smart Prompter ←
           </div>
         )}
 
@@ -403,24 +367,3 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   )
 }
 
-/**
- * Chip compacto que resume uma conexão upstream ativa.
- */
-function ConnectionChip({ label, value, color }: { label: string; value: string; color: string }) {
-  return (
-    <div style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      padding: '2px 6px',
-      background: `${color}15`,
-      border: `1px solid ${color}40`,
-      borderRadius: wfRadius.control,
-      fontSize: 9, color: wfColors.textDim,
-      maxWidth: 130,
-    }}>
-      <span style={{ color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.3 }}>{label}</span>
-      <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {value.length > 30 ? value.slice(0, 30) + '…' : value}
-      </span>
-    </div>
-  )
-}

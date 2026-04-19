@@ -57,8 +57,7 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
   const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const accent = (data.color as string) || getNodeTypeMeta('image').color
 
-  // Estado persistido
-  const persistedPrompt = (data.prompt as string) ?? (data.text as string) ?? ''
+  // Estado persistido (sem prompt local — prompt vem sempre de upstream)
   const modelId = (data.modelId as string) ?? DEFAULT_IMAGE_ENGINE_ID
   const aspectRatio = (data.aspectRatio as string) ?? '1:1'
   const count = parseCount(data.count)
@@ -70,25 +69,16 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
     ?? (legacyUrl ? [{ url: legacyUrl }] : [])
   const selectedIndex = typeof data.selectedIndex === 'number' ? data.selectedIndex : 0
 
-  // Estado local só pra textarea (digitação). Commit ao blur.
-  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
   const [generating, setGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Texto upstream (quando TextNode/SmartPrompter conecta)
+  // Prompt vem SEMPRE de upstream (TextNode ou SmartPrompter conectado)
   const upstreamText = useUpstreamText(id)
   const upstreamImage = useUpstreamImage(id)
 
-  // Prompt efetivo que vai pra API
-  const effectivePrompt = (upstreamText ?? localPrompt).trim()
+  const effectivePrompt = (upstreamText ?? '').trim()
   const effectiveReference = upstreamImage ?? referenceImageUrl
   const canRun = effectivePrompt.length > 0 && !generating
-
-  const commitPrompt = useCallback(() => {
-    if (localPrompt !== persistedPrompt) {
-      updateNode(id, { content: { prompt: localPrompt } })
-    }
-  }, [id, localPrompt, persistedPrompt, updateNode])
 
   const patchContent = useCallback((patch: Record<string, unknown>) => {
     updateNode(id, { content: patch })
@@ -224,37 +214,15 @@ export function ImageNode({ id, data, selected }: { id: string; data: Record<str
           )}
         </div>
 
-        {/* Prompt input */}
-        <div style={{ padding: '0 12px 8px' }}>
-          {upstreamText ? (
-            <div style={{
-              padding: '6px 8px', borderRadius: wfRadius.control,
-              background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-              fontSize: 10, color: wfColors.textDim,
-              display: 'flex', alignItems: 'center', gap: 5,
-            }}>
-              <span style={{ color: accent }}>●</span>
-              <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                Prompt conectado — {upstreamText.slice(0, 60)}{upstreamText.length > 60 ? '…' : ''}
-              </span>
-            </div>
-          ) : (
-            <textarea
-              value={localPrompt}
-              onChange={e => setLocalPrompt(e.target.value)}
-              onBlur={commitPrompt}
-              placeholder="Descreva a imagem…"
-              className="nodrag"
-              style={{
-                width: '100%', minHeight: 56, padding: 8, borderRadius: wfRadius.control,
-                background: wfColors.surfaceDeep, border: `1px solid ${wfColors.border}`,
-                color: wfColors.text, fontSize: 11, fontFamily: 'inherit',
-                resize: 'vertical', outline: 'none',
-                lineHeight: 1.4,
-              }}
-            />
-          )}
-        </div>
+        {/* Hint quando faltam conexões */}
+        {!upstreamText && (
+          <div style={{
+            padding: '0 12px 8px',
+            fontSize: 10, color: wfColors.textFaint, textAlign: 'center',
+          }}>
+            conecte um Texto ou Smart Prompter ←
+          </div>
+        )}
 
         {/* Error banner */}
         {error && (
