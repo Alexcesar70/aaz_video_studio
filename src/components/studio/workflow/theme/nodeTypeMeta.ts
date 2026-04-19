@@ -38,6 +38,14 @@ export const NODE_TYPE_META: Record<NodeType, NodeTypeMeta> = {
     inputTypes: ['text', 'image'],
     outputType: 'text',
   },
+  'smart-prompter': {
+    color: '#E59866',
+    icon: '✨',
+    label: 'Smart Prompter',
+    category: 'transformer',
+    inputTypes: ['text', 'prompt'],
+    outputType: 'prompt',
+  },
   image: {
     color: '#8B5CF6',
     icon: '🖼',

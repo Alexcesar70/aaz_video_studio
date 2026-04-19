@@ -77,6 +77,7 @@ export type IconComponent = (props: BearIconProps) => JSX.Element
 export const NODE_TYPE_ICONS: Record<NodeType, IconComponent> = {
   note: TextBlockIcon,
   prompt: PromptEnhanceIcon,
+  'smart-prompter': PromptEnhanceIcon,
   image: ImageGeneratorIcon,
   video: VideoGeneratorIcon,
   reference: StyleReferenceIcon,
