@@ -1,12 +1,12 @@
 'use client'
 
 import React, { useState, useMemo, useCallback } from 'react'
-import { useStore } from '@xyflow/react'
 import { useWorkflow } from '../WorkflowContext'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
 import { NodeFrame } from '../components/NodeFrame'
 import { standardNodeActions } from '../components/nodeActions'
+import { useUpstreamText } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { ActionIcons, UIIcons, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
@@ -20,24 +20,6 @@ const CATEGORY_META: Record<PromptSuggestion['category'], { icon: string; color:
   emotion: { icon: '💭', color: '#D4A0C8', label: 'Emoção' },
   style: { icon: '🎨', color: '#AFA9EC', label: 'Estilo' },
   technical: { icon: '⚙', color: '#9F9AB8', label: 'Técnico' },
-}
-
-/**
- * Lê o texto do nó upstream conectado ao input deste SP.
- * Retorna null se não há conexão. Reativo: useStore faz re-render
- * sempre que edges/nodes mudam no canvas.
- */
-function useUpstreamText(nodeId: string): string | null {
-  return useStore((state) => {
-    const edges = state.edges
-    const inbound = edges.filter(e => e.target === nodeId)
-    if (inbound.length === 0) return null
-    const sourceId = inbound[0].source
-    const src = state.nodeLookup.get(sourceId)
-    if (!src) return null
-    const d = src.data as Record<string, unknown>
-    return (d.refinedPrompt as string) ?? (d.text as string) ?? null
-  })
 }
 
 export function SmartPrompterNode({
