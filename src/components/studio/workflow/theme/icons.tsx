@@ -81,6 +81,7 @@ export const NODE_TYPE_ICONS: Record<NodeType, IconComponent> = {
   'smart-prompter': PromptEnhanceIcon,
   assistant: PromptEnhanceIcon,
   list: LayersIcon,
+  sticky: TextBlockIcon,
   image: ImageGeneratorIcon,
   video: VideoGeneratorIcon,
   reference: StyleReferenceIcon,

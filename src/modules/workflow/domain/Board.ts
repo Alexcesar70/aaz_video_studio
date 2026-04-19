@@ -1,4 +1,4 @@
-export type NodeType = 'note' | 'image' | 'video' | 'character' | 'scenario' | 'reference' | 'prompt' | 'smart-prompter' | 'assistant' | 'list' | 'audio' | 'group' | 'task'
+export type NodeType = 'note' | 'image' | 'video' | 'character' | 'scenario' | 'reference' | 'prompt' | 'smart-prompter' | 'assistant' | 'list' | 'audio' | 'sticky' | 'group' | 'task'
 
 export interface NodePosition {
   x: number

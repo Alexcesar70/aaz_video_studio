@@ -107,6 +107,12 @@ export const NODE_TYPE_META: Record<NodeType, NodeTypeMeta> = {
     inputTypes: ['text', 'any'],
     outputType: 'text',
   },
+  sticky: {
+    color: '#FEF08A',
+    icon: '📌',
+    label: 'Post-it',
+    category: 'output',
+  },
   group: {
     color: '#9F9AB8',
     icon: '📦',

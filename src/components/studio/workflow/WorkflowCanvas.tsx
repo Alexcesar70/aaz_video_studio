@@ -29,6 +29,8 @@ import { PromptNode } from './nodes/PromptNode'
 import { SmartPrompterNode } from './nodes/SmartPrompterNode'
 import { AssistantNode } from './nodes/AssistantNode'
 import { ListNode } from './nodes/ListNode'
+import { AudioNode } from './nodes/AudioNode'
+import { StickyNote } from './nodes/StickyNote'
 import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult, type ConnectingState } from './WorkflowContext'
 import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
 import { getDataTypeColor } from './components/TypedHandle'
@@ -50,6 +52,8 @@ const nodeTypes: NodeTypes = {
   'smart-prompter': SmartPrompterNode,
   assistant: AssistantNode,
   list: ListNode,
+  audio: AudioNode,
+  sticky: StickyNote,
 }
 
 export type SaveStatus = 'idle' | 'saving' | 'saved'
@@ -88,7 +92,9 @@ const TOOLBAR_ITEMS: { type: NodeType; label: string }[] = [
   { type: 'assistant', label: 'Assistant' },
   { type: 'image', label: 'Imagem' },
   { type: 'video', label: 'Vídeo' },
+  { type: 'audio', label: 'Áudio' },
   { type: 'reference', label: 'Ref' },
+  { type: 'sticky', label: 'Post-it' },
 ]
 
 export function WorkflowCanvas(props: WorkflowCanvasProps) {
