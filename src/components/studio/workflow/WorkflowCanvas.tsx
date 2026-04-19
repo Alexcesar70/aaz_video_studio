@@ -396,10 +396,29 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
     })
   }, [setEdges, scheduleConnectionsSave])
 
+  /**
+   * Posiciona um novo nó no centro do viewport atual do canvas (área
+   * visível pro usuário), com pequeno offset aleatório pra evitar
+   * empilhar quando vários são criados em sequência. Converte coords
+   * de tela pra coords do flow via screenToFlowPosition.
+   */
   const addNode = useCallback((type: NodeType) => {
-    const position = { x: 200 + Math.random() * 300, y: 100 + Math.random() * 200 }
+    const canvasEl = document.querySelector('.react-flow') as HTMLElement | null
+    const rect = canvasEl?.getBoundingClientRect()
+    const cx = rect ? rect.left + rect.width / 2 : window.innerWidth / 2
+    const cy = rect ? rect.top + rect.height / 2 : window.innerHeight / 2
+    const flowCenter = screenToFlowPosition({ x: cx, y: cy })
+    // Ajuste aproximado pra que o CENTRO do nó bata com o centro do viewport
+    // (xyflow posiciona nós pelo topo-esquerda; nós variam ~110–160px de meia-largura)
+    const HALF_W = 120
+    const HALF_H = 70
+    const jitter = { x: (Math.random() - 0.5) * 30, y: (Math.random() - 0.5) * 30 }
+    const position = {
+      x: flowCenter.x - HALF_W + jitter.x,
+      y: flowCenter.y - HALF_H + jitter.y,
+    }
     createNodeAt(type, position)
-  }, [createNodeAt])
+  }, [createNodeAt, screenToFlowPosition])
 
   useEffect(() => {
     const handler = (ev: KeyboardEvent) => {

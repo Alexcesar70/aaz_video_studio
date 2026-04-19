@@ -78,7 +78,7 @@ export function NodeShell({
         animation: glowAnimation,
         color: wfColors.text,
         overflow: 'hidden',
-        padding: flush ? 0 : padding ?? 12,
+        padding: flush ? 0 : padding ?? 10,
         width,
         minWidth,
         maxWidth,

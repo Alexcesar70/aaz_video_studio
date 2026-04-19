@@ -7,14 +7,18 @@ import { getNodeTypeIcon, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors } from '../theme/workflowTheme'
 
 /**
- * Header padrão de qualquer nó: ícone + label tipográfico minúsculo à esquerda,
- * slot à direita pra status/ações (ex: "gerando...", "3 outputs").
+ * Header de qualquer nó. Por padrão mostra apenas o ícone do tipo à
+ * esquerda (modo elegante/compacto) e permite slot customizado à direita
+ * (status, score, timer).
+ *
+ * Se `label` for passado, renderiza também o texto ao lado do ícone
+ * (útil pra Character/Scenario que têm nome customizado).
  *
  * Stateless — recebe tudo por props.
  */
 export interface NodeHeaderProps {
   type: NodeType
-  /** Override do label (ex: nome customizado do nó) */
+  /** Texto opcional ao lado do ícone. Omitir = só ícone (padrão elegante). */
   label?: string
   /** Conteúdo à direita (status, badge, timer) */
   right?: React.ReactNode
@@ -35,23 +39,28 @@ export function NodeHeader({ type, label, right, accent, style }: NodeHeaderProp
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 8,
-        marginBottom: 8,
-        fontSize: 10,
-        letterSpacing: 0.6,
-        textTransform: 'uppercase',
+        marginBottom: 6,
         color: wfColors.textDim,
+        minHeight: 14,
         ...style,
       }}
     >
       <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <Icon size={13} color={color} {...DEFAULT_ICON_PROPS} />
-        <span style={{ fontWeight: 600 }}>{label ?? meta.label}</span>
+        <Icon size={14} color={color} {...DEFAULT_ICON_PROPS} />
+        {label && (
+          <span style={{
+            fontSize: 10, letterSpacing: 0.6, textTransform: 'uppercase', fontWeight: 600,
+          }}>
+            {label}
+          </span>
+        )}
       </span>
       {right !== undefined && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 4, textTransform: 'none', letterSpacing: 0 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           {right}
         </span>
       )}
     </div>
   )
 }
+

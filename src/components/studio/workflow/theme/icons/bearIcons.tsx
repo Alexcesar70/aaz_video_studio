@@ -421,6 +421,20 @@ export const UserIcon = (props: BearIconProps) => (
   </BearIcon>
 )
 
+/**
+ * Users (dois usuários — time). Mantém o mesmo estilo do UserIcon:
+ * pessoa principal à esquerda, segunda pessoa sobreposta atrás à
+ * direita. Sinaliza "mais de uma pessoa" sem poluir visual.
+ */
+export const UsersIcon = (props: BearIconProps) => (
+  <BearIcon {...props}>
+    <circle cx="9.5" cy="8.5" r="3"/>
+    <path d="M3.5 20c0-3.6 2.7-6 6-6s6 2.4 6 6"/>
+    <circle cx="16.5" cy="6.5" r="2.3"/>
+    <path d="M14.5 14.2c3 .4 5 2.6 5 5.8"/>
+  </BearIcon>
+)
+
 /** Layers (layers) */
 export const LayersIcon = (props: BearIconProps) => (
   <BearIcon {...props}>
