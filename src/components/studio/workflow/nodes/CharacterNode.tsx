@@ -1,12 +1,16 @@
 'use client'
 import React from 'react'
 import { Handle, Position } from '@xyflow/react'
+import { useWorkflow } from '../WorkflowContext'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
+import { NodeActionsToolbar } from '../components/NodeActionsToolbar'
+import { standardNodeActions } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { wfColors } from '../theme/workflowTheme'
 
-export function CharacterNode({ data, selected }: { data: Record<string, unknown>; selected: boolean }) {
+export function CharacterNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
+  const { duplicateNode, deleteNode } = useWorkflow()
   const name = (data.name as string) ?? (data.label as string) ?? 'Personagem'
   const sheetUrl = data.sheetUrl as string | undefined
   const emoji = (data.emoji as string) ?? '👤'
@@ -14,6 +18,7 @@ export function CharacterNode({ data, selected }: { data: Record<string, unknown
 
   return (
     <NodeShell type="character" selected={selected} colorOverride={accent} width={180} flush>
+      <NodeActionsToolbar actions={standardNodeActions(id, { duplicateNode, deleteNode })} />
       <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8, marginTop: 24 }} />
 
       <div style={{ padding: '10px 12px 6px' }}>

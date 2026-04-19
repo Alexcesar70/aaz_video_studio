@@ -4,11 +4,13 @@ import { Handle, Position } from '@xyflow/react'
 import { useWorkflow } from '../WorkflowContext'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
+import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
+import { standardNodeActions, openLinkAction } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function ReferenceNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
-  const { updateNode } = useWorkflow()
+  const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const url = data.url as string | undefined
   const label = (data.label as string) ?? ''
   const accent = (data.color as string) || getNodeTypeMeta('reference').color
@@ -16,6 +18,18 @@ export function ReferenceNode({ id, data, selected }: { id: string; data: Record
   const [editing, setEditing] = useState(false)
   const [draftUrl, setDraftUrl] = useState(url ?? '')
   const [draftLabel, setDraftLabel] = useState(label)
+
+  const openAction = openLinkAction(url)
+  const actions: NodeAction[] = [
+    {
+      id: 'edit-url',
+      icon: '✎',
+      title: 'Editar URL',
+      onClick: () => setEditing(true),
+    },
+    ...(openAction ? [openAction] : []),
+    ...standardNodeActions(id, { duplicateNode, deleteNode }),
+  ]
 
   const save = () => {
     setEditing(false)
@@ -29,6 +43,7 @@ export function ReferenceNode({ id, data, selected }: { id: string; data: Record
 
   return (
     <NodeShell type="reference" selected={selected} colorOverride={accent} minWidth={180} maxWidth={260}>
+      <NodeActionsToolbar actions={actions} />
       <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8 }} />
       <NodeHeader type="reference" accent={accent} />
 

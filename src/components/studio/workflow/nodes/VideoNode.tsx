@@ -4,11 +4,13 @@ import { Handle, Position } from '@xyflow/react'
 import { useWorkflow } from '../WorkflowContext'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
+import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
+import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function VideoNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
-  const { updateNode } = useWorkflow()
+  const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const url = data.url as string | undefined
   const label = (data.label as string) ?? ''
   const duration = data.duration as number | undefined
@@ -17,6 +19,17 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const [editing, setEditing] = useState(false)
   const [draftUrl, setDraftUrl] = useState(url ?? '')
   const [draftLabel, setDraftLabel] = useState(label)
+
+  const actions: NodeAction[] = [
+    {
+      id: 'edit-url',
+      icon: '✎',
+      title: 'Editar URL',
+      onClick: () => setEditing(true),
+    },
+    ...(downloadAction(url, `${label || 'video'}.mp4`) ? [downloadAction(url, `${label || 'video'}.mp4`)!] : []),
+    ...standardNodeActions(id, { duplicateNode, deleteNode }),
+  ]
 
   const save = () => {
     setEditing(false)
@@ -28,6 +41,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
 
   return (
     <NodeShell type="video" selected={selected} colorOverride={accent} width={220} flush>
+      <NodeActionsToolbar actions={actions} />
       <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8, marginTop: 24 }} />
 
       <div style={{ padding: '10px 12px 6px' }}>

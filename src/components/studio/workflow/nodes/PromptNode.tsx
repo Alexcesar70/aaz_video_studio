@@ -5,11 +5,13 @@ import { useWorkflow } from '../WorkflowContext'
 import { SmartPrompter } from '../../SmartPrompter'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
+import { NodeActionsToolbar, type NodeAction } from '../components/NodeActionsToolbar'
+import { standardNodeActions } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function PromptNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
-  const { updateNode, generateImageFromPrompt } = useWorkflow()
+  const { updateNode, generateImageFromPrompt, duplicateNode, deleteNode } = useWorkflow()
   const accent = (data.color as string) || getNodeTypeMeta('prompt').color
   const initialText = (data.text as string) ?? ''
 
@@ -47,8 +49,21 @@ export function PromptNode({ id, data, selected }: { id: string; data: Record<st
     updateNode(id, { content: { count: n } })
   }
 
+  const actions: NodeAction[] = [
+    {
+      id: 'run',
+      icon: '▶',
+      title: 'Gerar agora',
+      tone: 'primary',
+      disabled: !text.trim() || generating,
+      onClick: () => { void handleGenerate() },
+    },
+    ...standardNodeActions(id, { duplicateNode, deleteNode }),
+  ]
+
   return (
     <NodeShell type="prompt" selected={selected} colorOverride={accent} width={280}>
+      <NodeActionsToolbar actions={actions} />
       <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8 }} />
 
       <NodeHeader

@@ -4,11 +4,13 @@ import { Handle, Position } from '@xyflow/react'
 import { useWorkflow } from '../WorkflowContext'
 import { NodeShell } from '../components/NodeShell'
 import { NodeHeader } from '../components/NodeHeader'
+import { NodeActionsToolbar } from '../components/NodeActionsToolbar'
+import { standardNodeActions } from '../components/nodeActions'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 
 export function NoteNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
-  const { updateNode } = useWorkflow()
+  const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const [editing, setEditing] = useState(false)
   const [text, setText] = useState((data.text as string) ?? '')
   const accent = (data.color as string) || getNodeTypeMeta('note').color
@@ -22,6 +24,7 @@ export function NoteNode({ id, data, selected }: { id: string; data: Record<stri
 
   return (
     <NodeShell type="note" selected={selected} colorOverride={accent} minWidth={180} maxWidth={280}>
+      <NodeActionsToolbar actions={standardNodeActions(id, { duplicateNode, deleteNode })} />
       <Handle type="target" position={Position.Left} style={{ background: accent, width: 8, height: 8 }} />
       <NodeHeader type="note" accent={accent} />
 
