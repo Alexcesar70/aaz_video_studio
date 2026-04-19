@@ -196,16 +196,29 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
 
       const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
 
-      const tagPrefixes: string[] = []
-      refImages.forEach((_, i) => tagPrefixes.push(`@image${i + 1}`))
-      if (effectiveRefVideo) tagPrefixes.push('@video1')
+      const imageTags = refImages.map((_, i) => `@image${i + 1}`)
+      const hasImage = imageTags.length > 0
+      const hasVideo = !!effectiveRefVideo
+      const hasAudio = !!effectiveAudio
 
       let finalPrompt = effectivePrompt
-      if (tagPrefixes.length > 0) {
-        finalPrompt = `${tagPrefixes.join(' ')} ${finalPrompt}`
-      }
-      if (effectiveAudio) {
-        finalPrompt = `${finalPrompt}, voice driven by @audio1 with phoneme-accurate lip-sync`
+      if (hasOmniRefs) {
+        const manifest: string[] = []
+        if (hasImage) manifest.push(imageTags.join(' '))
+        if (hasVideo) manifest.push('@video1')
+        finalPrompt = `${manifest.join(' ')} ${finalPrompt}`
+
+        // Hints que ativam os modos certos no Seedance. A combinação
+        // foto + vídeo é o caso "avatar herda voz+lip-sync do vídeo
+        // fonte" — Seedance extrai áudio do vídeo e transfere pra
+        // identidade da foto.
+        if (hasImage && hasAudio && hasVideo) {
+          finalPrompt += ', voice and lip-sync from @audio1, motion from @video1'
+        } else if (hasImage && hasAudio) {
+          finalPrompt += ', voice driven by @audio1 with phoneme-accurate lip-sync'
+        } else if (hasImage && hasVideo) {
+          finalPrompt += ', speaking with voice and lip-sync transferred from @video1'
+        }
       }
 
       const body: Record<string, unknown> = {
