@@ -183,16 +183,17 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
     setError(null)
     try {
       /**
-       * Seedance 2.0 ativa seus modos (avatar com lip-sync, identity-ref,
-       * video-to-video, voice-clone) via TAGS dentro do prompt: @image1,
-       * @image2, @video1, @audio1. As tags casam 1-based com a posição
-       * nos arrays reference_images/videos/audios.
+       * Payload espelhando o padrão que funciona no AAZStudio.tsx
+       * (generate() em ~L3517). Chaves:
        *
-       * Estrutura do prompt segue a doc da Segmind:
-       *   "@image1 is the character. @video1 provides motion. {prompt}"
-       * Essa forma explícita força o modelo a preservar identidade. Sem
-       * a declaração "is the character / provides motion", Seedance
-       * trata como style fraco e perde fidelidade.
+       *   1. NÃO escreve manifest prefix tipo "@image1 is the character..."
+       *      — AAZ não faz isso, e isso confunde o Seedance.
+       *   2. Prompt do user fica intacto; hints de ref vão ao FINAL
+       *      como frases curtas ("Featuring @image1...", "Referencing
+       *      @video1 for motion...") — padrão AAZ.
+       *   3. `resolution` vai explícito (AAZ sempre manda engine.defaultResolution).
+       *   4. `@imageN/@videoN/@audioN` casam 1-based com a posição
+       *      nos arrays. Se o user já mencionou a tag, não duplica.
        */
       const refImages: string[] = []
       if (effectiveFirstFrame) refImages.push(effectiveFirstFrame)
@@ -200,57 +201,41 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
 
       const hasOmniRefs = refImages.length > 0 || !!effectiveRefVideo || !!effectiveAudio
 
-      const hasImage = refImages.length > 0
-      const hasVideo = !!effectiveRefVideo
-      const hasAudio = !!effectiveAudio
-
       let finalPrompt = effectivePrompt
       if (hasOmniRefs) {
-        const manifest: string[] = []
+        const mentions = (tag: string) => finalPrompt.toLowerCase().includes(tag.toLowerCase())
 
-        if (refImages.length === 1) {
-          manifest.push('@image1 is the main character — preserve face, hair, skin tone and outfit exactly')
-        } else if (refImages.length >= 2) {
-          manifest.push('@image1 is the main character — preserve face, hair, skin tone and outfit exactly; @image2 is an additional reference angle')
+        refImages.forEach((_, i) => {
+          const tag = `@image${i + 1}`
+          if (!mentions(tag)) {
+            finalPrompt = `${finalPrompt} Featuring ${tag} as the main character.`
+          }
+        })
+        if (effectiveRefVideo && !mentions('@video1')) {
+          finalPrompt = `${finalPrompt} Referencing @video1 for motion, voice, and scene continuity.`
         }
-
-        if (hasVideo && hasAudio) {
-          manifest.push('@video1 provides the motion and framing; @audio1 is the voice source, generate phoneme-accurate lip-sync')
-        } else if (hasVideo) {
-          manifest.push('@video1 provides the motion, voice timbre, and phoneme-accurate lip-sync — match the mouth movements to the audio in @video1 exactly')
-        } else if (hasAudio) {
-          manifest.push('@audio1 is the voice source — generate phoneme-accurate lip-sync')
-        } else if (hasImage) {
-          manifest.push('speak with natural voice and phoneme-accurate lip-sync')
+        if (effectiveAudio && !mentions('@audio1')) {
+          finalPrompt = `${finalPrompt} Use @audio1 as the voice source with phoneme-accurate lip-sync.`
         }
-
-        finalPrompt = `${manifest.join('. ')}. Scene: ${finalPrompt}`
       }
 
-      // Debug: loga o prompt final montado pra comparar com o que chega
-      // no Segmind. Remover depois que o comportamento estabilizar.
       console.log('[VideoNode] finalPrompt:', finalPrompt)
 
       const body: Record<string, unknown> = {
-        prompt: finalPrompt,
         engineId: modelId,
-        aspect_ratio: aspectRatio,
+        prompt: finalPrompt,
         duration,
-        // SEMPRE explícito pra não cair no default `?? false` do
-        // buildEnginePayload. Bug do silêncio resolvido.
+        aspect_ratio: aspectRatio,
+        resolution: engine.defaultResolution,
         generate_audio: soundEnabled,
       }
 
       if (hasOmniRefs) {
-        // `mode` é flag interna pro buildEnginePayload rotear —
-        // não vai pro Segmind. Segmind ativa omni implicitamente
-        // pela presença dos arrays.
         body.mode = 'omni_reference'
         if (refImages.length > 0) body.reference_images = refImages
         if (effectiveRefVideo) body.reference_videos = [effectiveRefVideo]
         if (effectiveAudio) body.reference_audios = [effectiveAudio]
       } else {
-        // Sem refs — modo first/last frame (interpolação entre 2 frames).
         if (effectiveFirstFrame) body.first_frame_url = effectiveFirstFrame
         if (effectiveLastFrame) body.last_frame_url = effectiveLastFrame
       }
