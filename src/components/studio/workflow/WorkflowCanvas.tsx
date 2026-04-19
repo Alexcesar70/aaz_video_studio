@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -27,6 +27,7 @@ import { CharacterNode } from './nodes/CharacterNode'
 import { ScenarioNode } from './nodes/ScenarioNode'
 import { PromptNode } from './nodes/PromptNode'
 import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult } from './WorkflowContext'
+import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
 import type { DraggableItem } from './WorkflowSidebar'
 import type { WorkflowNode, NodeType } from '@/modules/workflow'
 
@@ -94,6 +95,7 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
   const connectionsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const pendingOps = useRef(0)
   const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
 
   const beginSave = useCallback(() => {
     pendingOps.current += 1
@@ -407,6 +409,11 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
           onNodesDelete={handleNodesDelete}
           onEdgesDelete={handleEdgesDelete}
           onConnect={onConnect}
+          onNodeContextMenu={(ev, node) => {
+            ev.preventDefault()
+            setContextMenu({ nodeId: node.id, x: ev.clientX, y: ev.clientY })
+          }}
+          onPaneClick={() => setContextMenu(null)}
           nodeTypes={nodeTypes}
           fitView
           deleteKeyCode={['Backspace', 'Delete']}
@@ -427,6 +434,9 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
           />
         </ReactFlow>
       </div>
+      {contextMenu && (
+        <NodeContextMenu state={contextMenu} onClose={() => setContextMenu(null)} />
+      )}
     </WorkflowContext.Provider>
   )
 }
