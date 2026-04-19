@@ -95,10 +95,12 @@ export function UploadControl({
         style={{
           width: 22, height: 22, padding: 0,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: hasValue ? `${accent}25` : 'transparent',
-          border: `1px solid ${error ? '#ff5d7a' : hasValue ? `${accent}55` : wfColors.border}`,
+          // Sempre com background leve + borda de accent pra ficar visível,
+          // mesmo sem value (antes estava transparente e passava despercebido).
+          background: hasValue ? `${accent}35` : `${accent}15`,
+          border: `1px solid ${error ? '#ff5d7a' : hasValue ? accent : `${accent}55`}`,
           borderRadius: wfRadius.control,
-          color: error ? '#ff5d7a' : iconColor,
+          color: error ? '#ff5d7a' : accent,
           cursor: disabled || uploading ? 'default' : 'pointer',
           opacity: disabled ? 0.5 : 1,
         }}

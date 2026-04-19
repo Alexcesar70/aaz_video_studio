@@ -11,7 +11,7 @@ import { PromptEditor } from '../components/controls/PromptEditor'
 import { standardNodeActions, downloadAction } from '../components/nodeActions'
 import { useUpstreamText, useUpstreamImage, useUpstreamVideo, useUpstreamAudio } from '../hooks/useUpstreamData'
 import { getNodeTypeMeta } from '../theme/nodeTypeMeta'
-import { ActionIcons, NODE_TYPE_ICONS, DEFAULT_ICON_PROPS } from '../theme/icons'
+import { ActionIcons, NODE_TYPE_ICONS, UIIcons, DEFAULT_ICON_PROPS } from '../theme/icons'
 import { wfColors, wfRadius } from '../theme/workflowTheme'
 import type { NodeAction } from '../components/NodeActionsToolbar'
 import { VIDEO_ENGINES, DEFAULT_ENGINE_ID, getEngine } from '@/lib/videoEngines'
@@ -52,22 +52,22 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const accent = (data.color as string) || getNodeTypeMeta('video').color
 
   // Estado persistido
-  const persistedPrompt = (data.prompt as string) ?? ''
+  const refinedPrompt = (data.refinedPrompt as string) ?? ''
   const modelId = (data.modelId as string) ?? DEFAULT_ENGINE_ID
   const aspectRatio = (data.aspectRatio as string) ?? '16:9'
   const duration = (data.duration as number) ?? 5
   const firstFrameUrl = (data.firstFrameUrl as string) ?? undefined
   const lastFrameUrl = (data.lastFrameUrl as string) ?? undefined
+  const soundEnabled = data.soundEnabled !== false // default ON
 
   const legacyUrl = data.url as string | undefined
   const persistedOutputs: StoredOutput[] = (data.outputs as StoredOutput[] | undefined)
     ?? (legacyUrl ? [{ url: legacyUrl }] : [])
   const selectedIndex = typeof data.selectedIndex === 'number' ? data.selectedIndex : 0
 
-  // Prompt local editável (persistido on blur); upstream é fallback
-  const [localPrompt, setLocalPrompt] = useState(persistedPrompt)
   const [jobId, setJobId] = useState<string | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [refining, setRefining] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Upstream (reativo) — cada handle tem id próprio pra distinguir
@@ -77,8 +77,8 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const upstreamRefVideo = useUpstreamVideo(id, 'ref')
   const upstreamAudio = useUpstreamAudio(id, 'audio')
 
-  // Prompt efetivo: local tem precedência; se vazio, usa upstream
-  const effectivePrompt = (localPrompt.trim() || upstreamText?.trim() || '')
+  // Prompt efetivo: refinedPrompt salvo tem precedência; depois upstream cru
+  const effectivePrompt = (refinedPrompt.trim() || upstreamText?.trim() || '')
   const effectiveFirstFrame = firstFrameUrl ?? upstreamStartFrame ?? undefined
   const effectiveLastFrame = lastFrameUrl ?? upstreamEndFrame ?? undefined
   const referenceVideoUrl = (data.referenceVideoUrl as string) ?? undefined
@@ -86,6 +86,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
   const referenceAudioUrl = (data.referenceAudioUrl as string) ?? undefined
   const effectiveAudio = upstreamAudio ?? referenceAudioUrl
   const canRun = effectivePrompt.length > 0 && !generating
+  const canRefine = Boolean(upstreamText?.trim()) && !refining && !generating
 
   const engine = useMemo(() => getEngine(modelId), [modelId])
 
@@ -108,16 +109,30 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
     updateNode(id, { content: patch })
   }, [id, updateNode])
 
-  const commitPrompt = useCallback(() => {
-    if (localPrompt !== persistedPrompt) {
-      patchContent({ prompt: localPrompt })
+  const handleRefine = useCallback(async () => {
+    if (!canRefine) return
+    const source = upstreamText?.trim()
+    if (!source) return
+    setRefining(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/smart-prompter/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: source }),
+      })
+      const payload = await res.json() as { refinedPrompt?: string; error?: string }
+      if (!res.ok || !payload.refinedPrompt) {
+        setError(payload.error ?? 'Falha ao refinar.')
+        return
+      }
+      patchContent({ refinedPrompt: payload.refinedPrompt })
+    } catch {
+      setError('Erro de conexão.')
+    } finally {
+      setRefining(false)
     }
-  }, [localPrompt, persistedPrompt, patchContent])
-
-  const handleRefined = useCallback((refined: string) => {
-    setLocalPrompt(refined)
-    patchContent({ prompt: refined })
-  }, [patchContent])
+  }, [canRefine, upstreamText, patchContent])
 
   // ─── Polling do job ──────────────────────────────────────────
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -177,6 +192,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
       if (effectiveLastFrame) body.last_frame_url = effectiveLastFrame
       if (effectiveRefVideo) body.reference_videos = [effectiveRefVideo]
       if (effectiveAudio) body.reference_audios = [effectiveAudio]
+      if (!soundEnabled) body.generate_audio = false
 
       const res = await fetch('/api/generate', {
         method: 'POST',
@@ -216,7 +232,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
       setError('Erro de conexão.')
       setGenerating(false)
     }
-  }, [canRun, effectivePrompt, modelId, aspectRatio, duration, effectiveFirstFrame, effectiveLastFrame, effectiveRefVideo, effectiveAudio, patchContent])
+  }, [canRun, effectivePrompt, modelId, aspectRatio, duration, effectiveFirstFrame, effectiveLastFrame, effectiveRefVideo, effectiveAudio, soundEnabled, patchContent])
 
   const handleSelectOutput = useCallback((idx: number) => {
     patchContent({ selectedIndex: idx, url: persistedOutputs[idx]?.url })
@@ -306,21 +322,6 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
           )}
         </div>
 
-        {/* Editor de prompt inline: textarea + Refinar com IA */}
-        <div style={{ padding: '0 12px 8px' }}>
-          <PromptEditor
-            value={localPrompt}
-            onChange={setLocalPrompt}
-            onCommit={commitPrompt}
-            onRefined={handleRefined}
-            upstream={upstreamText}
-            accent={accent}
-            disabled={generating}
-            placeholder="Descreva o vídeo…"
-            minHeight={80}
-          />
-        </div>
-
         {/* Error */}
         {error && (
           <div style={{
@@ -375,11 +376,51 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
               ? 'Vídeo de referência anexado (clique pra trocar)'
               : 'Anexar vídeo de referência (video-to-video)'}
           />
+
+          {/* Toggle Som — mesma altura do Gerar */}
+          <button
+            onClick={() => patchContent({ soundEnabled: !soundEnabled })}
+            disabled={generating}
+            title={soundEnabled ? 'Som: ligado (clique pra desligar)' : 'Som: desligado (clique pra ligar)'}
+            style={{
+              marginLeft: 'auto',
+              height: 22, padding: '0 8px',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              background: soundEnabled ? `${accent}25` : 'transparent',
+              border: `1px solid ${soundEnabled ? `${accent}66` : wfColors.border}`,
+              borderRadius: wfRadius.control,
+              color: soundEnabled ? accent : wfColors.textDim,
+              fontSize: 10, fontWeight: 600, fontFamily: 'inherit',
+              cursor: generating ? 'default' : 'pointer',
+            }}
+          >
+            🎵 {soundEnabled ? 'Som' : 'Mudo'}
+          </button>
+
+          {/* Botão Refinar — discreto, usa upstream text */}
+          <button
+            onClick={() => void handleRefine()}
+            disabled={!canRefine}
+            title={canRefine
+              ? (refinedPrompt ? 'Refinar novamente' : 'Refinar prompt com Smart Prompter')
+              : 'Conecte um Texto no input pra refinar'}
+            style={{
+              height: 22, width: 22, padding: 0,
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              background: refinedPrompt ? `${accent}25` : 'transparent',
+              border: `1px solid ${canRefine ? `${accent}66` : wfColors.border}`,
+              borderRadius: wfRadius.control,
+              color: canRefine ? accent : wfColors.textFaint,
+              cursor: canRefine ? 'pointer' : 'default',
+            }}
+          >
+            {refining ? <span style={{ fontSize: 9 }}>…</span> : <UIIcons.refine size={11} {...DEFAULT_ICON_PROPS} />}
+          </button>
+
           <button
             onClick={() => void handleRun()}
             disabled={!canRun}
             style={{
-              marginLeft: 'auto',
               display: 'inline-flex', alignItems: 'center', gap: 5,
               height: 22, padding: '0 10px',
               background: canRun ? accent : wfColors.border,
