@@ -6,16 +6,17 @@ import { TypedHandle } from './TypedHandle'
 import { NodeActionsToolbar, type NodeAction } from './NodeActionsToolbar'
 
 /**
- * Layout padrão de qualquer nó do Workflow — envolve o NodeShell com:
- * - Actions toolbar flutuante (xyflow portal)
- * - Handles tipados nos cantos (outputs TR, inputs BL — padrão Freepik)
+ * Layout padrão de qualquer nó do Workflow. Encapsula:
+ * - NodeActionsToolbar flutuante (xyflow portal)
+ * - Handles tipados LATERAIS (inputs esquerda, outputs direita)
  *
- * Stateless e declarativo — o nó só descreve o que tem, o frame cuida
- * de posicionamento e visual.
+ * Stateless + declarativo: o nó concreto passa `inputs/outputs/actions`
+ * e o Frame cuida de posicionar/distribuir. Uncle Bob — Frame tem uma
+ * responsabilidade: compor layout visual do nó.
  *
  * @example
  * <NodeFrame
- *   inputs={[{ dataType: 'text', id: 'text-in' }]}
+ *   inputs={[{ dataType: 'text' }]}
  *   outputs={[{ dataType: 'image' }]}
  *   actions={standardNodeActions(id, ctx)}
  * >
@@ -25,9 +26,7 @@ import { NodeActionsToolbar, type NodeAction } from './NodeActionsToolbar'
 
 export interface HandleSpec {
   dataType: DataType
-  /** ID único dentro do nó quando há múltiplos handles */
   id?: string
-  /** Label customizado pro tooltip — default: "Entrada: <tipo>" */
   label?: string
 }
 
@@ -43,29 +42,31 @@ export function NodeFrame({ inputs = [], outputs = [], actions = [], children }:
     <div style={{ position: 'relative' }}>
       {actions.length > 0 && <NodeActionsToolbar actions={actions} />}
 
-      {/* Inputs no canto inferior esquerdo (empilhados verticalmente quando N>1) */}
+      {/* Inputs na lateral esquerda, distribuídos verticalmente */}
       {inputs.map((h, idx) => (
-        <HandleStack
-          key={`in-${h.id ?? idx}`}
+        <TypedHandle
+          key={`in-${h.id ?? `${h.dataType}-${idx}`}`}
           kind="target"
-          side="bl"
-          index={idx}
-          total={inputs.length}
-          spec={h}
+          side="left"
+          dataType={h.dataType}
+          id={h.id}
+          label={h.label}
+          verticalAnchor={computeAnchor(idx, inputs.length)}
         />
       ))}
 
       {children}
 
-      {/* Outputs no canto superior direito (empilhados verticalmente quando N>1) */}
+      {/* Outputs na lateral direita, distribuídos verticalmente */}
       {outputs.map((h, idx) => (
-        <HandleStack
-          key={`out-${h.id ?? idx}`}
+        <TypedHandle
+          key={`out-${h.id ?? `${h.dataType}-${idx}`}`}
           kind="source"
-          side="tr"
-          index={idx}
-          total={outputs.length}
-          spec={h}
+          side="right"
+          dataType={h.dataType}
+          id={h.id}
+          label={h.label}
+          verticalAnchor={computeAnchor(idx, outputs.length)}
         />
       ))}
     </div>
@@ -73,45 +74,10 @@ export function NodeFrame({ inputs = [], outputs = [], actions = [], children }:
 }
 
 /**
- * Empilha múltiplos handles no mesmo canto, sem colidir — desloca o
- * próximo ao longo do eixo vertical (pros cantos TR e BL).
+ * Distribui `total` handles igualmente pelo eixo vertical do card.
+ * 1 handle → 50% (centro). 2 → 33% / 66%. 3 → 25% / 50% / 75%. Etc.
  */
-function HandleStack({
-  kind,
-  side,
-  index,
-  total,
-  spec,
-}: {
-  kind: 'target' | 'source'
-  side: 'bl' | 'tr'
-  index: number
-  total: number
-  spec: HandleSpec
-}) {
-  const STEP = 26
-  // quando total > 1, deslocamos; primeiro handle fica na posição do canto
-  const offset = total > 1 ? index * STEP : 0
-
-  return (
-    <div
-      style={{
-        position: 'absolute',
-        ...(side === 'bl'
-          ? { bottom: 0, left: 0, marginBottom: offset }
-          : { top: 0, right: 0, marginTop: offset }),
-        width: 0, height: 0,
-        pointerEvents: 'none',
-        zIndex: 4,
-      }}
-    >
-      <TypedHandle
-        kind={kind}
-        dataType={spec.dataType}
-        corner={side}
-        id={spec.id}
-        label={spec.label}
-      />
-    </div>
-  )
+function computeAnchor(index: number, total: number): number {
+  if (total <= 1) return 0.5
+  return (index + 1) / (total + 1)
 }

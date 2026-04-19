@@ -26,11 +26,12 @@ import { ReferenceNode } from './nodes/ReferenceNode'
 import { CharacterNode } from './nodes/CharacterNode'
 import { ScenarioNode } from './nodes/ScenarioNode'
 import { PromptNode } from './nodes/PromptNode'
-import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult } from './WorkflowContext'
+import { WorkflowContext, type NodeUpdatePatch, type GenerateImageResult, type ConnectingState } from './WorkflowContext'
 import { NodeContextMenu, type ContextMenuState } from './NodeContextMenu'
 import { getDataTypeColor } from './components/TypedHandle'
+import { isCompatibleConnection } from './theme/connectionRules'
 import { wfCanvasBackground, wfColors, wfGridColor, wfGridGap, wfRadius, wfShadow } from './theme/workflowTheme'
-import { getNodeTypeMeta } from './theme/nodeTypeMeta'
+import { getNodeTypeMeta, type DataType } from './theme/nodeTypeMeta'
 import { getNodeTypeIcon, DEFAULT_ICON_PROPS } from './theme/icons'
 import type { DraggableItem } from './WorkflowSidebar'
 import type { WorkflowNode, NodeType } from '@/modules/workflow'
@@ -286,17 +287,51 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
     )
   }, [getNode, createNodeAt])
 
+  // Estado de drag em andamento — alimenta TypedHandle com info pra
+  // acender pins compatíveis e apagar incompatíveis.
+  const [connecting, setConnecting] = useState<ConnectingState | null>(null)
+
   const contextValue = useMemo(
-    () => ({ updateNode, deleteNode, duplicateNode, generateImageFromPrompt }),
-    [updateNode, deleteNode, duplicateNode, generateImageFromPrompt],
+    () => ({ updateNode, deleteNode, duplicateNode, generateImageFromPrompt, connecting }),
+    [updateNode, deleteNode, duplicateNode, generateImageFromPrompt, connecting],
   )
 
-  const getEdgeColorFromSource = useCallback((sourceNodeId: string): string => {
-    const node = getNode(sourceNodeId)
-    if (!node) return wfColors.edgeDefault
-    const meta = getNodeTypeMeta((node.type ?? 'note') as NodeType)
-    return getDataTypeColor(meta.outputType ?? 'any')
+  const getNodeOutputType = useCallback((nodeId: string): DataType => {
+    const node = getNode(nodeId)
+    if (!node) return 'any'
+    return getNodeTypeMeta((node.type ?? 'note') as NodeType).outputType ?? 'any'
   }, [getNode])
+
+  const getNodeInputTypes = useCallback((nodeId: string): DataType[] => {
+    const node = getNode(nodeId)
+    if (!node) return ['any']
+    const meta = getNodeTypeMeta((node.type ?? 'note') as NodeType)
+    return meta.inputTypes ?? ['any']
+  }, [getNode])
+
+  const getEdgeColorFromSource = useCallback((sourceNodeId: string): string => {
+    return getDataTypeColor(getNodeOutputType(sourceNodeId))
+  }, [getNodeOutputType])
+
+  const onConnectStart = useCallback<NonNullable<React.ComponentProps<typeof ReactFlow>['onConnectStart']>>((_ev, params) => {
+    if (!params.nodeId || params.handleType !== 'source') return
+    setConnecting({
+      sourceNodeId: params.nodeId,
+      sourceDataType: getNodeOutputType(params.nodeId),
+    })
+  }, [getNodeOutputType])
+
+  const onConnectEnd = useCallback(() => {
+    setConnecting(null)
+  }, [])
+
+  const isValidConnection = useCallback((conn: Connection | Edge): boolean => {
+    if (!conn.source || !conn.target) return false
+    if (conn.source === conn.target) return false
+    const srcType = getNodeOutputType(conn.source)
+    const tgtTypes = getNodeInputTypes(conn.target)
+    return tgtTypes.some(t => isCompatibleConnection(srcType, t))
+  }, [getNodeOutputType, getNodeInputTypes])
 
   const onConnect: OnConnect = useCallback((params: Connection) => {
     const color = params.source ? getEdgeColorFromSource(params.source) : wfColors.edgeDefault
@@ -447,6 +482,9 @@ function WorkflowCanvasInner({ boardId, initialNodes, initialConnections, onConn
           onNodesDelete={handleNodesDelete}
           onEdgesDelete={handleEdgesDelete}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
+          isValidConnection={isValidConnection}
           onNodeContextMenu={(ev, node) => {
             ev.preventDefault()
             setContextMenu({ nodeId: node.id, x: ev.clientX, y: ev.clientY })

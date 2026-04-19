@@ -3,103 +3,124 @@
 import React from 'react'
 import { Handle, Position } from '@xyflow/react'
 import type { DataType } from '../theme/nodeTypeMeta'
+import { isCompatibleConnection } from '../theme/connectionRules'
 import { PortIcons } from '../theme/icons'
 import { wfColors } from '../theme/workflowTheme'
+import { useWorkflow } from '../WorkflowContext'
 
 /**
- * Handle tipado com:
- * - Hitbox generoso (22×22 transparente) pra facilitar drag de conexão
- * - Pin visível pequeno (10×10) com cor do tipo de dado
- * - Ícone da porta correspondente ao DataType (do Bear Icon Kit)
- * - Posicionamento absoluto em cantos (TR pra outputs, BL pra inputs
- *   — padrão Freepik/Spaces)
+ * Handle tipado renderizado como círculo pequeno com ícone, posicionado
+ * à LATERAL do card (não mais nos cantos TR/BL), padrão Freepik/Spaces.
  *
- * Compõe <Handle> do xyflow mantendo sua semântica (target/source) +
- * overlay visual próprio.
+ * Camadas de responsabilidade (Uncle Bob):
+ * - Renderização (este arquivo): visual, hitbox, posicionamento
+ * - Compatibilidade (connectionRules.ts): função pura `isCompatibleConnection`
+ * - Contexto de drag (WorkflowContext): estado `connecting`
+ *
+ * Comportamento visual:
+ * - Idle: opacity 0.55, pin discreto
+ * - Hover no próprio pin: opacity 1, halo
+ * - Drag em andamento e pin compatível: opacity 1, cor cheia, glow
+ * - Drag em andamento e pin incompatível: opacity 0.12 (apagado)
  */
 
-export type HandleCorner = 'tl' | 'tr' | 'bl' | 'br'
+export type HandleSide = 'left' | 'right'
 
 export interface TypedHandleProps {
-  /** Direção do fluxo — target (input) ou source (output) */
+  /** Direção do fluxo */
   kind: 'target' | 'source'
-  /** Tipo semântico do dado que entra/sai — dita cor e ícone */
+  /** Tipo semântico — dita cor, ícone e regras de compatibilidade */
   dataType: DataType
-  /** Canto do card em que o handle é renderizado */
-  corner: HandleCorner
-  /** ID único dentro do nó (necessário quando há múltiplos handles do mesmo tipo) */
+  /** Lado do card (inputs=left, outputs=right) */
+  side: HandleSide
+  /** ID único dentro do nó (necessário quando há múltiplos do mesmo tipo) */
   id?: string
-  /** Tooltip hover — ex: "Entrada: texto" */
+  /** Tooltip hover */
   label?: string
-  /** Sobrescreve cor default do dataType */
-  color?: string
+  /**
+   * Posição vertical relativa ao card (0 a 1). 0.5 = centro.
+   * Múltiplos handles distribuem pelo NodeFrame, que calcula essa posição.
+   */
+  verticalAnchor?: number
 }
 
-const PIN_SIZE = 10
-const HITBOX_SIZE = 22
+const PIN_SIZE = 18
+const HITBOX_SIZE = 26
+const GAP_FROM_CARD = 6
 
 const DATA_TYPE_COLORS: Record<DataType, string> = {
-  text: '#C6D66E',   // verde-oliva (cor da Nota)
-  image: '#8B5CF6',  // roxo
-  video: '#06B6D4',  // ciano
-  prompt: '#E59866', // âmbar
-  any: '#9F9AB8',    // neutro
+  text: '#C6D66E',
+  image: '#8B5CF6',
+  video: '#06B6D4',
+  prompt: '#E59866',
+  any: '#9F9AB8',
 }
 
 const DATA_TYPE_PORT_ICON: Record<DataType, keyof typeof PortIcons> = {
   text: 'text',
   image: 'image',
   video: 'video',
-  prompt: 'text',  // prompt é texto; usa port-text
+  prompt: 'text',
   any: 'connectorOut',
 }
 
-function getCornerStyle(corner: HandleCorner): React.CSSProperties {
-  // offset negativo = fora da borda do card
-  const offset = -HITBOX_SIZE / 2
-  switch (corner) {
-    case 'tl': return { top: offset, left: offset }
-    case 'tr': return { top: offset, right: offset }
-    case 'bl': return { bottom: offset, left: offset }
-    case 'br': return { bottom: offset, right: offset }
-  }
-}
-
-function getXyflowPosition(corner: HandleCorner): Position {
-  // xyflow precisa saber de qual lado a edge vai sair/entrar pra calcular
-  // a curva. Usamos Top pra TR/TL e Bottom pra BR/BL.
-  if (corner === 'tr' || corner === 'tl') return Position.Top
-  return Position.Bottom
+const DATA_TYPE_LABELS: Record<DataType, string> = {
+  text: 'texto',
+  image: 'imagem',
+  video: 'vídeo',
+  prompt: 'prompt',
+  any: 'qualquer',
 }
 
 export function TypedHandle({
   kind,
   dataType,
-  corner,
+  side,
   id,
   label,
-  color: colorOverride,
+  verticalAnchor = 0.5,
 }: TypedHandleProps) {
-  const color = colorOverride ?? DATA_TYPE_COLORS[dataType]
-  const xyPos = getXyflowPosition(corner)
-  const cornerStyle = getCornerStyle(corner)
+  const { connecting } = useWorkflow()
+  const color = DATA_TYPE_COLORS[dataType]
   const PortIcon = PortIcons[DATA_TYPE_PORT_ICON[dataType]]
 
+  // xyflow precisa saber de qual lado vem pra calcular curva da edge
+  const xyPos = side === 'left' ? Position.Left : Position.Right
+
+  // Estado visual — calculado puro a partir de `connecting`
+  const state = resolveHandleState({
+    kind,
+    dataType,
+    connecting,
+  })
+
   const tooltip = label ?? `${kind === 'source' ? 'Saída' : 'Entrada'}: ${DATA_TYPE_LABELS[dataType]}`
+
+  // Posicionamento: fora da borda do card, offset negativo.
+  // Ancoragem vertical em porcentagem pra distribuir múltiplos pins.
+  const sideStyle: React.CSSProperties = side === 'left'
+    ? { left: -(PIN_SIZE + GAP_FROM_CARD) }
+    : { right: -(PIN_SIZE + GAP_FROM_CARD) }
 
   return (
     <div
       title={tooltip}
       style={{
         position: 'absolute',
+        top: `${verticalAnchor * 100}%`,
+        transform: 'translateY(-50%)',
         width: HITBOX_SIZE,
         height: HITBOX_SIZE,
-        pointerEvents: 'none', // hitbox delegado ao <Handle>
-        zIndex: 4,
-        ...cornerStyle,
+        marginLeft: side === 'left' ? -(HITBOX_SIZE - PIN_SIZE) / 2 : undefined,
+        marginRight: side === 'right' ? -(HITBOX_SIZE - PIN_SIZE) / 2 : undefined,
+        pointerEvents: 'none',
+        zIndex: 5,
+        opacity: state.opacity,
+        transition: 'opacity 160ms ease',
+        ...sideStyle,
       }}
     >
-      {/* Handle real do xyflow — invisível mas captura drag */}
+      {/* Handle real do xyflow — invisível, captura drag no hitbox inteiro */}
       <Handle
         type={kind}
         position={xyPos}
@@ -115,7 +136,8 @@ export function TypedHandle({
           pointerEvents: 'auto',
         }}
       />
-      {/* Pin visível centralizado */}
+
+      {/* Pin visível centralizado, com ícone do tipo */}
       <div
         style={{
           position: 'absolute',
@@ -123,30 +145,50 @@ export function TypedHandle({
           transform: 'translate(-50%, -50%)',
           width: PIN_SIZE, height: PIN_SIZE,
           borderRadius: '50%',
-          background: color,
-          boxShadow: `0 0 0 2px ${wfColors.surface}, 0 0 0 3px ${color}40`,
+          background: wfColors.surface,
+          border: `1.5px solid ${color}`,
+          boxShadow: state.highlight
+            ? `0 0 0 3px ${color}33, 0 0 12px ${color}55`
+            : `0 0 0 2px ${wfColors.canvasBase}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           pointerEvents: 'none',
-          transition: 'transform 120ms ease, box-shadow 120ms ease',
+          transition: 'box-shadow 160ms ease, border-color 160ms ease',
         }}
-        data-port-color={color}
-        data-port-kind={kind}
       >
-        <PortIcon size={6} color="#0A0814" strokeWidth={2} />
+        <PortIcon size={11} color={color} strokeWidth={1.75} />
       </div>
     </div>
   )
 }
 
-const DATA_TYPE_LABELS: Record<DataType, string> = {
-  text: 'texto',
-  image: 'imagem',
-  video: 'vídeo',
-  prompt: 'prompt',
-  any: 'qualquer',
+/**
+ * Resolve estado visual do handle a partir do contexto de drag e do tipo
+ * do próprio pin. Função pura — toda a lógica visual concentrada aqui.
+ */
+function resolveHandleState({
+  kind,
+  dataType,
+  connecting,
+}: {
+  kind: 'target' | 'source'
+  dataType: DataType
+  connecting: { sourceDataType: DataType; sourceNodeId: string } | null
+}): { opacity: number; highlight: boolean } {
+  // Sem drag ativo — estado neutro, discreto mas visível
+  if (!connecting) return { opacity: 0.6, highlight: false }
+
+  // Durante drag:
+  // - Sources (outputs) não são alvo, ficam neutros
+  if (kind === 'source') return { opacity: 0.3, highlight: false }
+
+  // - Targets (inputs) acendem se compatíveis com o source ativo
+  const compatible = isCompatibleConnection(connecting.sourceDataType, dataType)
+  return {
+    opacity: compatible ? 1 : 0.12,
+    highlight: compatible,
+  }
 }
 
-/** Exportado pra que o canvas possa colorir edges conforme o source handle. */
 export function getDataTypeColor(dataType: DataType): string {
   return DATA_TYPE_COLORS[dataType]
 }
