@@ -40,6 +40,16 @@ import { useAvatarGeneration, type AvatarRefImage } from '@/components/avatar/us
 const ASPECT_OPTIONS = ['9:16', '16:9', '1:1']
 const DURATION_OPTIONS = [5, 8, 10]
 
+/** Largura do card por aspect — mesmo padrão do VideoNode (pra evitar
+ *  apertar 16:9 e esticar 9:16). */
+const WIDTH_BY_ASPECT: Record<string, number> = {
+  '16:9': 380,
+  '1:1': 300,
+  '9:16': 280,
+}
+const getNodeWidth = (aspectRatio: string): number =>
+  WIDTH_BY_ASPECT[aspectRatio] ?? 300
+
 export function AvatarNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
   const { updateNode, duplicateNode, deleteNode } = useWorkflow()
   const accent = (data.color as string) || getNodeTypeMeta('avatar').color
@@ -134,7 +144,7 @@ export function AvatarNode({ id, data, selected }: { id: string; data: Record<st
         type="avatar"
         selected={selected}
         colorOverride={accent}
-        width={320}
+        width={getNodeWidth(aspectRatio)}
         flush
         glow={isGenerating ? 'pulse' : undefined}
       >

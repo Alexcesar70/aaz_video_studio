@@ -46,6 +46,25 @@ const ASPECT_OPTIONS: SelectOption[] = [
   { value: '21:9', label: '21:9', hint: 'Ultra-wide' },
 ]
 
+/**
+ * Largura do card por aspect ratio — evita que o preview fique
+ * apertado em 16:9 e esticado demais em 9:16. Mantém altura visual
+ * do preview ~200-215px em todos os ratios, dentro dos limites
+ * confortáveis pro canvas.
+ */
+const WIDTH_BY_ASPECT: Record<string, number> = {
+  '21:9': 440,
+  '16:9': 380,
+  '4:3': 340,
+  '1:1': 300,
+  '3:4': 280,
+  '9:16': 260,
+}
+
+function getNodeWidth(aspectRatio: string): number {
+  return WIDTH_BY_ASPECT[aspectRatio] ?? 300
+}
+
 interface StoredOutput { url: string }
 
 export function VideoNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected: boolean }) {
@@ -324,7 +343,7 @@ export function VideoNode({ id, data, selected }: { id: string; data: Record<str
         type="video"
         selected={selected}
         colorOverride={accent}
-        width={300}
+        width={getNodeWidth(aspectRatio)}
         flush
         glow={generating ? 'pulse' : undefined}
       >
